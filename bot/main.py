@@ -1,0 +1,22 @@
+"""Точка входа для Telegram бота Charlotte-v2"""
+
+from aiogram import Bot, Dispatcher
+from core.config import Config
+from core.logger import setup_logger
+
+async def main():
+    config = Config()
+    logger = setup_logger()
+    
+    bot = Bot(token=config.BOT_TOKEN)
+    dp = Dispatcher()
+    
+    # Регистрация хэндлеров
+    from bot.handlers import universal, youtube, playlist, premium, admin
+    
+    logger.info("Бот запущен")
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
