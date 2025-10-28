@@ -8,6 +8,8 @@ async def main():
     config = Config()
     logger = setup_logger()
     
+    logger.info("Bot is starting...")
+    
     bot = Bot(token=config.BOT_TOKEN)
     dp = Dispatcher()
     

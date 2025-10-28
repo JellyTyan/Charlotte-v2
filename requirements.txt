@@ -1,3 +1,2 @@
-aiogram==3.4.1
-aiohttp==3.9.1
-asyncio
+aiogram[i18n]==3.22.0
+httpx
