@@ -7,16 +7,19 @@ from core.logger import setup_logger
 async def main():
     config = Config()
     logger = setup_logger()
-    
+
     logger.info("Bot is starting...")
     
     bot = Bot(token=config.BOT_TOKEN)
     dp = Dispatcher()
     
+    # Передаем конфиг через workflow_data
+    dp.workflow_data.update(config=config, logger=logger)
+    
     # Регистрация хэндлеров
     from bot.handlers import universal, youtube, playlist, premium, admin
     
-    logger.info("Бот запущен")
+    logger.info("Bot is started")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
