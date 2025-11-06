@@ -1,2 +1,3 @@
 aiogram[i18n]==3.22.0
 httpx
+python-dotenv
