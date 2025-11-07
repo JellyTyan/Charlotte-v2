@@ -1,7 +1,6 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-from aiogram import Bot, Dispatcher
 from core.config import Config
 from core.logger import setup_logger
 from core.bot_commands import set_default_commands
@@ -25,7 +24,9 @@ async def main():
     dp.workflow_data.update(config=config, logger=logger)
 
     # Регистрация хэндлеров
-    from bot.handlers import start
+    import modules
+    from modules.router import service_router
+    dp.include_router(service_router)
 
     logger.info("📝 Setting default commands...")
     await set_default_commands()
