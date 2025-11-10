@@ -10,7 +10,10 @@ class ServiceUseMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: Dict[str, Any]
     ) -> Any:
+        # Check is user
         if isinstance(event, Message) and not event.from_user:
             return
+
+        # Check is banned
 
         return await handler(event, data)

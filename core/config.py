@@ -1,4 +1,4 @@
-"""Конфигурация приложения"""
+"""Global Bot Configuration"""
 
 import os
 from dataclasses import dataclass
