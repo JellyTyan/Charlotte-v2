@@ -6,12 +6,12 @@ import sys
 import os
 
 def setup_logger():
-    os.makedirs("storage/logs", exist_ok=True)
+    os.makedirs("logs", exist_ok=True)
 
     format_str = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 
     file_handler = TimedRotatingFileHandler(
-        "storage/logs/charlotte.log", when="midnight", backupCount=7
+        "logs/charlotte.log", when="midnight", backupCount=7
     )
     file_handler.setFormatter(logging.Formatter(format_str))
 

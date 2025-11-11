@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any
-from models.metadata_models import MediaMetadata
+from models.metadata import MediaMetadata
 
 class BaseService(ABC):
     @abstractmethod

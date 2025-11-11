@@ -1,22 +1,14 @@
 from modules.router import service_router as router
 from aiogram import F
-from aiogram.types import Message, InlineKeyboardButton, CallbackQuery
-from aiogram.utils.keyboard import InlineKeyboardBuilder
-from aiogram.filters.callback_data import CallbackData
-from typing import Optional
+from aiogram.types import FSInputFile, InaccessibleMessage, Message, CallbackQuery
 import logging
+from .models import YoutubeCallback
+from utils import truncate_string, format_duration
 
 logger = logging.getLogger(__name__)
 
 
 YOUTUBE_REGEX = r"https?://(?:www\.)?(?:m\.)?(?:youtu\.be/|youtube\.com/(?:shorts/|watch\?v=))([\w-]+)"
-
-class YoutubeCallback(CallbackData, prefix="yt"):
-    type: str
-    format_id: str
-    audio_id: Optional[str] = None
-    url_hash: Optional[str] = None
-    sponsored: Optional[bool] = False
 
 @router.message(F.text.regexp(YOUTUBE_REGEX))
 async def youtube_handler(message: Message):
@@ -28,18 +20,39 @@ async def youtube_handler(message: Message):
 
     if not message.text:
         return
+    if not message.bot:
+        return
+
+    await message.bot.send_chat_action(message.chat.id, "find_location")
+    process_message = await message.reply("Processing...")
 
     from .service import YouTubeService
-    from models.error_models import BotError
+    from models.errors import BotError
 
     try:
         media_metadata = await YouTubeService().get_info(message.text)
         if media_metadata is None:
             return await message.reply("No metadata found")
 
-        await message.reply(
-            "Choose a format to download:", reply_markup=media_metadata.keyboard
-        )
+        caption = f"<b>{media_metadata.title}</b>\n\n"
+        caption += f"<b>Channel:</b><a href='{media_metadata.performer_url}'> {media_metadata.performer}</a>\n"
+        caption += f"<b>Duration:</b> {format_duration(media_metadata.duration) \
+            if media_metadata.duration else "00"}\n\n"
+        caption += f"{media_metadata.description}"
+
+        await process_message.delete()
+
+        if media_metadata.cover:
+            await message.reply_photo(
+                photo=FSInputFile(media_metadata.cover),
+                caption=truncate_string(caption, 1024),
+                reply_markup=media_metadata.keyboard
+            )
+        else:
+            await message.reply(
+                truncate_string(caption, 1024),
+                reply_markup=media_metadata.keyboard
+            )
     except BotError as e:
         logger.error(f"YouTube error: {e.message}")
         await message.reply(f"Error: {e.message}")
@@ -84,13 +97,17 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
     await message.delete()
 
     try:
+        if message.bot:
+            await message.bot.send_chat_action(message.chat.id, "record_video")
+
         media_content = await YouTubeService().download(url, format_choice)
 
-        from sender.message_sender import SendManager
-        send_manager = SendManager()
-        await send_manager.send_media(media_content, callback_query.message)
+        from senders.media_sender import MediaSender
+        send_manager = MediaSender()
+        await send_manager.send(message, media_content, user_id)
 
     except Exception as e:
+        logger.error(f"Youtube Handler Error: {e}")
         # from utils.error_handler import BotError, ErrorCode, handle_download_error
         # if not isinstance(e, BotError):
         #     e = BotError(
@@ -101,4 +118,3 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
         #         is_logged=True
         #     )
         # await handle_download_error(callback_query.message, e)
-        pass

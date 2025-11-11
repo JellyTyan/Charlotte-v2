@@ -9,6 +9,10 @@ async def main():
     logger = setup_logger()
     logger.info("🚀 Charlotte-v2 Bot starting...")
 
+    logger.info("📋 Initializing DataBase...")
+    from storage.db import database_manager
+    await database_manager.init_db()
+
     logger.info("📋 Loading configuration...")
     config = Config()
     logger.info(f"✅ Configuration loaded. Admin ID: {config.ADMIN_ID}")

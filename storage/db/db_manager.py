@@ -33,17 +33,17 @@ class DatabaseManager:
         self.engine = create_async_engine(db_url, echo=echo, future=True)
         self.async_session = async_sessionmaker(self.engine, expire_on_commit=False)
 
-        logger.info("Подключение к базе данных успешно")
+        logger.info("Connection to the database successful")
         self._initialized = True
 
     async def init_db(self):
         try:
             async with self.engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
-            logger.info("База данных инициализирована")
+            logger.info("The database has been initialized.")
         except SQLAlchemyError as e:
-            logger.exception(f"Ошибка при инициализации базы данных: {e}")
+            logger.exception(f"Error during database initialization: {e}")
 
     async def close(self):
         await self.engine.dispose()
-        logger.info("Подключение к базе данных закрыто")
+        logger.info("Connection to the database is closed")

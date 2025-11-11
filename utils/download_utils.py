@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Optional
 import httpx
 import aiofiles
-from models.error_models import BotError, ErrorCode
+from models.errors import BotError, ErrorCode
 
 logger = logging.getLogger(__name__)
 

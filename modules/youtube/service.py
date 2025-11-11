@@ -13,9 +13,9 @@ from yt_dlp.utils import sanitize_filename
 from aiogram.types import InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from models.media_models import MediaContent, MediaType
-from models.error_models import BotError, ErrorCode
-from models.metadata_models import MediaMetadata, MetadataType
+from models.media import MediaContent, MediaType
+from models.errors import BotError, ErrorCode
+from models.metadata import MediaMetadata, MetadataType
 from modules.base_service import BaseService
 from .utils import get_ytdlp_options, get_video_info
 from .models import YoutubeCallback
@@ -30,7 +30,7 @@ class YouTubeService(BaseService):
     name = "YouTube"
     _download_executor = ThreadPoolExecutor(max_workers=10)
 
-    def __init__(self, output_path: str = "temp/") -> None:
+    def __init__(self, output_path: str = "storage/temp/") -> None:
         super().__init__()
         try:
             os.makedirs(output_path, exist_ok=True)
