@@ -21,3 +21,4 @@ class BotError(Exception):
     message: Optional[str] = None  # Message for Owner
     critical: bool = False # Send to owner?
     is_logged: bool = False # Need to be logged?
+    send_user_message: bool = True # Send error message to user?
