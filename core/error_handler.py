@@ -12,32 +12,49 @@ config = Config()
 async def global_error_handler(event: ErrorEvent):
     """Handle all unhandled errors"""
     exception = event.exception
+    logger.error(f"Global error handler triggered: {type(exception).__name__}: {exception}")
+    
+    # Get message from update (can be from message or callback_query)
     message = event.update.message
-
+    if not message and event.update.callback_query:
+        message = event.update.callback_query.message
+        logger.debug(f"Got message from callback_query: {message}")
+    
     if not message:
+        logger.error(f"Error without message context: {exception}")
         return
 
     # Handle BotError
     if isinstance(exception, BotError):
+        logger.info(f"Handling BotError: code={exception.code}, message={exception.message}")
+        
+        error_message = None
         match exception.code:
             case ErrorCode.INVALID_URL:
-                await message.answer("I'm sorry. You may have provided a corrupted link, private content or 18+ content 🤯")
+                error_message = "I'm sorry. You may have provided a corrupted link, private content or 18+ content 🤯"
             case ErrorCode.LARGE_FILE:
-                await message.answer("Critical error #022 - media file is too large")
+                error_message = "Critical error #022 - media file is too large"
             case ErrorCode.SIZE_CHECK_FAIL:
-                await message.answer("Wow, you tried to download too heavy media. Don't do this, pleeease 😭")
+                error_message = "Wow, you tried to download too heavy media. Don't do this, pleeease 😭"
             case ErrorCode.DOWNLOAD_FAILED:
-                await message.answer("Sorry, I couldn't download the media.")
+                error_message = "Sorry, I couldn't download the media."
             case ErrorCode.DOWNLOAD_CANCELLED:
-                await message.answer("Download canceled.")
+                error_message = "Download canceled."
             case ErrorCode.PLAYLIST_INFO_ERROR:
-                await message.answer("Get playlist items error")
+                error_message = "Get playlist items error"
             case ErrorCode.METADATA_ERROR:
-                await message.answer("Failed to get media metadata")
+                error_message = "Failed to get media metadata"
             case ErrorCode.INTERNAL_ERROR:
-                await message.answer("Sorry, there was an error. Try again later 🧡")
+                error_message = "Sorry, there was an error. Try again later 🧡"
+        
+        if error_message:
+            logger.info(f"Sending error message to user: {error_message}")
+            await message.answer(error_message)
+        else:
+            logger.warning(f"No error message defined for code: {exception.code}")
 
         if exception.critical and config.ADMIN_ID:
+            logger.info(f"Sending critical error notification to admin {config.ADMIN_ID}")
             await bot.send_message(
                 config.ADMIN_ID,
                 f"Sorry, there was an error:\n{exception.url}\n\n<pre>{exception.message}</pre>",
@@ -48,5 +65,6 @@ async def global_error_handler(event: ErrorEvent):
             logger.error(f"Error: {exception.message}")
     else:
         # Generic error
+        logger.warning(f"Handling generic error: {type(exception).__name__}")
         await message.answer("❌ Произошла ошибка. Попробуйте позже.")
         logger.error(f"Unhandled error: {exception}", exc_info=True)

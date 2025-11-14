@@ -20,17 +20,20 @@ async def main():
     logger.info("🤖 Initializing Bot and Dispatcher...")
     from core.loader import dp, bot
 
-    # Получаем информацию о боте
     bot_info = await bot.get_me()
     logger.info(f"✅ Bot initialized: @{bot_info.username} ({bot_info.first_name})")
 
     logger.info("⚙️ Setting up workflow data...")
     dp.workflow_data.update(config=config, logger=logger)
 
-    # Регистрация хэндлеров
+    import core.error_handler
+    logger.info("✅ Error handler registered")
+
     import modules
     from modules.router import service_router
     dp.include_router(service_router)
+
+    logger.info("✅ Error handler registered")
 
     logger.info("📝 Setting default commands...")
     await set_default_commands()

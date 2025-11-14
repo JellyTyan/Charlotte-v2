@@ -1,3 +1,4 @@
+from models.errors import ErrorCode
 from modules.router import service_router as router
 from aiogram import F
 from aiogram.types import FSInputFile, InaccessibleMessage, Message, CallbackQuery
@@ -29,36 +30,34 @@ async def youtube_handler(message: Message):
     from .service import YouTubeService
     from models.errors import BotError
 
-    try:
-        media_metadata = await YouTubeService().get_info(message.text)
-        if media_metadata is None:
-            return await message.reply("No metadata found")
+    media_metadata = await YouTubeService().get_info(message.text)
+    if media_metadata is None:
+        raise BotError(
+            code=ErrorCode.METADATA_ERROR,
+            message="Failed to get metadata",
+            url=message.text,
+            is_logged=True
+        )
 
-        caption = f"<b>{media_metadata.title}</b>\n\n"
-        caption += f"<b>Channel:</b><a href='{media_metadata.performer_url}'> {media_metadata.performer}</a>\n"
-        caption += f"<b>Duration:</b> {format_duration(media_metadata.duration) \
-            if media_metadata.duration else "00"}\n\n"
-        caption += f"{media_metadata.description}"
+    caption = f"<b>{media_metadata.title}</b>\n\n"
+    caption += f"<b>Channel:</b><a href='{media_metadata.performer_url}'> {media_metadata.performer}</a>\n"
+    caption += f"<b>Duration:</b> {format_duration(media_metadata.duration) \
+        if media_metadata.duration else "00"}\n\n"
+    caption += f"{media_metadata.description}"
 
-        await process_message.delete()
+    await process_message.delete()
 
-        if media_metadata.cover:
-            await message.reply_photo(
-                photo=FSInputFile(media_metadata.cover),
-                caption=truncate_string(caption, 1024),
-                reply_markup=media_metadata.keyboard
-            )
-        else:
-            await message.reply(
-                truncate_string(caption, 1024),
-                reply_markup=media_metadata.keyboard
-            )
-    except BotError as e:
-        logger.error(f"YouTube error: {e.message}")
-        await message.reply(f"Error: {e.message}")
-    except Exception as e:
-        logger.error(f"Unexpected error in youtube_handler: {e}")
-        await message.reply("An error occurred while processing the video")
+    if media_metadata.cover:
+        await message.reply_photo(
+            photo=FSInputFile(media_metadata.cover),
+            caption=truncate_string(caption, 1024),
+            reply_markup=media_metadata.keyboard
+        )
+    else:
+        await message.reply(
+            truncate_string(caption, 1024),
+            reply_markup=media_metadata.keyboard
+        )
 
 
 @router.callback_query(YoutubeCallback.filter())
@@ -96,25 +95,11 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
     await callback_query.answer("Starting download...")
     await message.delete()
 
-    try:
-        if message.bot:
-            await message.bot.send_chat_action(message.chat.id, "record_video")
+    if message.bot:
+        await message.bot.send_chat_action(message.chat.id, "record_video")
 
-        media_content = await YouTubeService().download(url, format_choice)
+    media_content = await YouTubeService().download(url, format_choice)
 
-        from senders.media_sender import MediaSender
-        send_manager = MediaSender()
-        await send_manager.send(message, media_content, user_id)
-
-    except Exception as e:
-        logger.error(f"Youtube Handler Error: {e}")
-        # from utils.error_handler import BotError, ErrorCode, handle_download_error
-        # if not isinstance(e, BotError):
-        #     e = BotError(
-        #         code=ErrorCode.DOWNLOAD_FAILED,
-        #         message=str(e),
-        #         url=url,
-        #         critical=True,
-        #         is_logged=True
-        #     )
-        # await handle_download_error(callback_query.message, e)
+    from senders.media_sender import MediaSender
+    send_manager = MediaSender()
+    await send_manager.send(message, media_content, user_id)

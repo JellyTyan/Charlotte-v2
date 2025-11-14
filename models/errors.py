@@ -12,6 +12,7 @@ class ErrorCode(Enum):
     PLAYLIST_INFO_ERROR = "E006"
     SPONSORSHIP_ACTIVATE = "E007"
     METADATA_ERROR = "E008"
+    SEND_ERROR = "E009"
     INTERNAL_ERROR = "E500"
 
 @dataclass

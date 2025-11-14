@@ -1,11 +1,11 @@
-import asyncio
 import logging
+import os
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
 from aiogram import types
-from aiogram.enums import InputMediaType
 from aiogram.utils.media_group import MediaGroupBuilder
+from aiogram.exceptions import TelegramEntityTooLarge
 
 from utils import delete_files, truncate_string
 from models.media import MediaContent, MediaType
@@ -38,7 +38,7 @@ class MediaSender:
 
     async def send(self, message: types.Message, content: List[MediaContent], user_id: Optional[int] = None) -> None:
         if not message.bot:
-            raise BotError(code=ErrorCode.DOWNLOAD_FAILED, message="Bot instance not available")
+            raise BotError(code=ErrorCode.INTERNAL_ERROR, message="Bot instance not available", is_logged=True)
 
         try:
             media_items, audio_items, gif_items, caption = self._parse_media(content)
@@ -65,11 +65,6 @@ class MediaSender:
 
             logger.info(f"Successfully sent all media to chat {message.chat.id}")
 
-        except BotError:
-            raise
-        except Exception as e:
-            logger.error(f"Media send error: {e}", exc_info=True)
-            raise BotError(code=ErrorCode.DOWNLOAD_FAILED, message=str(e), critical=True)
         finally:
             if self._files_to_cleanup:
                 logger.debug(f"Cleaning up {len(self._files_to_cleanup)} files")
@@ -93,6 +88,17 @@ class MediaSender:
                 media_group.caption = truncate_string(caption, 1024)
 
             for item in group_items:
+                # Check file size before sending
+                file_size_mb = item.path.stat().st_size / (1024 * 1024)
+                max_size_mb = 4000 if os.getenv("TELEGRAM_BOT_API_URL") else 2000
+                
+                if file_size_mb > max_size_mb:
+                    raise BotError(
+                        code=ErrorCode.LARGE_FILE,
+                        message=f"File {item.path.name} is {file_size_mb:.1f}MB (limit: {max_size_mb}MB)",
+                        is_logged=True
+                    )
+                
                 if item.type == MediaType.PHOTO:
                     media_group.add_photo(media=types.FSInputFile(item.path))
                 elif item.type == MediaType.VIDEO:
@@ -107,26 +113,55 @@ class MediaSender:
 
             if message.bot:
                 await message.bot.send_chat_action(message.chat.id, "upload_video")
-            await message.answer_media_group(
-                media=media_group.build(),
-                disable_notification=not settings.send_notifications
-            )
+            
+            try:
+                await message.answer_media_group(
+                    media=media_group.build(),
+                    disable_notification=not settings.send_notifications
+                )
+            except TelegramEntityTooLarge:
+                raise BotError(
+                    code=ErrorCode.LARGE_FILE,
+                    message="File is too large for Telegram",
+                    is_logged=True
+                )
+            
             logger.debug(f"Sent media group {i // MEDIA_GROUP_LIMIT + 1}/{total_groups}")
 
 
     async def _send_audio(self, message: types.Message, audio: MediaContent,
                          settings: Union[UserSettings, ChatSettings]) -> None:
         logger.debug(f"Sending audio: {audio.title or 'Unknown'}")
+        
+        # Check file size before sending
+        file_size_mb = audio.path.stat().st_size / (1024 * 1024)
+        max_size_mb = 4000 if os.getenv("TELEGRAM_BOT_API_URL") else 2000
+        
+        if file_size_mb > max_size_mb:
+            raise BotError(
+                code=ErrorCode.LARGE_FILE,
+                message=f"Audio file is {file_size_mb:.1f}MB (limit: {max_size_mb}MB)",
+                is_logged=True
+            )
+        
         if message.bot:
             await message.bot.send_chat_action(message.chat.id, "upload_voice")
-        await message.answer_audio(
-            audio=types.FSInputFile(audio.path),
-            disable_notification=not settings.send_notifications,
-            thumbnail=types.FSInputFile(audio.cover) if audio.cover else None,
-            title=audio.title,
-            duration=audio.duration,
-            performer=audio.performer
-        )
+        
+        try:
+            await message.answer_audio(
+                audio=types.FSInputFile(audio.path),
+                disable_notification=not settings.send_notifications,
+                thumbnail=types.FSInputFile(audio.cover) if audio.cover else None,
+                title=audio.title,
+                duration=audio.duration,
+                performer=audio.performer
+            )
+        except TelegramEntityTooLarge:
+            raise BotError(
+                code=ErrorCode.LARGE_FILE,
+                message="Audio file is too large for Telegram",
+                is_logged=True
+            )
 
         if audio.cover and settings.send_music_covers:
             logger.debug("Sending audio cover as document")
