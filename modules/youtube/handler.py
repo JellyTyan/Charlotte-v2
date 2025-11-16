@@ -1,10 +1,11 @@
 from models.errors import ErrorCode
 from modules.router import service_router as router
 from aiogram import F
-from aiogram.types import FSInputFile, InaccessibleMessage, Message, CallbackQuery
+from aiogram.types import FSInputFile, Message, CallbackQuery
 import logging
 from .models import YoutubeCallback
 from utils import truncate_string, format_duration
+from tasks.task_manager import task_manager
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +20,14 @@ async def youtube_handler(message: Message):
     # if service.name + "Service" in blocked_services:
     #     return
 
-    if not message.text:
+    if not message.text or not message.from_user:
         return
-    if not message.bot:
+
+    await task_manager.add_task(message.from_user.id, process_youtube_url(message))
+
+
+async def process_youtube_url(message: Message):
+    if not message.bot or not message.text:
         return
 
     await message.bot.send_chat_action(message.chat.id, "find_location")
@@ -67,16 +73,7 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
     if not isinstance(message, Message):
         return
 
-    # Check sponsor access for premium formats
-    # if callback_data.sponsored:
-    #     from utils.sponsor_check import check_sponsor_access
-    #     if not await check_sponsor_access(user_id, is_premium_format=True):
-    #         await callback_query.answer(_("⭐ This format requires sponsor status"), show_alert=True)
-    #         return
-
-    # Get URL from cache using hash
     from utils.url_cache import get_url
-    from .service import YouTubeService
 
     if not callback_data.url_hash:
         await callback_query.answer("Invalid callback data")
@@ -92,14 +89,25 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
     else:
         format_choice = f"youtube_audio_{callback_data.format_id}"
 
-    await callback_query.answer("Starting download...")
+    active_count = task_manager.get_active_count(user_id)
+    if active_count > 0:
+        await callback_query.answer(f"Added to queue ({active_count} in queue)")
+    else:
+        await callback_query.answer("Starting download...")
+
     await message.delete()
+
+    await task_manager.add_task(user_id, download_youtube_media(message, url, format_choice, user_id))
+
+
+async def download_youtube_media(message: Message, url: str, format_choice: str, user_id: int):
+    from .service import YouTubeService
+    from senders.media_sender import MediaSender
 
     if message.bot:
         await message.bot.send_chat_action(message.chat.id, "record_video")
 
     media_content = await YouTubeService().download(url, format_choice)
 
-    from senders.media_sender import MediaSender
     send_manager = MediaSender()
     await send_manager.send(message, media_content, user_id)

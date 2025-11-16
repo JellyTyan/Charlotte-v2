@@ -13,13 +13,13 @@ async def global_error_handler(event: ErrorEvent):
     """Handle all unhandled errors"""
     exception = event.exception
     logger.error(f"Global error handler triggered: {type(exception).__name__}: {exception}")
-    
+
     # Get message from update (can be from message or callback_query)
     message = event.update.message
     if not message and event.update.callback_query:
         message = event.update.callback_query.message
         logger.debug(f"Got message from callback_query: {message}")
-    
+
     if not message:
         logger.error(f"Error without message context: {exception}")
         return
@@ -27,7 +27,7 @@ async def global_error_handler(event: ErrorEvent):
     # Handle BotError
     if isinstance(exception, BotError):
         logger.info(f"Handling BotError: code={exception.code}, message={exception.message}")
-        
+
         error_message = None
         match exception.code:
             case ErrorCode.INVALID_URL:
@@ -46,7 +46,7 @@ async def global_error_handler(event: ErrorEvent):
                 error_message = "Failed to get media metadata"
             case ErrorCode.INTERNAL_ERROR:
                 error_message = "Sorry, there was an error. Try again later 🧡"
-        
+
         if error_message:
             logger.info(f"Sending error message to user: {error_message}")
             await message.answer(error_message)
@@ -65,6 +65,5 @@ async def global_error_handler(event: ErrorEvent):
             logger.error(f"Error: {exception.message}")
     else:
         # Generic error
-        logger.warning(f"Handling generic error: {type(exception).__name__}")
         await message.answer("❌ Произошла ошибка. Попробуйте позже.")
         logger.error(f"Unhandled error: {exception}", exc_info=True)
