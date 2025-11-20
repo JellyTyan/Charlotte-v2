@@ -6,3 +6,4 @@ yt-dlp
 mutagen
 asyncpg
 greenlet
+redis~=7.0.1

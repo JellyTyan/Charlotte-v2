@@ -4,6 +4,7 @@ from datetime import date
 from . import database_manager
 from sqlalchemy import select, update
 from .models import Users, UserSettings, Chats, ChatSettings
+from storage.cache.redis_client import cache_get, cache_set, cache_delete, orm_to_dict, dict_to_orm
 
 
 async def get_user(user_id: int) -> Users | None:
@@ -15,9 +16,17 @@ async def get_user(user_id: int) -> Users | None:
     Returns:
         Users | None: User object
     """
+    cache_key = f"user:{user_id}"
+    cached = await cache_get(cache_key)
+    if cached:
+        return dict_to_orm(Users, cached)
+    
     async with database_manager.async_session() as session:
         result = await session.execute(select(Users).where(Users.user_id == user_id))
-        return result.scalar_one_or_none()
+        user = result.scalar_one_or_none()
+        if user:
+            await cache_set(cache_key, orm_to_dict(user), ttl=3600)
+        return user
 
 async def create_user(user_id: int) -> Users | None:
     """Create user in database
@@ -38,6 +47,9 @@ async def create_user(user_id: int) -> Users | None:
             settings = UserSettings(user_id=user_id)
             session.add_all([user, settings])
             await session.commit()
+            
+            await cache_set(f"user:{user_id}", orm_to_dict(user), ttl=3600)
+            await cache_set(f"user_settings:{user_id}", orm_to_dict(settings), ttl=3600)
             return user
     except Exception as e:
         logging.error(e)
@@ -52,9 +64,17 @@ async def get_user_settings(user_id: int) -> UserSettings | None:
     Returns:
         UserSettings | None: User settings object
     """
+    cache_key = f"user_settings:{user_id}"
+    cached = await cache_get(cache_key)
+    if cached:
+        return dict_to_orm(UserSettings, cached)
+    
     async with database_manager.async_session() as session:
         result = await session.execute(select(UserSettings).where(UserSettings.user_id == user_id))
-        return result.scalar_one_or_none()
+        settings = result.scalar_one_or_none()
+        if settings:
+            await cache_set(cache_key, orm_to_dict(settings), ttl=3600)
+        return settings
 
 async def update_user_premium(user_id: int, is_premium: bool, premium_ends: date):
     async with database_manager.async_session() as session:
@@ -64,6 +84,7 @@ async def update_user_premium(user_id: int, is_premium: bool, premium_ends: date
             .values(is_premium=is_premium, premium_ends=premium_ends)
         )
         await session.commit()
+    await cache_delete(f"user:{user_id}")
 
 async def update_user_settings(user_id: int, **kwargs):
     ALLOWED_KEYS = {"lang", "send_notifications", "send_raw", "send_music_covers",
@@ -84,6 +105,7 @@ async def update_user_settings(user_id: int, **kwargs):
             .values(safe_kwargs)
         )
         await session.commit()
+    await cache_delete(f"user_settings:{user_id}")
 
 
 async def get_chat(chat_id: int) -> Chats | None:
@@ -95,9 +117,17 @@ async def get_chat(chat_id: int) -> Chats | None:
     Returns:
         Chats | None: Chat object
     """
+    cache_key = f"chat:{chat_id}"
+    cached = await cache_get(cache_key)
+    if cached:
+        return dict_to_orm(Chats, cached)
+    
     async with database_manager.async_session() as session:
         result = await session.execute(select(Chats).where(Chats.chat_id == chat_id))
-        return result.scalar_one_or_none()
+        chat = result.scalar_one_or_none()
+        if chat:
+            await cache_set(cache_key, orm_to_dict(chat), ttl=3600)
+        return chat
 
 async def create_chat(chat_id: int, owner_id: int) -> Chats | None:
     """Create chat in database
@@ -112,6 +142,9 @@ async def create_chat(chat_id: int, owner_id: int) -> Chats | None:
             settings = ChatSettings(chat_id=chat_id)
             session.add_all([chat, settings])
             await session.commit()
+            
+            await cache_set(f"chat:{chat_id}", orm_to_dict(chat), ttl=3600)
+            await cache_set(f"chat_settings:{chat_id}", orm_to_dict(settings), ttl=3600)
             return chat
     except Exception as e:
         logging.error(e)
@@ -126,9 +159,16 @@ async def get_chat_settings(chat_id: int) -> ChatSettings | None:
     Returns:
         ChatSettings | None: Chat settings object
     """
+    cache_key = f"chat_settings:{chat_id}"
+    cached = await cache_get(cache_key)
+    if cached:
+        return dict_to_orm(ChatSettings, cached)
+    
     async with database_manager.async_session() as session:
         result = await session.execute(select(ChatSettings).where(ChatSettings.chat_id == chat_id))
         settings = result.scalar_one_or_none()
+        if settings:
+            await cache_set(cache_key, orm_to_dict(settings), ttl=3600)
         return settings
 
 async def update_chat_settings(chat_id: int, **kwargs):
@@ -150,3 +190,4 @@ async def update_chat_settings(chat_id: int, **kwargs):
             .values(safe_kwargs)
         )
         await session.commit()
+    await cache_delete(f"chat_settings:{chat_id}")
