@@ -1,8 +1,11 @@
 import redis.asyncio as redis
+import logging
 import os
 import datetime
 import json
 from typing import Optional, Any, Dict
+
+logger = logging.getLogger(__name__)
 
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
 
@@ -12,10 +15,12 @@ async def init_redis():
     global redis_client
     try:
         client = redis.from_url(REDIS_URL, decode_responses=True)
-        client.ping()
+        await client.ping()
         redis_client = client
+        logger.info("Connection to redis successful")
     except Exception:
         redis_client = None
+        logger.info("Redis not found. Skip...")
 
 def orm_to_dict(obj):
     result = {}

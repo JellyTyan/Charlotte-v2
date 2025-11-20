@@ -20,7 +20,7 @@ async def get_user(user_id: int) -> Users | None:
     cached = await cache_get(cache_key)
     if cached:
         return dict_to_orm(Users, cached)
-    
+
     async with database_manager.async_session() as session:
         result = await session.execute(select(Users).where(Users.user_id == user_id))
         user = result.scalar_one_or_none()
@@ -47,7 +47,7 @@ async def create_user(user_id: int) -> Users | None:
             settings = UserSettings(user_id=user_id)
             session.add_all([user, settings])
             await session.commit()
-            
+
             await cache_set(f"user:{user_id}", orm_to_dict(user), ttl=3600)
             await cache_set(f"user_settings:{user_id}", orm_to_dict(settings), ttl=3600)
             return user
@@ -68,7 +68,7 @@ async def get_user_settings(user_id: int) -> UserSettings | None:
     cached = await cache_get(cache_key)
     if cached:
         return dict_to_orm(UserSettings, cached)
-    
+
     async with database_manager.async_session() as session:
         result = await session.execute(select(UserSettings).where(UserSettings.user_id == user_id))
         settings = result.scalar_one_or_none()
@@ -121,7 +121,7 @@ async def get_chat(chat_id: int) -> Chats | None:
     cached = await cache_get(cache_key)
     if cached:
         return dict_to_orm(Chats, cached)
-    
+
     async with database_manager.async_session() as session:
         result = await session.execute(select(Chats).where(Chats.chat_id == chat_id))
         chat = result.scalar_one_or_none()
@@ -142,7 +142,7 @@ async def create_chat(chat_id: int, owner_id: int) -> Chats | None:
             settings = ChatSettings(chat_id=chat_id)
             session.add_all([chat, settings])
             await session.commit()
-            
+
             await cache_set(f"chat:{chat_id}", orm_to_dict(chat), ttl=3600)
             await cache_set(f"chat_settings:{chat_id}", orm_to_dict(settings), ttl=3600)
             return chat
@@ -163,7 +163,7 @@ async def get_chat_settings(chat_id: int) -> ChatSettings | None:
     cached = await cache_get(cache_key)
     if cached:
         return dict_to_orm(ChatSettings, cached)
-    
+
     async with database_manager.async_session() as session:
         result = await session.execute(select(ChatSettings).where(ChatSettings.chat_id == chat_id))
         settings = result.scalar_one_or_none()

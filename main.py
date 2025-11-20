@@ -13,6 +13,10 @@ async def main():
     from storage.db import database_manager
     await database_manager.init_db()
 
+    logger.info("📋 Initializing Redis Client...")
+    from storage.cache.redis_client import init_redis
+    await init_redis()
+
     logger.info("📋 Loading configuration...")
     config = Config()
     logger.info(f"✅ Configuration loaded. Admin ID: {config.ADMIN_ID}")
