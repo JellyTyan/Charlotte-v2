@@ -37,7 +37,8 @@ async def main():
     from modules.router import service_router
     dp.include_router(service_router)
 
-    logger.info("✅ Error handler registered")
+    import handlers
+    logger.info("✅ All handlers registered")
 
     logger.info("📝 Setting default commands...")
     await set_default_commands()

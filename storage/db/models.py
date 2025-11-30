@@ -1,5 +1,5 @@
 import datetime
-from sqlalchemy import BigInteger, Boolean, Date, Integer, String, ForeignKey, ARRAY
+from sqlalchemy import BigInteger, Boolean, Date, Integer, String, ForeignKey, ARRAY, DateTime
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from typing import List
@@ -14,9 +14,11 @@ class Users(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(BigInteger, unique=True)
     is_premium: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_lifetime_premium: Mapped[bool] = mapped_column(Boolean, default=False)
     stars_donated: Mapped[int] = mapped_column(Integer, default=0)
     premium_ends: Mapped[datetime.date] = mapped_column(Date, default=datetime.date.today)
     banned: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_used: Mapped[datetime.date] = mapped_column(Date, default=datetime.date.today, nullable=True)
 
     settings: Mapped["UserSettings"] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"
@@ -72,3 +74,23 @@ class ChatSettings(Base):
     allow_playlists: Mapped[bool] = mapped_column(Boolean, default=True)
 
     chat: Mapped["Chats"] = relationship(back_populates="settings")
+
+
+class Statistics(Base):
+    __tablename__ = "statistics"
+
+    event_id: Mapped[int] = mapped_column(primary_key=True)
+    service_name: Mapped[str] = mapped_column(String, nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    event_time: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.datetime.now, nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(32), nullable=True)
+
+
+class BotSetting(Base):
+    __tablename__ = "bot_settings"
+
+    key = mapped_column(String, primary_key=True)
+    value = mapped_column(String)
