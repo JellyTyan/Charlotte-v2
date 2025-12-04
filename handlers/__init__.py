@@ -1,1 +1,1 @@
-from . import start, admin, help
+from . import start, admin, help, settings
