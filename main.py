@@ -4,6 +4,9 @@ load_dotenv()
 from core.config import Config
 from core.logger import setup_logger
 from core.bot_commands import set_default_commands
+from utils.i18n import create_translator_hub
+from middlewares.i18n import TranslatorRunnerMiddleware
+
 
 async def main():
     logger = setup_logger()
@@ -30,8 +33,16 @@ async def main():
     logger.info("⚙️ Setting up workflow data...")
     dp.workflow_data.update(config=config, logger=logger)
 
+    logger.info("⚙️ Setting up translation...")
+    translator_hub = create_translator_hub()
+
+    dp["_translator_hub"] = translator_hub
+
+    dp.update.middleware(TranslatorRunnerMiddleware())
+
     import core.error_handler
     logger.info("✅ Error handler registered")
+
 
     import modules
     from modules.router import service_router

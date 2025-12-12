@@ -10,12 +10,11 @@ from aiogram.types import (
     InaccessibleMessage
 )
 from aiogram.enums import ParseMode
-# from aiogram.utils.i18n import gettext as _
 import logging
+from fluentogram import TranslatorRunner
 
 from storage.db.crud import update_user_settings, update_chat_settings, get_user_settings, get_chat_settings, create_user, create_chat
 from core.loader import dp
-# from main import custom_i18n
 # from utils.register_services import SERVICES
 
 
@@ -27,17 +26,6 @@ settings_keys = [
 chat_only_settings = [
     "allow_playlists", "blocked_services"
 ]
-
-settings_descriptions_raw = {
-    "send_raw": "Send the uncompressed version of art images after the usual preview, so you can get the best quality.",
-    "send_notifications": "Control whether a sound notification is sent when media is delivered.",
-    "send_music_covers": "Send music covers as separate files after the track is sent.",
-    "send_reactions": "Automatically add an emoji reaction to messages with links that I process.",
-    "auto_caption": "Automatically add captions to downloaded media.",
-    "auto_translate_titles": "Translate captions and titles into your preferred language.",
-    "allow_playlists": "Allow downloading full playlists from supported platforms in this chat.",
-    "blocked_services": "View and manage which websites or platforms are blocked in this chat."
-}
 
 LANGUAGES = [
     { "code": "en", "name": "English", "flag": "🇺🇲" },
@@ -61,43 +49,57 @@ LANGUAGES = [
     { "code": "hi", "name": "हिन्दी", "flag": "🇮🇳" }
 ]
 
-def build_main_keyboard(settings: dict, is_group: bool = False) -> InlineKeyboardMarkup:
-    def icon(flag: bool) -> str:
-        return "✅" if flag else "❌"
-
+def build_main_keyboard(settings: dict, i18n: TranslatorRunner, is_group: bool = False) -> InlineKeyboardMarkup:
+    # Добавляем настройки только для групп
     keyboards = [
         [
-        InlineKeyboardButton(text=f"{('Language')} →", callback_data="settings_lang"),
-        InlineKeyboardButton(text=f"{icon(settings['send_raw'])} {('Send art raw')}", callback_data="settings_send_raw"),
+            InlineKeyboardButton(
+                text=f"{i18n.btn.language()} →",
+                callback_data="settings_lang"
+            ),
+            InlineKeyboardButton(
+                text=i18n.btn.setting.send.raw(is_enabled=settings['send_raw']),
+                callback_data="settings_send_raw"
+            ),
         ],
         [
-            InlineKeyboardButton(text=f"{icon(settings['send_music_covers'])} {('Send Music Covers')}", callback_data="settings_send_music_covers"),
-            InlineKeyboardButton(text=f"{icon(settings['send_reactions'])} {('Send reactions')}", callback_data="settings_send_reactions"),
+            InlineKeyboardButton(
+                text=i18n.btn.setting.send.music.covers(is_enabled=settings['send_music_covers']),
+                callback_data="settings_send_music_covers"
+            ),
+            InlineKeyboardButton(
+                text=i18n.btn.setting.send.reactions(is_enabled=settings['send_reactions']),
+                callback_data="settings_send_reactions"
+            ),
         ],
         [
-            InlineKeyboardButton(text=f"{icon(settings['auto_translate_titles'])} {('Auto translate titles')}", callback_data="settings_auto_translate_titles"),
-            InlineKeyboardButton(text=f"{icon(settings['auto_caption'])} {('Auto caption')}", callback_data="settings_auto_caption"),
-        ],
-        [
-            InlineKeyboardButton(text=f"{icon(settings['send_notifications'])} {('Send a notification')}", callback_data="settings_send_notifications"),
-            InlineKeyboardButton(text=f"{('Title language')} →", callback_data="settings_title_language"),
+            InlineKeyboardButton(
+                text=i18n.btn.setting.send.music.covers(is_enabled=settings['auto_translate_titles']),
+                callback_data="settings_auto_translate_titles"
+            ),
+            InlineKeyboardButton(
+                text=i18n.btn.setting.send.reactions(is_enabled=settings['send_notifications']),
+                callback_data="settings_send_notifications"
+            ),
         ],
     ]
-
-    # Добавляем настройки только для групп
     if is_group:
         keyboards.append([
-            InlineKeyboardButton(text=f"{icon(settings['allow_playlists'])} {('Allow playlists')}", callback_data="settings_allow_playlists"),
-            InlineKeyboardButton(text=f"🔒 {('Blocked services')} →", callback_data="settings_blocked_services"),
+            InlineKeyboardButton(
+                text=i18n.btn.setting.send.music.covers(is_enabled=settings['allow_playlists']),
+                callback_data="settings_allow_playlists"
+            ),
+            InlineKeyboardButton(
+                text=i18n.btn.blocked.services(),
+                callback_data="settings_blocked_services"
+            ),
         ])
+    return InlineKeyboardMarkup(inline_keyboard=keyboards)
 
-    kb = InlineKeyboardMarkup(inline_keyboard=keyboards)
-    return kb
-
-def build_back_keyboard():
+def build_back_keyboard(i18n: TranslatorRunner):
     """Back button - used within handlers when i18n context is already available"""
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="🔙 " + ("Back"), callback_data="settings_back")]]
+        inline_keyboard=[[InlineKeyboardButton(text=i18n.settings.back(), callback_data="settings_back")]]
     )
 
 async def get_default_settings():
@@ -141,32 +143,32 @@ async def get_settings_for_chat(chat_id: int, user_id: int) -> dict:
     }
 
 @dp.message(Command("settings"))
-async def settings_command(message: Message) -> None:
+async def settings_command(message: Message, i18n: TranslatorRunner) -> None:
     chat = message.chat
     if message.bot is None or message.from_user is None:
         return
     if chat.type in ("group", "supergroup"):
         is_admin = await check_if_admin_or_owner(message.bot, chat.id, message.from_user.id)
         if not is_admin:
-            await message.answer(("You don't have permission to edit these settings!"))
+            await message.answer(i18n.settings.no.permission())
             return
 
     settings = await get_settings_for_chat(chat.id, message.from_user.id)
     is_group = chat.type in ("group", "supergroup")
 
     await message.answer(
-        ("Welcome! Here are your personal settings. Feel free to customize them as you like!"),
-        reply_markup=build_main_keyboard(settings, is_group)
+        i18n.settings.welcome(),
+        reply_markup=build_main_keyboard(settings, i18n, is_group)
     )
 
 
 @dp.callback_query(lambda c: c.data == "settings_back")
-async def settings_back(callback: CallbackQuery):
+async def settings_back(callback: CallbackQuery, i18n: TranslatorRunner):
     if callback.message is None:
         return
     settings = await get_settings_for_chat(callback.message.chat.id, callback.from_user.id)
     is_group = callback.message.chat.type in ("group", "supergroup")
-    text = ("Welcome! Here are your personal settings. Feel free to customize them as you like!")
+    text = i18n.settings.welcome()
     if isinstance(callback.message, InaccessibleMessage) or callback.message is None:
         if callback.bot is None:
             return
@@ -174,19 +176,19 @@ async def settings_back(callback: CallbackQuery):
             callback.from_user.id,
             text,
             parse_mode=ParseMode.HTML,
-            reply_markup=build_main_keyboard(settings, is_group)
+            reply_markup=build_main_keyboard(settings, i18n, is_group)
             )
     else:
         await callback.message.edit_text(
             text,
             parse_mode=ParseMode.HTML,
-            reply_markup=build_main_keyboard(settings, is_group)
+            reply_markup=build_main_keyboard(settings, i18n, is_group)
         )
     await callback.answer()
 
 
 @dp.callback_query(lambda c: c.data.startswith("settings_") and c.data in [f"settings_{k}" for k in settings_keys + ["allow_playlists"]])
-async def toggle_setting(callback: CallbackQuery):
+async def toggle_setting(callback: CallbackQuery, i18n: TranslatorRunner):
     data = callback.data
     message = callback.message
     if not data or not message:
@@ -197,11 +199,11 @@ async def toggle_setting(callback: CallbackQuery):
     # Check if the setting is available for this chat type
     if chat.type in ("group", "supergroup"):
         if key not in settings_keys and key != "allow_playlists":
-            await callback.answer(("This setting is not available for groups!"))
+            await callback.answer(i18n.settings.no.allowed.groups())
             return
     else:
         if key not in settings_keys:
-            await callback.answer(("This setting is not available for private chats!"))
+            await callback.answer(i18n.settings.no.allowed.dm())
             return
 
     # Get current settings
@@ -225,10 +227,14 @@ async def toggle_setting(callback: CallbackQuery):
     ])
 
     # Show setting description with enable/disable options
-    text = (
-        f"{settings_descriptions_raw[key]}\n\n"
-        "**Current status:** {status}"
-    ).format(status=f"✅ {('Enabled')}" if current_value else f"❌ {('Disabled')}")
+    description = i18n.get(f"desc-{key.replace('_', '-')}")
+
+    # Статус
+    status_text = i18n.setting.status.changed(
+        setting_name=key,
+        is_enabled=new_value
+    )
+    text = f"{description}\n\n{status_text}"
     if isinstance(callback.message, InaccessibleMessage) or callback.message is None:
         if callback.bot is None:
             return
@@ -352,12 +358,21 @@ async def apply_setting_toggle(callback: CallbackQuery):
 
 @dp.callback_query(lambda c: c.data.startswith("toggle_service_"))
 async def toggle_service_block(callback: CallbackQuery):
-    service_name = callback.data.replace("toggle_service_", "")
-    chat = callback.message.chat
+    data = callback.data
+    if not data:
+        return
+    service_name = data.replace("toggle_service_", "")
+    message = callback.message
+    if not message:
+        return
+    chat = message.chat
 
     # Проверяем права администратора для групп
     if chat.type in ("group", "supergroup"):
-        is_admin = await check_if_admin_or_owner(callback.bot, chat.id, callback.from_user.id)
+        bot = callback.bot
+        if not bot:
+            return
+        is_admin = await check_if_admin_or_owner(bot, chat.id, callback.from_user.id)
         if not is_admin:
             await callback.answer(("You don't have permission to edit these settings!"))
             return
@@ -417,10 +432,25 @@ async def settings_lang_menu(callback: CallbackQuery):
         ],
         [
             InlineKeyboardButton(text="Tiếng Việt 🇻🇳", callback_data="settings_lang_vi"),
-            InlineKeyboardButton(text="🔙 " + _("Back"), callback_data="settings_back"),
+            InlineKeyboardButton(text="🔙 " + ("Back"), callback_data="settings_back"),
         ]
     ])
-    await callback.message.edit_text(("Pick a language!"), reply_markup=kb)
+    text = "Pick a language!"
+    if isinstance(callback.message, InaccessibleMessage) or callback.message is None:
+        if callback.bot is None:
+            return
+        await callback.bot.send_message(
+            callback.from_user.id,
+            text,
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=kb
+            )
+    else:
+        await callback.message.edit_text(
+            text,
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=kb
+        )
     await callback.answer()
 
 

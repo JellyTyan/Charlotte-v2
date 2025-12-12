@@ -24,7 +24,7 @@ def get_ytdlp_options():
         "age_limit": 99,
         "retries": 10,
         "js_runtimes": {"deno": {}},
-        "remote_components": ["ejs:github"],
+        "remote_components": ["ejs:npm"],
         "extractor_args": {
             "youtube": {
                 "player_client": ["tv", "web_safari", "web_embedded"]
@@ -41,6 +41,8 @@ async def get_video_info(info_dict: dict, max_size_mb: int = 50) -> dict:
         uploader = info_dict.get("uploader", "Unknown Uploader")
         thumbnail = info_dict.get("thumbnail", None)
         formats = info_dict.get("formats", [])
+
+        print(formats)
 
         allowed_resolutions = ["2160p", "2160p60", "1440p", "1440p60", "1080p", "1080p60", "720p", "480p", "360p", "240p", "144p"]
 
@@ -59,7 +61,7 @@ async def get_video_info(info_dict: dict, max_size_mb: int = 50) -> dict:
                     and vcodec.startswith("avc1") and ext == "mp4" and acodec == "none":
                 video_formats.append(f)
 
-            if vcodec == "none" and acodec and ext == "m4a":
+            if vcodec == "none" and acodec and ext == "m4a" and "original" in (f.get('format_note') or '').lower():
                 audio_formats.append(f)
 
         max_bytes = max_size_mb * 1024 * 1024

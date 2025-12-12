@@ -1,9 +1,11 @@
 aiogram[i18n]==3.22.0
-httpx
-python-dotenv
-sqlalchemy
+httpx==0.28.1
+python-dotenv==1.2.1
+sqlalchemy==2.0.45
 yt-dlp
-mutagen
-asyncpg
-greenlet
+mutagen==1.47.0
+asyncpg==0.31.0
+greenlet==3.3.0
 redis~=7.1.0
+fluentogram==1.2.1
+alembic==1.17.2
