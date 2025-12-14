@@ -74,12 +74,22 @@ def build_main_keyboard(settings: dict, i18n: TranslatorRunner, is_group: bool =
         ],
         [
             InlineKeyboardButton(
-                text=i18n.btn.auto.translate(is_enabled='true' if settings['auto_translate_titles'] else 'false'),
-                callback_data="settings_auto_translate_titles"
+                text=i18n.btn.auto.caption(is_enabled='true' if settings['auto_caption'] else 'false'),
+                callback_data="settings_auto_caption"
             ),
             InlineKeyboardButton(
                 text=i18n.btn.notifications(is_enabled='true' if settings['send_notifications'] else 'false'),
                 callback_data="settings_send_notifications"
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text=i18n.btn.auto.translate(is_enabled='true' if settings['auto_translate_titles'] else 'false'),
+                callback_data="settings_auto_translate_titles"
+            ),
+            InlineKeyboardButton(
+                text=f"{i18n.btn.title.language()} →",
+                callback_data="settings_title_language"
             ),
         ],
     ]
@@ -302,13 +312,13 @@ async def apply_setting_toggle(callback: CallbackQuery, i18n: TranslatorRunner):
                 callback.from_user.id,
                 text,
                 parse_mode=ParseMode.MARKDOWN,
-                reply_markup=build_back_keyboard()
+                reply_markup=build_back_keyboard(i18n)
                 )
         else:
             await callback.message.edit_text(
                 text,
                 parse_mode=ParseMode.MARKDOWN,
-                reply_markup=build_back_keyboard()
+                reply_markup=build_back_keyboard(i18n)
             )
         await callback.answer(("Setting updated!"))
     except Exception as e:
@@ -471,7 +481,7 @@ async def settings_lang_set(callback: CallbackQuery, state: FSMContext, i18n: Tr
     await state.clear()
 
     text = ("Language has been changed to *{language}*!").format(language=lang.upper())
-    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=build_back_keyboard())
+    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=build_back_keyboard(i18n))
     await callback.answer(("Language updated!"))
 
 
@@ -507,7 +517,7 @@ async def settings_title_language_set(callback: CallbackQuery, i18n: TranslatorR
         await update_chat_settings(chat_id=chat.id, title_language=lang)
 
     text = ("Title language has been changed to *{language}*!").format(language=lang.upper())
-    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=build_back_keyboard())
+    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=build_back_keyboard(i18n))
     await callback.answer(("Title language updated!"))
 
 

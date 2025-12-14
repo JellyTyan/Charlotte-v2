@@ -42,8 +42,6 @@ async def get_video_info(info_dict: dict, max_size_mb: int = 50) -> dict:
         thumbnail = info_dict.get("thumbnail", None)
         formats = info_dict.get("formats", [])
 
-        print(formats)
-
         allowed_resolutions = ["2160p", "2160p60", "1440p", "1440p60", "1080p", "1080p60", "720p", "480p", "360p", "240p", "144p"]
 
         video_formats = []
