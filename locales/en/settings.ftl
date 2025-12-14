@@ -10,18 +10,44 @@ btn-language = Language
 btn-title-language = Title language
 btn-blocked-services = Blocked services
 
-btn-setting-send-raw = { $is_enabled -> [true] ✅ [false] ❌ } Send art raw
-btn-setting-send-music-covers = { $is_enabled -> [true] ✅ [false] ❌ } Send Music Covers
-btn-setting-send-reactions = { $is_enabled -> [true] ✅ [false] ❌ } Send reactions
-btn-setting-auto-translate = { $is_enabled -> [true] ✅ [false] ❌ } Auto translate titles
-btn-setting-auto-caption = { $is_enabled -> [true] ✅ [false] ❌ } Auto caption
-btn-setting-notifications = { $is_enabled -> [true] ✅ [false] ❌ } Send a notification
-btn-setting-allow-playlists = { $is_enabled -> [true] ✅ [false] ❌ } Allow playlists
+btn-send-raw = { $is_enabled ->
+    [true] ✅ Send art raw
+    *[false] ❌ Send art raw
+}
+btn-send-music-covers = { $is_enabled ->
+    [true] ✅ Send Music Covers
+    *[false] ❌ Send Music Covers
+}
+btn-send-reactions = { $is_enabled ->
+    [true] ✅ Send reactions
+    *[false] ❌ Send reactions
+}
+btn-auto-translate = { $is_enabled ->
+    [true] ✅ Auto translate titles
+    *[false] ❌ Auto translate titles
+}
+btn-auto-caption = { $is_enabled ->
+    [true] ✅ Auto caption
+    *[false] ❌ Auto caption
+}
+btn-notifications = { $is_enabled ->
+    [true] ✅ Send a notification
+    *[false] ❌ Send a notification
+}
+btn-allow-playlists = { $is_enabled ->
+    [true] ✅ Allow playlists
+    *[false] ❌ Allow playlists
+}
 
 desc-send-raw = Send the uncompressed version of art images after the usual preview, so you can get the best quality.
+desc-send-music-covers = Send music album covers along with audio files.
+desc-send-reactions = Send reaction emojis when processing media.
 desc-send-notifications = Control whether a sound notification is sent when media is delivered.
+desc-auto-caption = Automatically add captions to media.
+desc-auto-translate-titles = Automatically translate media titles to your language.
+desc-allow-playlists = Allow downloading and processing of playlists.
 
-setting-status-changed = Setting *{ $setting_name }* has been { $is_enabled ->
-    [true] enabled
-    [false] disabled
-}!
+setting-status-changed = { $is_enabled ->
+    [true] Setting *{ $setting_name }* has been enabled!
+    *[false] Setting *{ $setting_name }* has been disabled!
+}

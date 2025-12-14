@@ -2,5 +2,18 @@ from .file_utils import delete_files, update_metadata
 from .download_utils import download_file
 from .hash_utils import url_hash
 from .url_cache import store_url, get_url
-from .text_utils import truncate_string
+from .text_utils import truncate_string, translate_sync, translate_text
 from .time_utils import format_duration
+
+__all__ = [
+    "delete_files",
+    "update_metadata",
+    "download_file",
+    "url_hash",
+    "store_url",
+    "get_url",
+    "truncate_string",
+    "translate_sync",
+    "translate_text",
+    "format_duration",
+]

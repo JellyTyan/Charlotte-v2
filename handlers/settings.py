@@ -58,27 +58,27 @@ def build_main_keyboard(settings: dict, i18n: TranslatorRunner, is_group: bool =
                 callback_data="settings_lang"
             ),
             InlineKeyboardButton(
-                text=i18n.btn.setting.send.raw(is_enabled=settings['send_raw']),
+                text=i18n.btn.send.raw(is_enabled='true' if settings['send_raw'] else 'false'),
                 callback_data="settings_send_raw"
             ),
         ],
         [
             InlineKeyboardButton(
-                text=i18n.btn.setting.send.music.covers(is_enabled=settings['send_music_covers']),
+                text=i18n.btn.send.music.covers(is_enabled='true' if settings['send_music_covers'] else 'false'),
                 callback_data="settings_send_music_covers"
             ),
             InlineKeyboardButton(
-                text=i18n.btn.setting.send.reactions(is_enabled=settings['send_reactions']),
+                text=i18n.btn.send.reactions(is_enabled='true' if settings['send_reactions'] else 'false'),
                 callback_data="settings_send_reactions"
             ),
         ],
         [
             InlineKeyboardButton(
-                text=i18n.btn.setting.send.music.covers(is_enabled=settings['auto_translate_titles']),
+                text=i18n.btn.auto.translate(is_enabled='true' if settings['auto_translate_titles'] else 'false'),
                 callback_data="settings_auto_translate_titles"
             ),
             InlineKeyboardButton(
-                text=i18n.btn.setting.send.reactions(is_enabled=settings['send_notifications']),
+                text=i18n.btn.notifications(is_enabled='true' if settings['send_notifications'] else 'false'),
                 callback_data="settings_send_notifications"
             ),
         ],
@@ -86,7 +86,7 @@ def build_main_keyboard(settings: dict, i18n: TranslatorRunner, is_group: bool =
     if is_group:
         keyboards.append([
             InlineKeyboardButton(
-                text=i18n.btn.setting.send.music.covers(is_enabled=settings['allow_playlists']),
+                text=i18n.btn.allow.playlists(is_enabled='true' if settings['allow_playlists'] else 'false'),
                 callback_data="settings_allow_playlists"
             ),
             InlineKeyboardButton(
@@ -232,7 +232,7 @@ async def toggle_setting(callback: CallbackQuery, i18n: TranslatorRunner):
     # Статус
     status_text = i18n.setting.status.changed(
         setting_name=key,
-        is_enabled=new_value
+        is_enabled='true' if new_value else 'false'
     )
     text = f"{description}\n\n{status_text}"
     if isinstance(callback.message, InaccessibleMessage) or callback.message is None:
@@ -254,7 +254,7 @@ async def toggle_setting(callback: CallbackQuery, i18n: TranslatorRunner):
 
 
 @dp.callback_query(lambda c: c.data.startswith("toggle_") and not c.data.startswith("toggle_service_"))
-async def apply_setting_toggle(callback: CallbackQuery):
+async def apply_setting_toggle(callback: CallbackQuery, i18n: TranslatorRunner):
     data = callback.data
     if not data or not data.startswith("toggle_"):
         logging.error(f"Invalid callback data format, data don't starts with toggle_: {callback.data}")
@@ -455,7 +455,7 @@ async def settings_lang_menu(callback: CallbackQuery):
 
 
 @dp.callback_query(lambda c: c.data.startswith("settings_lang_") and c.data != "settings_lang")
-async def settings_lang_set(callback: CallbackQuery, state: FSMContext):
+async def settings_lang_set(callback: CallbackQuery, state: FSMContext, i18n: TranslatorRunner):
     lang = callback.data.removeprefix("settings_lang_")
     chat = callback.message.chat
 
@@ -497,7 +497,7 @@ async def settings_title_language_menu(callback: CallbackQuery):
 
 
 @dp.callback_query(lambda c: c.data.startswith("settings_title_lang_") and c.data != "settings_title_language")
-async def settings_title_language_set(callback: CallbackQuery):
+async def settings_title_language_set(callback: CallbackQuery, i18n: TranslatorRunner):
     lang = callback.data.removeprefix("settings_title_lang_")
     chat = callback.message.chat
 

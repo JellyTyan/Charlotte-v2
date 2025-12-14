@@ -12,6 +12,7 @@ from models.media import MediaContent, MediaType
 from models.errors import BotError, ErrorCode
 from storage.db.crud import get_user_settings, get_chat_settings, create_chat, create_user
 from storage.db.models import UserSettings, ChatSettings
+from utils import translate_text
 
 logger = logging.getLogger(__name__)
 
@@ -85,20 +86,22 @@ class MediaSender:
             media_group = MediaGroupBuilder()
 
             if caption and i == 0 and settings.auto_caption:
+                if settings.auto_translate_titles:
+                    caption = await translate_text(caption, settings.title_language)
                 media_group.caption = truncate_string(caption, 1024)
 
             for item in group_items:
                 # Check file size before sending
                 file_size_mb = item.path.stat().st_size / (1024 * 1024)
                 max_size_mb = 4000 if os.getenv("TELEGRAM_BOT_API_URL") else 2000
-                
+
                 if file_size_mb > max_size_mb:
                     raise BotError(
                         code=ErrorCode.LARGE_FILE,
                         message=f"File {item.path.name} is {file_size_mb:.1f}MB (limit: {max_size_mb}MB)",
                         is_logged=True
                     )
-                
+
                 if item.type == MediaType.PHOTO:
                     media_group.add_photo(media=types.FSInputFile(item.path))
                 elif item.type == MediaType.VIDEO:
@@ -113,7 +116,7 @@ class MediaSender:
 
             if message.bot:
                 await message.bot.send_chat_action(message.chat.id, "upload_video")
-            
+
             try:
                 await message.answer_media_group(
                     media=media_group.build(),
@@ -125,28 +128,28 @@ class MediaSender:
                     message="File is too large for Telegram",
                     is_logged=True
                 )
-            
+
             logger.debug(f"Sent media group {i // MEDIA_GROUP_LIMIT + 1}/{total_groups}")
 
 
     async def _send_audio(self, message: types.Message, audio: MediaContent,
                          settings: Union[UserSettings, ChatSettings]) -> None:
         logger.debug(f"Sending audio: {audio.title or 'Unknown'}")
-        
+
         # Check file size before sending
         file_size_mb = audio.path.stat().st_size / (1024 * 1024)
         max_size_mb = 4000 if os.getenv("TELEGRAM_BOT_API_URL") else 2000
-        
+
         if file_size_mb > max_size_mb:
             raise BotError(
                 code=ErrorCode.LARGE_FILE,
                 message=f"Audio file is {file_size_mb:.1f}MB (limit: {max_size_mb}MB)",
                 is_logged=True
             )
-        
+
         if message.bot:
             await message.bot.send_chat_action(message.chat.id, "upload_voice")
-        
+
         try:
             await message.answer_audio(
                 audio=types.FSInputFile(audio.path),

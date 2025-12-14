@@ -9,3 +9,4 @@ greenlet==3.3.0
 redis~=7.1.0
 fluentogram==1.2.1
 alembic==1.17.2
+translators~=6.0.1
