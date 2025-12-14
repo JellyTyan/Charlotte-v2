@@ -469,14 +469,14 @@ async def settings_lang_set(callback: CallbackQuery, state: FSMContext, i18n: Tr
     lang = callback.data.removeprefix("settings_lang_")
     chat = callback.message.chat
 
-    # if chat.type == "private":
-    #     await update_user_settings(user_id=callback.from_user.id, lang=lang)
-    #     # Clear cache for user
-    #     custom_i18n.clear_cache(callback.from_user.id)
-    # else:
-    #     await update_chat_settings(chat_id=chat.id, lang=lang)
-    #     # Clear cache for chat
-    #     custom_i18n.clear_cache(chat.id)
+    if chat.type == "private":
+        await update_user_settings(user_id=callback.from_user.id, lang=lang)
+        # Clear cache for user
+        # custom_i18n.clear_cache(callback.from_user.id)
+    else:
+        await update_chat_settings(chat_id=chat.id, lang=lang)
+        # Clear cache for chat
+        # custom_i18n.clear_cache(chat.id)
 
     await state.clear()
 

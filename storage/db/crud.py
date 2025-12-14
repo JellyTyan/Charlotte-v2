@@ -305,7 +305,7 @@ async def check_if_user_premium(user_id: int) -> bool:
     if user is None:
         await create_user(user_id)
         user = await get_user(user_id=user_id)
-    
+
     if not user:
         return False
 
@@ -333,7 +333,7 @@ async def toggle_lifetime_premium(user_id: int) -> bool | None:
     if user is None:
         await create_user(user_id)
         user = await get_user(user_id=user_id)
-    
+
     if not user:
         return None
 
@@ -364,7 +364,7 @@ async def ban_user(user_id: int) -> None:
     if user is None:
         await create_user(user_id=user_id)
         user = await get_user(user_id=user_id)
-    
+
     if not user:
         return
 
@@ -379,7 +379,7 @@ async def unban_user(user_id: int) -> None:
     if user is None:
         await create_user(user_id=user_id)
         user = await get_user(user_id=user_id)
-    
+
     if not user:
         return
 
@@ -391,7 +391,7 @@ async def unban_user(user_id: int) -> None:
 
 async def list_of_banned_users() -> list[Users]:
     async with database_manager.async_session() as session:
-        stmt = select(Users).where(Users.banned == True)
+        stmt = select(Users).where(Users.is_banned == True)
         result = await session.execute(stmt)
         return list(result.scalars().all())
 

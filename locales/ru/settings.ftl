@@ -7,44 +7,44 @@ settings-no-allowed-groups = This setting is not available for groups!
 settings-no-allowed-dm = This setting is not available for private chats!
 
 btn-language = Язык
-btn-title-language = Язык названий
+btn-title-language = Язык описаний
 btn-blocked-services = Заблокированные сервисы
 
 btn-send-raw = { $is_enabled ->
-    [true] ✅ Отправить исходный арт
-    *[false] ❌ Отправить исходный арт
+    [true] ✅ Без сжатия
+    *[false] ❌ Без сжатия
 }
 btn-send-music-covers = { $is_enabled ->
-    [true] ✅ Отправить музыкальные обложки
-    *[false] ❌ Отправить музыкальные обложки
+    [true] ✅ Муз. обложки
+    *[false] ❌ Муз. обложи
 }
 btn-send-reactions = { $is_enabled ->
-    [true] ✅ Отправить реакции
-    *[false] ❌ Отправить реакции
+    [true] ✅ Реакции
+    *[false] ❌ Реакции
 }
 btn-auto-translate = { $is_enabled ->
-    [true] ✅ Автоматически переводить названия
-    *[false] ❌ Автоматически переводить названия
+    [true] ✅ Перевод описаний
+    *[false] ❌ Перевод описаний
 }
 btn-auto-caption = { $is_enabled ->
-    [true] ✅ Автоматическое описание
-    *[false] ❌ Автоматическое описание
+    [true] ✅ Описания
+    *[false] ❌ Описания
 }
 btn-notifications = { $is_enabled ->
-    [true] ✅ Отправлять уведомления
-    *[false] ❌ Отправлять уведомления
+    [true] ✅ Уведомления
+    *[false] ❌ Уведомления
 }
 btn-allow-playlists = { $is_enabled ->
-    [true] ✅ Разрешить плейлисты
-    *[false] ❌ Разрешить плейлисты
+    [true] ✅ Плейлисты
+    *[false] ❌ Плейлисты
 }
 
-desc-send-raw = Отправляйте несжатую версию изображений после обычного предварительного просмотра, чтобы получить наилучшее качество.
-desc-send-music-covers = Отправлять обложки музыкальных альбомов вместе с аудиофайлами.
+desc-send-raw = Отправляет медиа, с поддерживаемых сервисов, файлом, после обычного (с сжатием).
+desc-send-music-covers = Отправлять обложки музыкальных треков вместе с аудиофайлами.
 desc-send-reactions = Отправлять эмодзи-реакции при обработке медиа.
 desc-send-notifications = Управление отправкой звукового уведомления при доставке мультимедиа.
-desc-auto-caption = Автоматически добавлять подписи к медиа.
-desc-auto-translate-titles = Автоматически переводить названия медиа на ваш язык.
+desc-auto-caption = Автоматически добавлять описание к медиа.
+desc-auto-translate-titles = Автоматически переводить описание медиа на выбранный язык.
 desc-allow-playlists = Разрешить загрузку и обработку плейлистов.
 
 setting-status-changed = { $is_enabled ->

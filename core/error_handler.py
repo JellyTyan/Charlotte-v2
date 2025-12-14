@@ -1,6 +1,7 @@
 import logging
 from aiogram.types import ErrorEvent
 from aiogram.enums import ParseMode
+from fluentogram import TranslatorRunner
 from models.errors import BotError, ErrorCode
 from core.loader import dp, bot
 from core.config import Config
@@ -24,6 +25,31 @@ async def global_error_handler(event: ErrorEvent):
         logger.error(f"Error without message context: {exception}")
         return
 
+    # Get i18n from workflow_data
+    hub = dp.workflow_data.get("_translator_hub")
+    if not hub:
+        logger.error("TranslatorHub not found in workflow_data")
+        await message.answer("❌ An error occurred. Please try again later.")
+        return
+    
+    # Get user/chat for locale
+    user = event.update.event_from_user
+    chat = event.update.event_chat
+    lang = "en"
+    
+    if chat and chat.type != "private":
+        from storage.db.crud import get_chat_settings
+        settings = await get_chat_settings(chat.id)
+        if settings:
+            lang = settings.lang
+    elif user:
+        from storage.db.crud import get_user_settings
+        settings = await get_user_settings(user.id)
+        if settings:
+            lang = settings.lang
+    
+    i18n: TranslatorRunner = hub.get_translator_by_locale(lang)
+
     # Handle BotError
     if isinstance(exception, BotError):
         logger.info(f"Handling BotError: code={exception.code}, message={exception.message}")
@@ -31,21 +57,21 @@ async def global_error_handler(event: ErrorEvent):
         error_message = None
         match exception.code:
             case ErrorCode.INVALID_URL:
-                error_message = "I'm sorry. You may have provided a corrupted link, private content or 18+ content 🤯"
+                error_message = i18n.error.invalid.url()
             case ErrorCode.LARGE_FILE:
-                error_message = "Critical error #022 - media file is too large"
+                error_message = i18n.error.large.file()
             case ErrorCode.SIZE_CHECK_FAIL:
-                error_message = "Wow, you tried to download too heavy media. Don't do this, pleeease 😭"
+                error_message = i18n.error.fail.check()
             case ErrorCode.DOWNLOAD_FAILED:
-                error_message = "Sorry, I couldn't download the media."
+                error_message = i18n.error.download.error()
             case ErrorCode.DOWNLOAD_CANCELLED:
-                error_message = "Download canceled."
+                error_message = i18n.error.download.canceled()
             case ErrorCode.PLAYLIST_INFO_ERROR:
-                error_message = "Get playlist items error"
+                error_message = i18n.error.playlist.info()
             case ErrorCode.METADATA_ERROR:
-                error_message = "Failed to get media metadata"
+                error_message = i18n.error.metadata()
             case ErrorCode.INTERNAL_ERROR:
-                error_message = "Sorry, there was an error. Try again later 🧡"
+                error_message = i18n.error.internal()
 
         if error_message:
             logger.info(f"Sending error message to user: {error_message}")
@@ -65,5 +91,5 @@ async def global_error_handler(event: ErrorEvent):
             logger.error(f"Error: {exception.message}")
     else:
         # Generic error
-        await message.answer("❌ Произошла ошибка. Попробуйте позже.")
+        await message.answer(i18n.error.generic())
         logger.error(f"Unhandled error: {exception}", exc_info=True)

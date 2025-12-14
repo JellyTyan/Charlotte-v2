@@ -1,0 +1,9 @@
+error-invalid-url = I'm sorry. You may have provided a corrupted link, private content or 18+ content 🤯
+error-large-file = Critical error #022 - media file is too large
+error-size-fail-check = Wow, you tried to download too heavy media. Don't do this, pleeease 😭
+error-download-error = Sorry, I couldn't download the media.
+error-download-canceled = Download canceled.
+error-playlist-info = Get playlist items error
+error-metadata = Failed to get media metadata
+error-internal = Sorry, there was an error. Try again later 🧡
+error-generic = ❌ There was an error. Try again later

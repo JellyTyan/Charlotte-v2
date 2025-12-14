@@ -1,6 +1,7 @@
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, Message
 from typing import Callable, Dict, Any, Awaitable
+from storage.db.crud import get_user
 
 
 class ServiceUseMiddleware(BaseMiddleware):
@@ -15,5 +16,8 @@ class ServiceUseMiddleware(BaseMiddleware):
             return
 
         # Check is banned
+        user = await get_user(event.from_user.id)
+        if user and user.is_banned:
+            return
 
         return await handler(event, data)

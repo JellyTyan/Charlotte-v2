@@ -13,11 +13,11 @@ class Users(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(BigInteger, unique=True)
+    is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
     is_premium: Mapped[bool] = mapped_column(Boolean, default=False)
     is_lifetime_premium: Mapped[bool] = mapped_column(Boolean, default=False)
     stars_donated: Mapped[int] = mapped_column(Integer, default=0)
     premium_ends: Mapped[datetime.date] = mapped_column(Date, default=datetime.date.today)
-    banned: Mapped[bool] = mapped_column(Boolean, default=False)
     last_used: Mapped[datetime.date] = mapped_column(Date, default=datetime.date.today, nullable=True)
 
     settings: Mapped["UserSettings"] = relationship(

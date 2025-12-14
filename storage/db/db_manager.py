@@ -26,7 +26,6 @@ class DatabaseManager:
             return
 
         db_url = os.getenv("DATABASE_URL", "postgresql+asyncpg://charlotte:charlottepass@localhost/charlotte")
-        # db_url = "postgresql+asyncpg://charlotte:charlottepass@localhost/charlotte"
         echo = os.getenv("SQLALCHEMY_ECHO", "False").lower() == "true"
 
         self.engine = create_async_engine(db_url, echo=echo, future=True)
