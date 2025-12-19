@@ -4,6 +4,7 @@ from .hash_utils import url_hash
 from .url_cache import store_url, get_url
 from .text_utils import truncate_string, translate_sync, translate_text
 from .time_utils import format_duration
+from .service_utils import search_music, get_ytdlp_options, random_cookie_file
 
 __all__ = [
     "delete_files",
@@ -16,4 +17,7 @@ __all__ = [
     "translate_sync",
     "translate_text",
     "format_duration",
+    "search_music",
+    "get_ytdlp_options",
+    "random_cookie_file",
 ]

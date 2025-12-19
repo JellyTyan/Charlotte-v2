@@ -9,6 +9,6 @@ class BaseService(ABC):
         pass
 
     @abstractmethod
-    async def get_info(self, url: str) -> MediaMetadata|None:
+    async def get_info(self, url: str, *args, **kwargs) -> MediaMetadata|None:
         """Getting info about media"""
         pass

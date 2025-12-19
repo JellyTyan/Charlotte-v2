@@ -5,5 +5,6 @@ error-download-error = Sorry, I couldn't download the media.
 error-download-canceled = Download canceled.
 error-playlist-info = Get playlist items error
 error-metadata = Failed to get media metadata
+error-no-found=Sorry, I didn't find anything.
 error-internal = Sorry, there was an error. Try again later 🧡
 error-generic = ❌ There was an error. Try again later

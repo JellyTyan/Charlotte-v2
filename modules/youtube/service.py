@@ -1,25 +1,23 @@
 import asyncio
 import logging
 import os
-import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
+from typing import List
 
-import aiofiles
-import aiohttp
 import yt_dlp
-from yt_dlp.utils import sanitize_filename
 from aiogram.types import InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from yt_dlp.utils import sanitize_filename
 
-from models.media import MediaContent, MediaType
 from models.errors import BotError, ErrorCode
+from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from modules.base_service import BaseService
-from .utils import get_ytdlp_options, get_video_info
+from utils import download_file, store_url, update_metadata, url_hash
+
 from .models import YoutubeCallback
-from utils import download_file, url_hash, store_url, update_metadata
+from .utils import get_video_info, get_ytdlp_options
 
 logger = logging.getLogger(__name__)
 

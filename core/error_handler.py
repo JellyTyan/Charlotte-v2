@@ -31,12 +31,12 @@ async def global_error_handler(event: ErrorEvent):
         logger.error("TranslatorHub not found in workflow_data")
         await message.answer("❌ An error occurred. Please try again later.")
         return
-    
+
     # Get user/chat for locale
     user = event.update.event_from_user
     chat = event.update.event_chat
     lang = "en"
-    
+
     if chat and chat.type != "private":
         from storage.db.crud import get_chat_settings
         settings = await get_chat_settings(chat.id)
@@ -47,7 +47,7 @@ async def global_error_handler(event: ErrorEvent):
         settings = await get_user_settings(user.id)
         if settings:
             lang = settings.lang
-    
+
     i18n: TranslatorRunner = hub.get_translator_by_locale(lang)
 
     # Handle BotError
@@ -70,6 +70,8 @@ async def global_error_handler(event: ErrorEvent):
                 error_message = i18n.error.playlist.info()
             case ErrorCode.METADATA_ERROR:
                 error_message = i18n.error.metadata()
+            case ErrorCode.NOT_FOUND:
+                error_message = i18n.error.no.found()
             case ErrorCode.INTERNAL_ERROR:
                 error_message = i18n.error.internal()
 

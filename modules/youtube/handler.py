@@ -1,11 +1,15 @@
+import logging
+
+from aiogram import F
+from aiogram.types import CallbackQuery, FSInputFile, Message
+
 from models.errors import ErrorCode
 from modules.router import service_router as router
-from aiogram import F
-from aiogram.types import FSInputFile, Message, CallbackQuery
-import logging
-from .models import YoutubeCallback
-from utils import truncate_string, format_duration
 from tasks.task_manager import task_manager
+from utils import format_duration, truncate_string
+from utils.file_utils import delete_files
+
+from .models import YoutubeCallback
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +37,9 @@ async def process_youtube_url(message: Message):
     await message.bot.send_chat_action(message.chat.id, "find_location")
     process_message = await message.reply("Processing...")
 
-    from .service import YouTubeService
     from models.errors import BotError
+
+    from .service import YouTubeService
 
     media_metadata = await YouTubeService().get_info(message.text)
     if media_metadata is None:
@@ -59,6 +64,7 @@ async def process_youtube_url(message: Message):
             caption=truncate_string(caption, 1024),
             reply_markup=media_metadata.keyboard
         )
+        await delete_files([media_metadata.cover])
     else:
         await message.reply(
             truncate_string(caption, 1024),
@@ -101,8 +107,9 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
 
 
 async def download_youtube_media(message: Message, url: str, format_choice: str, user_id: int):
-    from .service import YouTubeService
     from senders.media_sender import MediaSender
+
+    from .service import YouTubeService
 
     if message.bot:
         await message.bot.send_chat_action(message.chat.id, "record_video")

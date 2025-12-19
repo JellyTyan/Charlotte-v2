@@ -13,6 +13,7 @@ class ErrorCode(Enum):
     SPONSORSHIP_ACTIVATE = "E007"
     METADATA_ERROR = "E008"
     SEND_ERROR = "E009"
+    NOT_FOUND = "E404"
     INTERNAL_ERROR = "E500"
 
 @dataclass
@@ -23,3 +24,6 @@ class BotError(Exception):
     critical: bool = False # Send to owner?
     is_logged: bool = False # Need to be logged?
     send_user_message: bool = True # Send error message to user?
+
+    def __str__(self):
+        return f"[{self.code.value}] {self.message or 'No message'}" + (f" (URL: {self.url})" if self.url else "")

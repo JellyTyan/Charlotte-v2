@@ -1,5 +1,6 @@
-from aiogram.filters.callback_data import CallbackData
 from typing import Optional
+
+from aiogram.filters.callback_data import CallbackData
 
 
 class YoutubeCallback(CallbackData, prefix="yt"):

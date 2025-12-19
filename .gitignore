@@ -163,3 +163,4 @@ cython_debug/
 logs/*
 storage/cookies/*
 storage/temp/*
+tests
