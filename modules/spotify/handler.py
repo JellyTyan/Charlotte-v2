@@ -94,3 +94,5 @@ async def process_spotify_url(message: Message, config: Config):
             )
             logger.debug("Sending music to user")
             await send_manager.send(message, track, message.from_user.id)
+
+        await message.answer("All tracks downloaded successfully!")
