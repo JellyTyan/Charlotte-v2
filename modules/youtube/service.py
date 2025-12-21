@@ -251,29 +251,9 @@ class YouTubeService(BaseService):
                     url=url
                 )
 
-            video_id = info_dict.get('id', 'unknown')
-            video_title = info_dict.get('title', 'audio')
-
-            # Validate and sanitize to prevent path traversal
-            safe_id = sanitize_filename(str(video_id))
-            safe_title = sanitize_filename(str(video_title))
-
-            base_path = os.path.join(
-                self.output_path,
-                f"{safe_id}_{safe_title}"
-            )
-            # Ensure the path is within output_path
-            base_path = os.path.abspath(base_path)
-            if not base_path.startswith(os.path.abspath(self.output_path)):
-                raise BotError(
-                    code=ErrorCode.DOWNLOAD_FAILED,
-                    message="Invalid file path detected",
-                    url=url,
-                    critical=True,
-                    is_logged=True
-                )
-
-            audio_path = f"{base_path}.mp3"
+            # Use yt-dlp's prepare_filename to get actual file path
+            audio_path = ydl.prepare_filename(info_dict).rsplit('.', 1)[0] + '.mp3'
+            base_path = audio_path.rsplit('.', 1)[0]
             thumbnail_path = f"{base_path}.jpg"
 
             thumbnail_url = info_dict.get("thumbnail", None)

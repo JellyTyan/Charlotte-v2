@@ -2,32 +2,25 @@ import asyncio
 import logging
 import os
 import re
+import httpx
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import yt_dlp
 from aiofiles import os as aios
-from yt_dlp.utils import sanitize_filename
 
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from modules.base_service import BaseService
-from storage.cache.redis_client import get_or_cache
-from utils import download_file, search_music, update_metadata
-
-from .utils import (
-    fetch_spotify_token,
-    get_audio_options,
-    get_spotify_author,
-    get_set_list
-)
+from utils import download_file, update_metadata
+from .utils import get_audio_options, get_cover_url
 
 logger = logging.getLogger(__name__)
 
-class SpotifyService(BaseService):
-    name = "Spotify"
+class SoundCloudService(BaseService):
+    name = "SoundCloud"
     _download_executor = ThreadPoolExecutor(max_workers=10)
 
     def __init__(self, output_path: str = "storage/temp/") -> None:
@@ -45,71 +38,66 @@ class SpotifyService(BaseService):
             )
 
     async def get_info(self, url: str, *args, **kwargs) -> MediaMetadata|None:
-        logger.debug(f"Getting info for Spotify URL: {url}")
-        config = kwargs.get('config')
-        if not config:
-            raise BotError(
-                code=ErrorCode.INTERNAL_ERROR,
-                message="Config is required",
-                critical=True,
-                is_logged=True
+        async with httpx.AsyncClient(follow_redirects=True) as client:
+            response = await client.get(url)
+
+        match = re.search(r'window\.__sc_hydration = (\[.*?\]);', response.text, re.DOTALL)
+        if not match:
+            return None
+
+        import json
+        data = json.loads(match.group(1))
+        sound = next((item.get('data') for item in data if item.get('hydratable') == 'sound'), None)
+        playlist = next((item.get('data') for item in data if item.get('hydratable') == 'playlist'), None)
+
+        if sound:
+            return MediaMetadata(
+                type=MetadataType.METADATA,
+                url=url,
+                title=sound.get('title'),
+                description=sound.get('description'),
+                duration=sound.get('full_duration', 0) // 1000,
+                cover=sound.get('artwork_url'),
+                performer=sound.get('user', {}).get('username'),
+                performer_url=sound.get('user', {}).get('permalink_url'),
+                media_type='track'
             )
 
-        logger.debug("Fetching Spotify access token")
-        data = await get_or_cache(
-            "spotify_bearer_token",
-            lambda: fetch_spotify_token(config),
-            ttl=3500
-        )
-        token = data["token"]
-        logger.debug("Token retrieved successfully")
+        if playlist:
+            tracks = playlist.get('tracks', [])
+            user = playlist.get('user', {})
 
-        match_track = re.search(r"track/([^/?]+)", url)
-        match_playlist = re.search(r"playlist/([^/?]+)", url)
-        match_album = re.search(r"album/([^/?]+)", url)
-        if match_track:
-            track_id = match_track.group(1)
-            logger.debug(f"Extracting track info for ID: {track_id}")
-            performer, title, cover_url = await get_spotify_author(track_id, token)
-            logger.debug(f"Track info: {performer} - {title}")
+            # Get cover: playlist artwork -> user visuals -> user avatar
+            cover = playlist.get('artwork_url')
+            if not cover:
+                cover = user.get('avatar_url')
 
             return MediaMetadata(
                 type=MetadataType.METADATA,
                 url=url,
-                title=title,
-                performer=performer,
-                cover=cover_url,
-                media_type="track",
-            )
-        elif match_playlist:
-            playlist_id = match_playlist.group(1)
-            logger.debug(f"Extracting playlist info for ID: {playlist_id}")
-            return await get_set_list(playlist_id, "playlist", token)
-        elif match_album:
-            album_id = match_album.group(1)
-            logger.debug(f"Extracting album info for ID: {album_id}")
-            return await get_set_list(album_id, "album", token)
-        else:
-            logger.warning(f"Unrecognized Spotify URL pattern: {url}")
-            raise BotError(
-                code=ErrorCode.INVALID_URL,
-                message="Unrecognized Spotify URL format",
-                url=url,
-                is_logged=True
+                title=playlist.get('title'),
+                description=playlist.get('description'),
+                duration=playlist.get('duration', 0) // 1000,
+                cover=cover,
+                performer=user.get('username'),
+                performer_url=user.get('permalink_url'),
+                media_type='album' if playlist.get('is_album') else 'playlist',
+                items=[
+                    MediaMetadata(
+                        type=MetadataType.METADATA,
+                        url=track.get('permalink_url', ''),
+                        title=track.get('title'),
+                        duration=track.get('full_duration', 0) // 1000,
+                        cover=track.get('artwork_url'),
+                        performer=track.get('user', {}).get('username'),
+                        media_type='track'
+                    ) for track in tracks if track.get('permalink_url')
+                ]
             )
 
-    async def download(self, performer: str, title: str, cover_url: Optional[str] = None) -> List[MediaContent]:
-        logger.debug(f"Starting download for: {performer} - {title}")
+    async def download(self, url: str) -> List[MediaContent]:
+        logger.debug(f"Starting download for: {url}")
         options = get_audio_options()
-        logger.debug(f"Searching YouTube for: {performer} - {title}")
-        video_link = await search_music(performer, title)
-        if not video_link:
-            raise BotError(
-                code=ErrorCode.DOWNLOAD_FAILED,
-                message=f"No YouTube results found for: {performer} - {title}",
-                is_logged=True
-            )
-        logger.debug(f"Found YouTube link: {video_link}")
         try:
             with yt_dlp.YoutubeDL(options) as ydl:
                 loop = asyncio.get_event_loop()
@@ -117,35 +105,29 @@ class SpotifyService(BaseService):
                 logger.debug("Extracting audio info")
                 info_dict = await loop.run_in_executor(
                     self._download_executor,
-                    lambda: ydl.extract_info(video_link, download=False)
+                    lambda: ydl.extract_info(url, download=False)
                 )
                 if not info_dict:
                     raise BotError(
                         code=ErrorCode.DOWNLOAD_FAILED,
                         message="Failed to get audio info",
-                        url=video_link,
+                        url=url,
                         is_logged=True
                     )
 
                 logger.debug("Downloading audio")
                 await loop.run_in_executor(
                     self._download_executor,
-                    lambda: ydl.download([video_link])
+                    lambda: ydl.download([url])
                 )
 
-                # Use yt-dlp's prepare_filename to get actual file path
                 audio_path = ydl.prepare_filename(info_dict).rsplit('.', 1)[0] + '.mp3'
                 base_path = audio_path.rsplit('.', 1)[0]
+
                 logger.debug(f"Audio path: {audio_path}")
 
-                # Use cover from get_info if available, otherwise download from YouTube
                 cover_path = None
-                if not cover_url:
-                    thumbnail_url = info_dict.get("thumbnail", None)
-                    if thumbnail_url:
-                        cover_url = thumbnail_url
-                else:
-                    logger.debug(f"Using existing cover: {cover_url}")
+                cover_url = get_cover_url(info_dict)
 
                 if cover_url:
                     try:
@@ -157,6 +139,8 @@ class SpotifyService(BaseService):
                         cover_path = None
 
                 logger.debug("Updating metadata")
+                title = info_dict.get('title', 'Unknown')
+                performer = info_dict.get('uploader', 'Unknown')
                 await loop.run_in_executor(
                     self._download_executor,
                     lambda: update_metadata(
@@ -175,7 +159,7 @@ class SpotifyService(BaseService):
                     return [MediaContent(
                         type=MediaType.AUDIO,
                         path=Path(audio_path),
-                        duration=info_dict.get("duration", None),
+                        duration=int(info_dict.get("duration", 0)) if info_dict.get("duration") else None,
                         title=title,
                         performer=performer,
                         cover=cover_file
@@ -184,7 +168,7 @@ class SpotifyService(BaseService):
                     raise BotError(
                         code=ErrorCode.DOWNLOAD_FAILED,
                         message="Audio file not found after download",
-                        url=video_link,
+                        url=url,
                         is_logged=True,
                     )
 
@@ -193,8 +177,8 @@ class SpotifyService(BaseService):
         except Exception as e:
             raise BotError(
                 code=ErrorCode.DOWNLOAD_FAILED,
-                message=f"Error downloading YouTube Audio: {e}",
-                url=video_link,
+                message=f"Error downloading SoundCloud Audio: {e}",
+                url=url,
                 critical=True,
                 is_logged=True
             )
