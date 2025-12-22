@@ -10,3 +10,4 @@ class Config:
     ADMIN_ID: int = int(os.getenv("ADMIN_ID", 0))
     SPOTIFY_CLIENT_ID: str = os.getenv("SPOTIFY_CLIENT_ID", "")
     SPOTIFY_SECRET: str = os.getenv("SPOTIFY_SECRET", "")
+    APPLE_MUSIC_TOKEN: str = os.getenv("APPLEMUSIC_DEV_TOKEN", "")

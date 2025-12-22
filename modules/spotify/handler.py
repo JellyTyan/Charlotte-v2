@@ -55,6 +55,8 @@ async def process_spotify_url(message: Message, config: Config):
                 is_logged=True
             )
         logger.debug("Starting track download")
+        if message.bot:
+            await message.bot.send_chat_action(message.chat.id, "record_audio")
         track = await service.download(
             media_metadata.performer,
             media_metadata.title,
@@ -84,15 +86,28 @@ async def process_spotify_url(message: Message, config: Config):
         await delete_files([media_metadata.cover])
         await message.reply("Downloading tracks...")
         send_manager = MediaSender()
+        success_count = 0
+        failed_count = 0
+
         for track in media_metadata.items:
             if track.performer is None or track.title is None:
+                logger.warning(f"Skipping track with missing metadata")
                 continue
-            track = await service.download(
-                track.performer,
-                track.title,
-                track.cover
-            )
-            logger.debug("Sending music to user")
-            await send_manager.send(message, track, message.from_user.id)
 
-        await message.answer("All tracks downloaded successfully!")
+            try:
+                track = await service.download(
+                    track.performer,
+                    track.title,
+                    track.cover
+                )
+                logger.debug("Sending music to user")
+                await send_manager.send(message, track, message.from_user.id)
+                success_count += 1
+            except Exception as e:
+                logger.error(f"Failed to download track {track.title}: {e}")
+                failed_count += 1
+
+        if failed_count > 0:
+            await message.answer(f"Downloaded {success_count} tracks. {failed_count} failed.")
+        else:
+            await message.answer("All tracks downloaded successfully!")

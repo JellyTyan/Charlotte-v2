@@ -167,13 +167,21 @@ class MediaSender:
             )
 
         if audio.cover and settings.send_music_covers:
-            logger.debug("Sending audio cover as document")
+            # Send full size cover if available, otherwise regular cover
+            cover_to_send = audio.full_cover if audio.full_cover else audio.cover
+            logger.debug(f"Sending audio cover as document: {cover_to_send}")
             await message.answer_document(
-                document=types.FSInputFile(audio.cover),
+                document=types.FSInputFile(cover_to_send),
                 disable_notification=not settings.send_notifications
             )
 
-        self._files_to_cleanup.extend([audio.path, audio.cover] if audio.cover else [audio.path])
+        # Cleanup files
+        cleanup_files = [audio.path]
+        if audio.cover:
+            cleanup_files.append(audio.cover)
+        if audio.full_cover:
+            cleanup_files.append(audio.full_cover)
+        self._files_to_cleanup.extend(cleanup_files)
 
 
     def _parse_media(self, content: List[MediaContent]) -> Tuple[List[MediaContent], List[MediaContent],
