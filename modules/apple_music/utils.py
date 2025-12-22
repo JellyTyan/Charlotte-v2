@@ -68,7 +68,7 @@ async def get_track_info(song_id: int, token: str, region_code: str = "us") -> M
                 url=f"https://music.apple.com/{region_code}/song/{song_id}",
                 is_logged=True
             )
-        
+
         if not data.get('data'):
             raise BotError(
                 code=ErrorCode.METADATA_ERROR,
@@ -76,7 +76,7 @@ async def get_track_info(song_id: int, token: str, region_code: str = "us") -> M
                 url=f"https://music.apple.com/{region_code}/song/{song_id}",
                 is_logged=True
             )
-        
+
         track = data['data'][0]
         attrs = track.get('attributes', {})
         artwork = attrs.get('artwork', {})
@@ -169,9 +169,6 @@ async def get_playlist_info(playlist_id: str, token: str, region_code: str = "us
                 media_type='track'
             ))
 
-        with open('playlist_tracks_debug.json', 'w', encoding='utf-8') as f:
-            json.dump({'total_tracks': len(items), 'tracks': [{'title': t.title, 'performer': t.performer, 'url': t.url} for t in items]}, f, ensure_ascii=False, indent=2)
-
         return MediaMetadata(
             type=MetadataType.METADATA,
             url=attrs.get('url'),
@@ -216,7 +213,7 @@ async def get_album_info(album_id: str, token: str, region_code: str = "us") -> 
                 url=f"https://music.apple.com/{region_code}/album/{album_id}",
                 is_logged=True
             )
-        
+
         if not data.get('data'):
             raise BotError(
                 code=ErrorCode.METADATA_ERROR,
@@ -224,7 +221,7 @@ async def get_album_info(album_id: str, token: str, region_code: str = "us") -> 
                 url=f"https://music.apple.com/{region_code}/album/{album_id}",
                 is_logged=True
             )
-        
+
         album = data['data'][0]
         attrs = album.get('attributes', {})
         tracks_data = album.get('relationships', {}).get('tracks', {}).get('data', [])

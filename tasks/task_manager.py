@@ -33,6 +33,18 @@ class TaskManager:
         """Get number of active tasks for user"""
         self._user_tasks[user_id] = [t for t in self._user_tasks[user_id] if not t.done()]
         return len(self._user_tasks[user_id])
+    
+    async def cancel_user_tasks(self, user_id: int) -> int:
+        """Cancel all tasks for user"""
+        tasks = self._user_tasks.get(user_id, [])
+        cancelled_count = 0
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+                cancelled_count += 1
+        self._user_tasks[user_id] = []
+        logger.info(f"Cancelled {cancelled_count} tasks for user {user_id}")
+        return cancelled_count
 
 
 task_manager = TaskManager()
