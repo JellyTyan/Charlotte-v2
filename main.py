@@ -12,6 +12,12 @@ async def main():
     logger = setup_logger()
     logger.info("🚀 Charlotte-v2 Bot starting...")
 
+    logger.info("📁 Creating storage directories...")
+    import os
+    os.makedirs("storage/temp", exist_ok=True)
+    os.makedirs("logs", exist_ok=True)
+    logger.info("✅ Storage directories created")
+
     logger.info("📋 Initializing DataBase...")
     from storage.db import database_manager
     await database_manager.init_db()

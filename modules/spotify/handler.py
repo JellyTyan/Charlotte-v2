@@ -19,15 +19,13 @@ async def spotify_handler(message: Message, config: Config):
     if not message.text or not message.from_user:
         return
 
-    logger.debug(f"Spotify handler triggered for URL: {message.text}")
     await task_manager.add_task(message.from_user.id, process_spotify_url(message, config))
 
 
 async def process_spotify_url(message: Message, config: Config):
-    if not message.bot or not message.text:
+    if not message.text:
         return
 
-    logger.debug(f"Processing Spotify URL: {message.text}")
     from models.errors import BotError, ErrorCode
     from senders.media_sender import MediaSender
 
@@ -35,7 +33,6 @@ async def process_spotify_url(message: Message, config: Config):
 
     service = SpotifyService()
 
-    logger.debug("Getting metadata from Spotify")
     media_metadata = await service.get_info(message.text, config=config)
     if not media_metadata:
         raise BotError(
@@ -44,7 +41,6 @@ async def process_spotify_url(message: Message, config: Config):
             url=message.text,
             is_logged=True
         )
-    logger.debug(f"Metadata received: {media_metadata.title} by {media_metadata.performer}")
 
     if media_metadata.media_type == "track":
         if not media_metadata.performer or not media_metadata.title:
@@ -54,7 +50,6 @@ async def process_spotify_url(message: Message, config: Config):
                 url=message.text,
                 is_logged=True
             )
-        logger.debug("Starting track download")
         if message.bot:
             await message.bot.send_chat_action(message.chat.id, "record_audio")
         track = await service.download(
@@ -62,15 +57,11 @@ async def process_spotify_url(message: Message, config: Config):
             media_metadata.title,
             media_metadata.cover
         )
-        logger.debug(f"Track downloaded: {track}")
 
-        logger.debug("Sending media to user")
         send_manager = MediaSender()
         await send_manager.send(message, track, message.from_user.id)
-        logger.debug("Media sent successfully")
 
     elif media_metadata.media_type == "album" or media_metadata.media_type == "playlist":
-        logger.debug("Starting album download")
         text = f"{media_metadata.title} by <a href=\"{media_metadata.performer_url}\">{media_metadata.performer}</a>\n"
         if media_metadata.media_type == "playlist":
             text += f"<i>{media_metadata.description}</i>\n"
@@ -100,12 +91,14 @@ async def process_spotify_url(message: Message, config: Config):
                     track.title,
                     track.cover
                 )
-                logger.debug("Sending music to user")
                 await send_manager.send(message, track, message.from_user.id)
                 success_count += 1
             except Exception as e:
                 logger.error(f"Failed to download track {track.title}: {e}")
                 failed_count += 1
+
+        total = success_count + failed_count
+        logger.info(f"Completed {media_metadata.media_type} download: {success_count}/{total} tracks for user {message.from_user.id}")
 
         if failed_count > 0:
             await message.answer(f"Downloaded {success_count} tracks. {failed_count} failed.")

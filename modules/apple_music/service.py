@@ -30,17 +30,7 @@ class AppleMusicService(BaseService):
 
     def __init__(self, output_path: str = "storage/temp/") -> None:
         super().__init__()
-        try:
-            os.makedirs(output_path, exist_ok=True)
-            self.output_path = output_path
-        except OSError as e:
-            logger.error(f"Failed to create output directory {output_path}: {e}")
-            raise BotError(
-                code=ErrorCode.METADATA_ERROR,
-                message=f"Failed to initialize AppleMusic service: {str(e)}",
-                critical=True,
-                is_logged=True
-            )
+        self.output_path = output_path
 
     async def get_info(self, url: str, *args, **kwargs) -> MediaMetadata|None:
         logger.debug(f"Getting info for AppleMusic URL: {url}")

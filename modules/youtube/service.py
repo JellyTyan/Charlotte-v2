@@ -30,17 +30,7 @@ class YouTubeService(BaseService):
 
     def __init__(self, output_path: str = "storage/temp/") -> None:
         super().__init__()
-        try:
-            os.makedirs(output_path, exist_ok=True)
-            self.output_path = output_path
-        except OSError as e:
-            logger.error(f"Failed to create output directory {output_path}: {e}")
-            raise BotError(
-                code=ErrorCode.METADATA_ERROR,
-                message=f"Failed to initialize YouTube service: {str(e)}",
-                critical=True,
-                is_logged=True
-            )
+        self.output_path = output_path
 
     async def download(self, url: str, format_choice: str = "") -> List[MediaContent]:
         if not format_choice:

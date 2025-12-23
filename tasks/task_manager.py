@@ -15,7 +15,7 @@ class TaskManager:
         """Add task to user's queue using semaphore"""
         async def wrapper():
             async with self._user_semaphores[user_id]:
-                logger.info(f"Processing task for user {user_id}")
+                logger.debug(f"Processing task for user {user_id}")
                 try:
                     return await coro
                 except Exception as e:
