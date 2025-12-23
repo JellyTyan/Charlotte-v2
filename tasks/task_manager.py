@@ -11,7 +11,7 @@ class TaskManager:
         self._user_semaphores: Dict[int, asyncio.Semaphore] = defaultdict(lambda: asyncio.Semaphore(1))
         self._user_tasks: Dict[int, list] = defaultdict(list)
 
-    async def add_task(self, user_id: int, coro):
+    async def add_task(self, user_id: int, coro, message=None):
         """Add task to user's queue using semaphore"""
         async def wrapper():
             async with self._user_semaphores[user_id]:
@@ -20,6 +20,12 @@ class TaskManager:
                     return await coro
                 except Exception as e:
                     logger.error(f"Task failed for user {user_id}: {e}", exc_info=True)
+                    
+                    # Handle error manually if message provided
+                    if message:
+                        from models.errors import BotError
+                        if isinstance(e, BotError):
+                            await self._handle_bot_error(e, message, user_id)
                     raise
 
         task = asyncio.create_task(wrapper())
@@ -28,6 +34,70 @@ class TaskManager:
         self._user_tasks[user_id] = [t for t in self._user_tasks[user_id] if not t.done()]
 
         return task
+    
+    async def _handle_bot_error(self, exception, message, user_id: int):
+        """Handle BotError and send message to user"""
+        from core.loader import bot, dp
+        from core.config import Config
+        from aiogram.enums import ParseMode
+        from models.errors import ErrorCode
+        
+        config = Config()
+        hub = dp.workflow_data.get("_translator_hub")
+        if not hub:
+            await message.answer("❌ An error occurred. Please try again later.")
+            return
+        
+        # Get user settings for locale
+        from storage.db.crud import get_user_settings
+        settings = await get_user_settings(user_id)
+        lang = settings.lang if settings else "en"
+        i18n = hub.get_translator_by_locale(lang)
+        
+        # Get error message
+        error_message = None
+        match exception.code:
+            case ErrorCode.INVALID_URL:
+                error_message = i18n.error.invalid.url()
+            case ErrorCode.LARGE_FILE:
+                error_message = i18n.error.large.file()
+            case ErrorCode.SIZE_CHECK_FAIL:
+                error_message = i18n.error.fail.check()
+            case ErrorCode.DOWNLOAD_FAILED:
+                error_message = i18n.error.download.error()
+            case ErrorCode.DOWNLOAD_CANCELLED:
+                error_message = i18n.error.download.canceled()
+            case ErrorCode.PLAYLIST_INFO_ERROR:
+                error_message = i18n.error.playlist.info()
+            case ErrorCode.METADATA_ERROR:
+                error_message = i18n.error.metadata()
+            case ErrorCode.NOT_FOUND:
+                error_message = i18n.error.no.found()
+            case ErrorCode.INTERNAL_ERROR:
+                error_message = i18n.error.internal()
+        
+        if error_message:
+            await message.answer(error_message)
+        
+        # Log failed statistics
+        if hasattr(exception, 'url') and exception.url:
+            from middlewares.statistics import StatisticsMiddleware
+            from utils.statistics_helper import log_download_event
+            service_name = None
+            for pattern, name in StatisticsMiddleware.SERVICE_PATTERNS.items():
+                if pattern in exception.url:
+                    service_name = name
+                    break
+            if service_name:
+                await log_download_event(user_id, service_name, 'failed')
+        
+        # Send to admin if critical
+        if exception.critical and config.ADMIN_ID:
+            await bot.send_message(
+                config.ADMIN_ID,
+                f"Sorry, there was an error:\n{exception.url}\n\n<pre>{exception.message}</pre>",
+                parse_mode=ParseMode.HTML
+            )
 
     def get_active_count(self, user_id: int) -> int:
         """Get number of active tasks for user"""

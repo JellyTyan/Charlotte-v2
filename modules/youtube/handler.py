@@ -18,16 +18,10 @@ YOUTUBE_REGEX = r"https?://(?:www\.)?(?:m\.)?(?:youtu\.be/|youtube\.com/(?:short
 
 @router.message(F.text.regexp(YOUTUBE_REGEX))
 async def youtube_handler(message: Message):
-    # Check if service is blocked for this chat
-    # user_settings = await MediaHandler.get_settings_for_chat(message.chat.id, callback_query.from_user.id)
-    # blocked_services = getattr(user_settings, 'blocked_services', [])
-    # if service.name + "Service" in blocked_services:
-    #     return
-
     if not message.text or not message.from_user:
         return
 
-    await task_manager.add_task(message.from_user.id, process_youtube_url(message))
+    await task_manager.add_task(message.from_user.id, process_youtube_url(message), message)
 
 
 async def process_youtube_url(message: Message):
@@ -103,11 +97,12 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
 
     await message.delete()
 
-    await task_manager.add_task(user_id, download_youtube_media(message, url, format_choice, user_id))
+    await task_manager.add_task(user_id, download_youtube_media(message, url, format_choice, user_id), message)
 
 
 async def download_youtube_media(message: Message, url: str, format_choice: str, user_id: int):
     from senders.media_sender import MediaSender
+    from utils.statistics_helper import log_download_event
 
     from .service import YouTubeService
 
@@ -118,3 +113,4 @@ async def download_youtube_media(message: Message, url: str, format_choice: str,
 
     send_manager = MediaSender()
     await send_manager.send(message, media_content, user_id)
+    await log_download_event(user_id, 'YouTube', 'success')

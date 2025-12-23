@@ -19,7 +19,7 @@ async def spotify_handler(message: Message, config: Config):
     if not message.text or not message.from_user:
         return
 
-    await task_manager.add_task(message.from_user.id, process_spotify_url(message, config))
+    await task_manager.add_task(message.from_user.id, process_spotify_url(message, config), message)
 
 
 async def process_spotify_url(message: Message, config: Config):
@@ -28,6 +28,7 @@ async def process_spotify_url(message: Message, config: Config):
 
     from models.errors import BotError, ErrorCode
     from senders.media_sender import MediaSender
+    from utils.statistics_helper import log_download_event
 
     from .service import SpotifyService
 
@@ -60,6 +61,7 @@ async def process_spotify_url(message: Message, config: Config):
 
         send_manager = MediaSender()
         await send_manager.send(message, track, message.from_user.id)
+        await log_download_event(message.from_user.id, 'Spotify', 'success')
 
     elif media_metadata.media_type == "album" or media_metadata.media_type == "playlist":
         text = f"{media_metadata.title} by <a href=\"{media_metadata.performer_url}\">{media_metadata.performer}</a>\n"
@@ -68,7 +70,6 @@ async def process_spotify_url(message: Message, config: Config):
         text += f"Total tracks: {media_metadata.extra.get('total_tracks', 'Unknown')}\n"
         if media_metadata.media_type == "album":
             text += f"Release Date: {media_metadata.extra.get('release_date', 'Unknown')}\n"
-            # text += f"Genres: {media_metadata.extra["genres"]}\n"
         await message.answer_photo(
             photo=FSInputFile(media_metadata.cover),
             caption = text,
@@ -99,6 +100,9 @@ async def process_spotify_url(message: Message, config: Config):
 
         total = success_count + failed_count
         logger.info(f"Completed {media_metadata.media_type} download: {success_count}/{total} tracks for user {message.from_user.id}")
+
+        if success_count > 0:
+            await log_download_event(message.from_user.id, 'Spotify', 'success')
 
         if failed_count > 0:
             await message.answer(f"Downloaded {success_count} tracks. {failed_count} failed.")

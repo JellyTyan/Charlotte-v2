@@ -18,6 +18,7 @@ from storage.db.crud import (
     get_global_settings,
     update_global_settings
 )
+from storage.db.crud_statistics import get_service_stats, get_user_stats
 # from utils.register_services import SERVICES
 
 from core.loader import dp
@@ -36,6 +37,10 @@ statistic_kb = InlineKeyboardMarkup(inline_keyboard=[
         ],
         [
             InlineKeyboardButton(text="😔 User Premium stats", callback_data="statistic_premium_stats"),
+            InlineKeyboardButton(text="📊 Service Stats", callback_data="statistic_service_usage"),
+        ],
+        [
+            InlineKeyboardButton(text="🗑 Clean Old Stats", callback_data="statistic_clean_old"),
             InlineKeyboardButton(text="🔙 Back", callback_data="admin_panel_back"),
         ],
     ])
@@ -597,3 +602,109 @@ async def toggle_service(callback: CallbackQuery):
 
     await update_global_settings("blocked_services", blocked_services)
     # await blocked_services_menu(callback)
+
+
+# === Service Statistics ===
+@dp.callback_query(lambda c: c.data == "statistic_service_usage")
+async def admin_panel_service_usage(callback: CallbackQuery, state: FSMContext):
+    config: Optional[Config] = dp.workflow_data.get("config")
+    if not config or callback.from_user.id != config.ADMIN_ID:
+        return
+
+    from storage.db import database_manager
+    from sqlalchemy import select, func, case
+    from storage.db.models import Statistics
+    import datetime
+
+    async with database_manager.async_session() as session:
+        since = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)
+        
+        result = await session.execute(
+            select(
+                Statistics.service_name,
+                func.count(Statistics.event_id).label('total'),
+                func.sum(case((Statistics.status == 'success', 1), else_=0)).label('success'),
+                func.sum(case((Statistics.status == 'failed', 1), else_=0)).label('failed')
+            )
+            .where(Statistics.event_time >= since)
+            .group_by(Statistics.service_name)
+            .order_by(func.count(Statistics.event_id).desc())
+        )
+        
+        stats = result.all()
+
+    text = "📊 <b>Service Usage (Last 30 days)</b>\n\n"
+    total_all = 0
+    for service, total, success, failed in stats:
+        text += f"<b>{service}</b>\n"
+        text += f"  Total: {total}\n"
+        text += f"  ✅ Success: {success}\n"
+        text += f"  ❌ Failed: {failed}\n\n"
+        total_all += total
+    
+    text += f"<b>Total Downloads:</b> {total_all}"
+
+    if isinstance(callback.message, InaccessibleMessage) or callback.message is None:
+        if callback.bot:
+            await callback.bot.send_message(callback.from_user.id, text, parse_mode=ParseMode.HTML, reply_markup=statistic_kb)
+    else:
+        await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=statistic_kb)
+    await callback.answer()
+
+
+@dp.callback_query(lambda c: c.data == "statistic_clean_old")
+async def admin_panel_clean_stats(callback: CallbackQuery, state: FSMContext):
+    config: Optional[Config] = dp.workflow_data.get("config")
+    if not config or callback.from_user.id != config.ADMIN_ID:
+        return
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🗑 Clean 30+ days", callback_data="clean_stats_30"),
+            InlineKeyboardButton(text="🗑 Clean 60+ days", callback_data="clean_stats_60"),
+        ],
+        [
+            InlineKeyboardButton(text="🗑 Clean 90+ days", callback_data="clean_stats_90"),
+            InlineKeyboardButton(text="🔙 Back", callback_data="admin_panel_statistic"),
+        ]
+    ])
+
+    text = "⚠️ <b>Clean Old Statistics</b>\n\nSelect period to clean:"
+
+    if isinstance(callback.message, InaccessibleMessage) or callback.message is None:
+        if callback.bot:
+            await callback.bot.send_message(callback.from_user.id, text, parse_mode=ParseMode.HTML, reply_markup=kb)
+    else:
+        await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+    await callback.answer()
+
+
+@dp.callback_query(lambda c: c.data.startswith("clean_stats_"))
+async def admin_clean_stats_confirm(callback: CallbackQuery, state: FSMContext):
+    config: Optional[Config] = dp.workflow_data.get("config")
+    if not config or callback.from_user.id != config.ADMIN_ID:
+        return
+
+    days = int(callback.data.split("_")[-1])
+    
+    from storage.db import database_manager
+    from sqlalchemy import delete
+    from storage.db.models import Statistics
+    import datetime
+
+    async with database_manager.async_session() as session:
+        cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days)
+        result = await session.execute(
+            delete(Statistics).where(Statistics.event_time < cutoff)
+        )
+        await session.commit()
+        deleted = result.rowcount
+
+    text = f"✅ Cleaned {deleted} records older than {days} days"
+
+    if isinstance(callback.message, InaccessibleMessage) or callback.message is None:
+        if callback.bot:
+            await callback.bot.send_message(callback.from_user.id, text, parse_mode=ParseMode.HTML, reply_markup=statistic_kb)
+    else:
+        await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=statistic_kb)
+    await callback.answer()

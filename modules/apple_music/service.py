@@ -57,14 +57,14 @@ class AppleMusicService(BaseService):
             )
             m = song_pattern.match(url)
 
-            return await get_track_info(m.group("id"), m.group("region"), token)
+            return await get_track_info(m.group("id"), token, m.group("region"))
         elif match_album_track:
             album_track_pattern = re.compile(
                 r"^https?:\/\/music\.apple\.com\/(?P<region>[a-z]{2})\/album\/(?:[^\/\s]+\/)?(?P<album_id>\d+)\?i=(?P<track_id>\d+)$"
             )
             m = album_track_pattern.match(url)
 
-            return await get_track_info(m.group("track_id"), m.group("region"), token)
+            return await get_track_info(m.group("track_id"), token, m.group("region"))
         elif match_playlist:
             playlist_pattern = re.compile(
                 r"^https?:\/\/music\.apple\.com\/(?P<region>[a-z]{2})\/playlist\/(?:[^\/\s]+\/)?(?P<id>[^\/\s]+)$"

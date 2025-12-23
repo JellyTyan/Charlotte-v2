@@ -32,8 +32,8 @@ def get_audio_options():
             "key": "FFmpegExtractAudio",
             "preferredcodec": "mp3",
             "preferredquality": "192",
-        },
-    ],
+        }
+    ]
 
     cookie_file = random_cookie_file("youtube")
     if cookie_file:

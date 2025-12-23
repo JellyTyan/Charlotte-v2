@@ -16,11 +16,12 @@ async def global_error_handler(event: ErrorEvent):
     logger.error(f"Global error handler triggered: {type(exception).__name__}: {exception}")
 
     # Get message from update (can be from message or callback_query)
-    message = event.update.message
-    if not message and event.update.callback_query:
-        message = event.update.callback_query.message
-        logger.debug(f"Got message from callback_query: {message}")
-
+    message = None
+    if hasattr(event, 'message'):
+        message = event.message
+    elif hasattr(event, 'callback_query') and event.callback_query:
+        message = event.callback_query.message
+    
     if not message:
         logger.error(f"Error without message context: {exception}")
         return
@@ -33,8 +34,18 @@ async def global_error_handler(event: ErrorEvent):
         return
 
     # Get user/chat for locale
-    user = event.update.event_from_user
-    chat = event.update.event_chat
+    user = None
+    if hasattr(event, 'from_user'):
+        user = event.from_user
+    elif hasattr(event, 'callback_query') and event.callback_query:
+        user = event.callback_query.from_user
+    
+    chat = None
+    if hasattr(event, 'chat'):
+        chat = event.chat
+    elif message:
+        chat = message.chat
+    
     lang = "en"
 
     if chat and chat.type != "private":

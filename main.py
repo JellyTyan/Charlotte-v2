@@ -45,6 +45,11 @@ async def main():
     dp["_translator_hub"] = translator_hub
 
     dp.update.middleware(TranslatorRunnerMiddleware())
+    
+    logger.info("📊 Setting up statistics collection...")
+    from middlewares.statistics import StatisticsMiddleware
+    dp.message.middleware(StatisticsMiddleware())
+    logger.info("✅ Statistics middleware registered")
 
     import core.error_handler
     logger.info("✅ Error handler registered")
@@ -56,6 +61,11 @@ async def main():
 
     import handlers
     logger.info("✅ All handlers registered")
+
+    logger.info("⏰ Starting scheduled tasks...")
+    from tasks.scheduled import start_scheduled_tasks
+    start_scheduled_tasks()
+    logger.info("✅ Scheduled tasks started")
 
     logger.info("📝 Setting default commands...")
     await set_default_commands()
