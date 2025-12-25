@@ -36,13 +36,13 @@ def get_ytdlp_options():
     }
 
 
-async def get_video_info(info_dict: dict, max_size_mb: int = 50) -> dict:
+async def  get_video_info(info_dict: dict, max_size_mb: int = 50) -> dict:
         title = info_dict.get("title", "Unknown Title")
         uploader = info_dict.get("uploader", "Unknown Uploader")
         thumbnail = info_dict.get("thumbnail", None)
         formats = info_dict.get("formats", [])
 
-        allowed_resolutions = ["2160p", "2160p60", "1440p", "1440p60", "1080p", "1080p60", "720p", "480p", "360p", "240p", "144p"]
+        allowed_resolutions = ["2160p", "2160p60", "1440p", "1440p60", "1080p", "1080p60", "720p", "720p60", "480p", "360p", "240p", "144p"]
 
         video_formats = []
         audio_formats = []
@@ -59,7 +59,8 @@ async def get_video_info(info_dict: dict, max_size_mb: int = 50) -> dict:
                     and vcodec.startswith("avc1") and ext == "mp4" and acodec == "none":
                 video_formats.append(f)
 
-            if vcodec == "none" and acodec and ext == "m4a" and "original" in (f.get('format_note') or '').lower():
+            # Select best audio: prefer m4a with highest bitrate
+            if vcodec == "none" and acodec and ext == "m4a":
                 audio_formats.append(f)
 
         max_bytes = max_size_mb * 1024 * 1024
@@ -88,14 +89,28 @@ async def get_video_info(info_dict: dict, max_size_mb: int = 50) -> dict:
         best_audio = None
         best_audio_score = -1
 
+        # First pass: try to find original audio
         for a in audio_formats:
-            a_size = a.get('filesize') or a.get('filesize_approx') or 0
-            size_mb = a_size / (1024 * 1024)
-            abr = a.get("abr", 0)
+            format_note = (a.get('format_note') or '').lower()
+            if 'original' in format_note:
+                a_size = a.get('filesize') or a.get('filesize_approx') or 0
+                size_mb = a_size / (1024 * 1024)
+                abr = a.get("abr", 0)
 
-            if size_mb <= max_size_mb and abr > best_audio_score:
-                best_audio_score = abr
-                best_audio = a
+                if size_mb <= max_size_mb and abr > best_audio_score:
+                    best_audio_score = abr
+                    best_audio = a
+        
+        # Second pass: if no original found, take best available
+        if not best_audio:
+            for a in audio_formats:
+                a_size = a.get('filesize') or a.get('filesize_approx') or 0
+                size_mb = a_size / (1024 * 1024)
+                abr = a.get("abr", 0)
+
+                if size_mb <= max_size_mb and abr > best_audio_score:
+                    best_audio_score = abr
+                    best_audio = a
 
         result = {
             "title": title,

@@ -173,18 +173,18 @@ class YouTubeService(BaseService):
             except (KeyError, ValueError) as e:
                 logger.warning(f"Failed to create audio button: {e}")
 
-            return MediaMetadata(
-                type=MetadataType.METADATA,
-                url=url,
-                title=info_dict.get("title", None),
-                description=info_dict.get("description", None),
-                duration=info_dict.get("duration", None),
-                performer=info_dict.get("uploader", None),
-                performer_url=info_dict.get("channel_url", None),
-                cover=thumbnail_path,
-                media_type="video",
-                keyboard=markup.as_markup()
-            )
+        return MediaMetadata(
+            type=MetadataType.METADATA,
+            url=url,
+            title=info_dict.get("title", None),
+            description=info_dict.get("description", None),
+            duration=info_dict.get("duration", None),
+            performer=info_dict.get("uploader", None),
+            performer_url=info_dict.get("channel_url", None),
+            cover=thumbnail_path,
+            media_type="video",
+            keyboard=markup.as_markup()
+        )
 
     async def download_video(self, url: str, format: str) -> List[MediaContent]:
         logger.info(f"Starting video download for URL: {url}")
