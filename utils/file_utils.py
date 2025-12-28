@@ -48,37 +48,56 @@ def update_metadata(
     :return: None
     """
     # Checking file extension
-    if not audio_file.lower().endswith(".mp3"):
-        logger.error(f"Файл {audio_file} не является MP3.")
+    ext = audio_file.lower().split('.')[-1]
+    if ext not in ["mp3", "m4a", "mp4"]:
+        logger.error(f"Unsupported audio format: {audio_file}")
         return
 
     try:
-        # Open the file to read and write metadata
-        audio = MP3(audio_file, ID3=ID3)
+        if ext == "mp3":
+            # Open the file to read and write metadata
+            audio = MP3(audio_file, ID3=ID3)
 
-        # Add or update title and artist
-        audio["TIT2"] = TIT2(encoding=3, text=title)
-        audio["TPE1"] = TPE1(encoding=3, text=artist)
+            # Add or update title and artist
+            audio["TIT2"] = TIT2(encoding=3, text=title)
+            audio["TPE1"] = TPE1(encoding=3, text=artist)
 
-        # If there's a cover, add it
-        if cover_file:
-            # Validate cover file path to prevent path traversal
-            import os
-            if not os.path.isfile(cover_file) or ".." in cover_file:
-                logger.error(f"Invalid cover file path: {cover_file}")
-                return
-            with open(cover_file, "rb") as img:
-                audio.tags.add(
-                    APIC(
-                        encoding=3,
-                        mime="image/jpeg",
-                        type=3,
-                        desc="Cover",
-                        data=img.read(),
+            # If there's a cover, add it
+            if cover_file:
+                import os
+                if not os.path.isfile(cover_file) or ".." in cover_file:
+                    logger.error(f"Invalid cover file path: {cover_file}")
+                    return
+                with open(cover_file, "rb") as img:
+                    audio.tags.add(
+                        APIC(
+                            encoding=3,
+                            mime="image/jpeg",
+                            type=3,
+                            desc="Cover",
+                            data=img.read(),
+                        )
                     )
-                )
+            audio.save()
 
-        audio.save()
+        elif ext in ["m4a", "mp4"]:
+            from mutagen.mp4 import MP4, MP4Cover
+
+            audio = MP4(audio_file)
+            audio["\xa9nam"] = title
+            audio["\xa9ART"] = artist
+
+            if cover_file:
+                import os
+                if not os.path.isfile(cover_file):
+                    logger.error(f"Covr file not found: {cover_file}")
+                else:
+                     with open(cover_file, "rb") as img:
+                        audio["covr"] = [
+                            MP4Cover(img.read(), imageformat=MP4Cover.FORMAT_JPEG)
+                        ]
+            audio.save()
+
         logger.info(
             f"Metadata and file cover of {audio_file} have been successfully updated."
         )
