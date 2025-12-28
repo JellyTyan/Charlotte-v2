@@ -14,6 +14,7 @@ msg-help =
     <b>Music Platforms</b>
       - Spotify
       - Apple Music
+      - Deezer
       - SoundCloud
     I’ll fetch the music, with title, artist, and cover.
     <b>Video Platforms</b>
