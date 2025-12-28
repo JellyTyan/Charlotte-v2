@@ -5,6 +5,7 @@ from .url_cache import store_url, get_url
 from .text_utils import truncate_string, translate_sync, translate_text
 from .time_utils import format_duration
 from .service_utils import search_music, get_ytdlp_options, random_cookie_file
+from .user_agents import get_user_agent
 
 __all__ = [
     "delete_files",
@@ -20,4 +21,5 @@ __all__ = [
     "search_music",
     "get_ytdlp_options",
     "random_cookie_file",
+    "get_user_agent"
 ]

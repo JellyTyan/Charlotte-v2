@@ -1,0 +1,112 @@
+import logging
+
+from aiogram import F
+from aiogram.enums import ParseMode
+from aiogram.types import FSInputFile, Message
+
+from core.config import Config
+from modules.router import service_router as router
+from tasks.task_manager import task_manager
+from utils.file_utils import delete_files
+
+logger = logging.getLogger(__name__)
+
+
+DEEZER_REGEX = r"^https?:\/\/(?:www\.deezer\.com\/[a-z]{2}\/(track|album|playlist)\/\d+|link\.deezer\.com\/s\/[A-Za-z0-9]+)$"
+
+@router.message(F.text.regexp(DEEZER_REGEX))
+async def deezer_handler(message: Message, config: Config):
+    if not message.text or not message.from_user:
+        return
+
+    await task_manager.add_task(message.from_user.id, process_deezer_url(message, config), message)
+
+
+async def process_deezer_url(message: Message, config: Config):
+    if not message.text:
+        return
+
+    from models.errors import BotError, ErrorCode
+    from senders.media_sender import MediaSender
+    from utils.statistics_helper import log_download_event
+
+    from .service import DeezerService
+
+    service = DeezerService()
+
+    media_metadata = await service.get_info(message.text, config=config)
+    if not media_metadata:
+        raise BotError(
+            code=ErrorCode.METADATA_ERROR,
+            message="Failed to get metadata",
+            url=message.text,
+            is_logged=True
+        )
+
+    if media_metadata.media_type == "track":
+        if not media_metadata.performer or not media_metadata.title:
+            raise BotError(
+                code=ErrorCode.METADATA_ERROR,
+                message="Failed to get metadata",
+                url=message.text,
+                is_logged=True
+            )
+        if message.bot:
+            await message.bot.send_chat_action(message.chat.id, "record_audio")
+        track = await service.download(
+            media_metadata.performer,
+            media_metadata.title,
+            media_metadata.cover,
+            media_metadata.full_size_cover
+        )
+
+        send_manager = MediaSender()
+        await send_manager.send(message, track, message.from_user.id)
+        await log_download_event(message.from_user.id, 'Deezer', 'success')
+
+    elif media_metadata.media_type == "album" or media_metadata.media_type == "playlist":
+        text = f"{media_metadata.title} by <a href=\"{media_metadata.performer_url}\">{media_metadata.performer}</a>\n"
+        if media_metadata.media_type == "playlist":
+            text += f"<i>{media_metadata.description}</i>\n"
+        text += f"Total tracks: {media_metadata.extra.get('track_count', 'Unknown')}\n"
+        if media_metadata.media_type == "album":
+            text += f"Release Date: {media_metadata.extra.get('release_date', 'Unknown')}\n"
+        await message.answer_photo(
+            photo=FSInputFile(media_metadata.cover),
+            caption = text,
+            parse_mode=ParseMode.HTML
+        )
+        await delete_files([media_metadata.cover])
+        await message.reply("Downloading tracks...")
+        send_manager = MediaSender()
+        success_count = 0
+        failed_count = 0
+
+        for track in media_metadata.items:
+            if track.performer is None or track.title is None:
+                logger.warning(f"Skipping track with missing metadata")
+                continue
+
+            try:
+                track = await service.download(
+                    track.performer,
+                    track.title,
+                    track.cover,
+                    track.full_size_cover
+                )
+                await send_manager.send(message, track, message.from_user.id)
+                success_count += 1
+            except Exception as e:
+                logger.error(f"Failed to download track {track.title}: {e}")
+                failed_count += 1
+
+        total = success_count + failed_count
+        logger.info(f"Completed {media_metadata.media_type} download: {success_count}/{total} tracks for user {message.from_user.id}")
+
+        if success_count > 0:
+            await log_download_event(message.from_user.id, 'Spotify', 'success')
+
+        if failed_count > 0:
+            await message.answer(f"Downloaded {success_count} tracks. {failed_count} failed.")
+        else:
+            await message.answer("All tracks downloaded successfully!")
