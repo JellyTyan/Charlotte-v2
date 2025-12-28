@@ -45,7 +45,7 @@ async def main():
     dp["_translator_hub"] = translator_hub
 
     dp.update.middleware(TranslatorRunnerMiddleware())
-    
+
     logger.info("📊 Setting up statistics collection...")
     from middlewares.statistics import StatisticsMiddleware
     dp.message.middleware(StatisticsMiddleware())
@@ -72,7 +72,7 @@ async def main():
     logger.info("✅ Default commands set")
 
     logger.info("🎉 Bot successfully started and ready to receive messages!")
-    await dp.start_polling(bot)
+    await dp.start_polling(bot, skip_updates=True)
 
 if __name__ == "__main__":
     import asyncio
