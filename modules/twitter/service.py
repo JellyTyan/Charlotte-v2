@@ -11,7 +11,7 @@ from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
 from modules.base_service import BaseService
-from utils import download_file, truncate_string
+from utils import download_file, truncate_string, get_user_agent
 from .utils import get_guest_token, get_tweet_info, sanitize_filename
 
 logger = logging.getLogger(__name__)
@@ -25,14 +25,6 @@ class TwitterService(BaseService):
         self.output_path = output_path
         os.makedirs(self.output_path, exist_ok=True)
         self.auth = "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
-        self.user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        self.guest_token = None
-        self.headers = {
-            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-            'user-agent': self.user_agent,
-        }
-        self.request_counter = 0
-        self.token_update_interval = 3
 
     async def download(self, url: str) -> List[MediaContent]:
         match = re.search(r"status/(\d+)", url)
@@ -45,18 +37,23 @@ class TwitterService(BaseService):
 
         tweet_id = int(match.group(1))
 
-        async with httpx.AsyncClient(follow_redirects=True, headers=self.headers) as client:
+        user_agent = get_user_agent()
+        headers = {
+            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'user-agent': user_agent,
+        }
+
+        async with httpx.AsyncClient(follow_redirects=True, headers=headers) as client:
             try:
                 await client.get(url)
 
-                if self.guest_token is None:
-                    self.guest_token = await get_guest_token(self.auth, client)
+                guest_token = await get_guest_token(self.auth, client)
 
                 tweet_dict = await get_tweet_info(
                     tweet_id,
                     self.auth,
-                    self.user_agent,
-                    self.guest_token,
+                    user_agent,
+                    guest_token,
                     client
                 )
 

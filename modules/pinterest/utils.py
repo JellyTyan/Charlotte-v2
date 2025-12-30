@@ -8,6 +8,7 @@ import httpx
 import yt_dlp
 
 from models.errors import BotError, ErrorCode
+from utils import get_user_agent
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ async def get_pin_info(pin_id: int, client: httpx.AsyncClient) -> Dict[str, Any]
     url = "https://www.pinterest.com/resource/PinResource/get/"
     headers = {
         "accept": "application/json, text/javascript, */*, q=0.01",
-        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "user-agent": get_user_agent(),
         "x-pinterest-pws-handler": "www/pin/[id]/feedback.js",
     }
     params = {
