@@ -20,6 +20,8 @@ class StatisticsMiddleware(BaseMiddleware):
         'soundcloud.com': 'SoundCloud',
         'music.apple.com': 'AppleMusic',
         'deezer.com': 'Deezer',
+        'twitter.com': 'Twitter',
+        'x.com': 'Twitter'
     }
 
     async def __call__(
