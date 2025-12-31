@@ -2,6 +2,7 @@ import logging
 
 from aiogram import F
 from aiogram.types import CallbackQuery, FSInputFile, Message
+from fluentogram import TranslatorRunner
 
 from models.errors import ErrorCode
 from modules.router import service_router as router
@@ -17,19 +18,19 @@ logger = logging.getLogger(__name__)
 YOUTUBE_REGEX = r"https?://(?:www\.)?(?:m\.)?(?:youtu\.be/|youtube\.com/(?:shorts/|watch\?v=))([\w-]+)"
 
 @router.message(F.text.regexp(YOUTUBE_REGEX))
-async def youtube_handler(message: Message):
+async def youtube_handler(message: Message, i18n: TranslatorRunner):
     if not message.text or not message.from_user:
         return
 
-    await task_manager.add_task(message.from_user.id, process_youtube_url(message), message)
+    await task_manager.add_task(message.from_user.id, process_youtube_url(message, i18n), message)
 
 
-async def process_youtube_url(message: Message):
+async def process_youtube_url(message: Message, i18n: TranslatorRunner):
     if not message.bot or not message.text:
         return
 
     await message.bot.send_chat_action(message.chat.id, "find_location")
-    process_message = await message.reply("Processing...")
+    process_message = await message.reply(i18n.get('processing'))
 
     from models.errors import BotError
 
@@ -67,7 +68,7 @@ async def process_youtube_url(message: Message):
 
 
 @router.callback_query(YoutubeCallback.filter())
-async def format_choice_handler(callback_query: CallbackQuery, callback_data: YoutubeCallback):
+async def format_choice_handler(callback_query: CallbackQuery, callback_data: YoutubeCallback, i18n: TranslatorRunner):
     user_id = callback_query.from_user.id
     message = callback_query.message
     if not isinstance(message, Message):
@@ -76,12 +77,12 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
     from utils.url_cache import get_url
 
     if not callback_data.url_hash:
-        await callback_query.answer("Invalid callback data")
+        await callback_query.answer(i18n.get('invalid-callback'))
         return
 
     url = get_url(callback_data.url_hash)
     if not url:
-        await callback_query.answer("URL expired or not found")
+        await callback_query.answer(i18n.get('url-expired'))
         return
 
     if callback_data.type == 'video':
@@ -91,9 +92,9 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
 
     active_count = task_manager.get_active_count(user_id)
     if active_count > 0:
-        await callback_query.answer(f"Added to queue ({active_count} in queue)")
+        await callback_query.answer(i18n.get('added-to-queue', count=active_count))
     else:
-        await callback_query.answer("Starting download...")
+        await callback_query.answer(i18n.get('starting-download'))
 
     await message.delete()
 

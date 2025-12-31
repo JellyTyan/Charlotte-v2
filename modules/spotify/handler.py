@@ -3,6 +3,7 @@ import logging
 from aiogram import F
 from aiogram.enums import ParseMode
 from aiogram.types import FSInputFile, Message
+from fluentogram import TranslatorRunner
 
 from core.config import Config
 from modules.router import service_router as router
@@ -15,14 +16,14 @@ logger = logging.getLogger(__name__)
 SPOTIFY_REGEX = r"https?://open\.spotify\.com/(track|playlist|album)/([\w-]+)"
 
 @router.message(F.text.regexp(SPOTIFY_REGEX))
-async def spotify_handler(message: Message, config: Config):
+async def spotify_handler(message: Message, config: Config, i18n: TranslatorRunner):
     if not message.text or not message.from_user:
         return
 
-    await task_manager.add_task(message.from_user.id, process_spotify_url(message, config), message)
+    await task_manager.add_task(message.from_user.id, process_spotify_url(message, config, i18n), message)
 
 
-async def process_spotify_url(message: Message, config: Config):
+async def process_spotify_url(message: Message, config: Config, i18n: TranslatorRunner):
     if not message.text:
         return
 
@@ -67,16 +68,16 @@ async def process_spotify_url(message: Message, config: Config):
         text = f"{media_metadata.title} by <a href=\"{media_metadata.performer_url}\">{media_metadata.performer}</a>\n"
         if media_metadata.media_type == "playlist":
             text += f"<i>{media_metadata.description}</i>\n"
-        text += f"Total tracks: {media_metadata.extra.get('total_tracks', 'Unknown')}\n"
+        text += i18n.get('total-tracks', count=media_metadata.extra.get('total_tracks', 'Unknown')) + "\n"
         if media_metadata.media_type == "album":
-            text += f"Release Date: {media_metadata.extra.get('release_date', 'Unknown')}\n"
+            text += i18n.get('release-date', date=media_metadata.extra.get('release_date', 'Unknown')) + "\n"
         await message.answer_photo(
             photo=FSInputFile(media_metadata.cover),
             caption = text,
             parse_mode=ParseMode.HTML
         )
         await delete_files([media_metadata.cover])
-        await message.reply("Downloading tracks...")
+        await message.reply(i18n.get('downloading-tracks'))
         send_manager = MediaSender()
         success_count = 0
         failed_count = 0
@@ -105,6 +106,6 @@ async def process_spotify_url(message: Message, config: Config):
             await log_download_event(message.from_user.id, 'Spotify', 'success')
 
         if failed_count > 0:
-            await message.answer(f"Downloaded {success_count} tracks. {failed_count} failed.")
+            await message.answer(i18n.get('download-stats', success=success_count, failed=failed_count))
         else:
-            await message.answer("All tracks downloaded successfully!")
+            await message.answer(i18n.get('all-tracks-success'))

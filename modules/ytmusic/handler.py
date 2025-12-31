@@ -3,6 +3,7 @@ import logging
 from aiogram import F
 from aiogram.enums import ParseMode
 from aiogram.types import FSInputFile, Message
+from fluentogram import TranslatorRunner
 
 from core.config import Config
 from modules.router import service_router as router
@@ -15,14 +16,14 @@ logger = logging.getLogger(__name__)
 YTMUSIC_REGEX = r"https:\/\/music\.youtube\.com\/(watch\?v=[\w-]+(&[\w=-]+)*|playlist\?list=[\w-]+(&[\w=-]+)*)"
 
 @router.message(F.text.regexp(YTMUSIC_REGEX))
-async def ytmusic_handler(message: Message, config: Config):
+async def ytmusic_handler(message: Message, config: Config, i18n: TranslatorRunner):
     if not message.text or not message.from_user:
         return
 
-    await task_manager.add_task(message.from_user.id, process_ytmusic_url(message, config), message)
+    await task_manager.add_task(message.from_user.id, process_ytmusic_url(message, config, i18n), message)
 
 
-async def process_ytmusic_url(message: Message, config: Config):
+async def process_ytmusic_url(message: Message, config: Config, i18n: TranslatorRunner):
     if not message.text:
         return
 
@@ -63,9 +64,9 @@ async def process_ytmusic_url(message: Message, config: Config):
         text = f"{media_metadata.title} by {media_metadata.performer}\n"
         if media_metadata.description:
             text += f"<i>{media_metadata.description}</i>\n"
-        text += f"Total tracks: {media_metadata.extra.get('track_count', 'Unknown')}\n"
+        text += i18n.get('total-tracks', count=media_metadata.extra.get('track_count', 'Unknown')) + "\n"
         if media_metadata.extra.get('year'):
-            text += f"Year: {media_metadata.extra.get('year')}\n"
+            text += i18n.get('year', year=media_metadata.extra.get('year')) + "\n"
         
         if media_metadata.cover:
             await message.answer_photo(
@@ -77,7 +78,7 @@ async def process_ytmusic_url(message: Message, config: Config):
         else:
             await message.answer(text, parse_mode=ParseMode.HTML)
         
-        await message.reply("Downloading tracks...")
+        await message.reply(i18n.get('downloading-tracks'))
         send_manager = MediaSender()
         success_count = 0
         failed_count = 0
@@ -103,6 +104,6 @@ async def process_ytmusic_url(message: Message, config: Config):
             await log_download_event(message.from_user.id, 'YTMusic', 'success')
 
         if failed_count > 0:
-            await message.answer(f"Downloaded {success_count} tracks. {failed_count} failed.")
+            await message.answer(i18n.get('download-stats', success=success_count, failed=failed_count))
         else:
-            await message.answer("All tracks downloaded successfully!")
+            await message.answer(i18n.get('all-tracks-success'))

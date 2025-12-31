@@ -51,3 +51,25 @@ setting-status-changed = { $is_enabled ->
     [true] Setting *{ $setting_name }* has been enabled!
     *[false] Setting *{ $setting_name }* has been disabled!
 }
+
+pick-language = Pick a language!
+pick-title-language = Pick a title language!
+language-changed = Language has been changed to *{ $language }*!
+language-updated = Language updated!
+title-language-changed = Title language has been changed to *{ $language }*!
+title-language-updated = Title language updated!
+setting-updated = Setting updated!
+invalid-setting = Invalid setting!
+error-updating = Error updating setting!
+setting-changed = Setting *{ $setting }* has been { $status }!
+enabled = enabled
+disabled = disabled
+enable = Enable
+disable = Disable
+back = Back
+service-status-changed = Service { $service } { $status }!
+blocked = blocked
+unblocked = unblocked
+settings-not-found = Settings not found!
+no-permission-service = You don't have permission to edit these settings!
+error-service-status = Error updating service status!

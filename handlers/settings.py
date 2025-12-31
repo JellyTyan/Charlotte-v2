@@ -227,12 +227,12 @@ async def toggle_setting(callback: CallbackQuery, i18n: TranslatorRunner):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
-                text=f"✅ {('Enable')}" if not current_value else f"❌ {('Disable')}",
+                text=f"✅ {i18n.get('enable')}" if not current_value else f"❌ {i18n.get('disable')}",
                 callback_data=callback_data
             ),
         ],
         [
-            InlineKeyboardButton(text="🔙 " + ("Back"), callback_data="settings_back"),
+            InlineKeyboardButton(text=f"🔙 {i18n.get('back')}", callback_data="settings_back"),
         ]
     ])
 
@@ -268,7 +268,7 @@ async def apply_setting_toggle(callback: CallbackQuery, i18n: TranslatorRunner):
     data = callback.data
     if not data or not data.startswith("toggle_"):
         logging.error(f"Invalid callback data format, data don't starts with toggle_: {callback.data}")
-        await callback.answer(("Invalid setting!"))
+        await callback.answer(i18n.get('invalid-setting'))
         return
 
     message = callback.message
@@ -281,7 +281,7 @@ async def apply_setting_toggle(callback: CallbackQuery, i18n: TranslatorRunner):
     last_underscore_index = data_without_prefix.rfind("_")
     if last_underscore_index == -1:
         logging.error(f"Invalid callback data format: {callback.data}")
-        await callback.answer(("Invalid setting!"))
+        await callback.answer(i18n.get('invalid-setting'))
         return
 
     key = data_without_prefix[:last_underscore_index]
@@ -292,7 +292,7 @@ async def apply_setting_toggle(callback: CallbackQuery, i18n: TranslatorRunner):
     # Validate that the key is in our allowed settings
     if key not in settings_keys and key != "allow_playlists":
         logging.error(f"Key '{key}' not found in settings_keys: {settings_keys}")
-        await callback.answer(("Invalid setting!"))
+        await callback.answer(i18n.get('invalid-setting'))
         return
 
     try:
@@ -303,8 +303,8 @@ async def apply_setting_toggle(callback: CallbackQuery, i18n: TranslatorRunner):
             await update_user_settings(callback.from_user.id, **{key: new_value})
 
         # Show confirmation message
-        status_text = ("enabled") if new_value else ("disabled")
-        text = ("Setting *{setting}* has been {status}!").format(setting=(key), status=status_text)
+        status_text = i18n.get('enabled') if new_value else i18n.get('disabled')
+        text = i18n.get('setting-changed', setting=key, status=status_text)
         if isinstance(callback.message, InaccessibleMessage) or callback.message is None:
             if callback.bot is None:
                 return
@@ -320,10 +320,10 @@ async def apply_setting_toggle(callback: CallbackQuery, i18n: TranslatorRunner):
                 parse_mode=ParseMode.MARKDOWN,
                 reply_markup=build_back_keyboard(i18n)
             )
-        await callback.answer(("Setting updated!"))
+        await callback.answer(i18n.get('setting-updated'))
     except Exception as e:
         logging.error(f"Error updating setting {key}: {e}")
-        await callback.answer(("Error updating setting!"))
+        await callback.answer(i18n.get('error-updating'))
 
 # Обработчик для управления заблокированными сервисами
 # @dp.callback_query(lambda c: c.data == "settings_blocked_services")
@@ -367,7 +367,7 @@ async def apply_setting_toggle(callback: CallbackQuery, i18n: TranslatorRunner):
 
 
 @dp.callback_query(lambda c: c.data.startswith("toggle_service_"))
-async def toggle_service_block(callback: CallbackQuery):
+async def toggle_service_block(callback: CallbackQuery, i18n: TranslatorRunner):
     data = callback.data
     if not data:
         return
@@ -384,7 +384,7 @@ async def toggle_service_block(callback: CallbackQuery):
             return
         is_admin = await check_if_admin_or_owner(bot, chat.id, callback.from_user.id)
         if not is_admin:
-            await callback.answer(("You don't have permission to edit these settings!"))
+            await callback.answer(i18n.get('no-permission-service'))
             return
 
     try:
@@ -401,7 +401,7 @@ async def toggle_service_block(callback: CallbackQuery):
                 settings_obj = await get_user_settings(callback.from_user.id)
 
         if not settings_obj:
-            await callback.answer(("Settings not found!"))
+            await callback.answer(i18n.get('settings-not-found'))
             return
 
         blocked_services = getattr(settings_obj, 'blocked_services', [])
@@ -409,10 +409,10 @@ async def toggle_service_block(callback: CallbackQuery):
         # Переключаем статус сервиса
         if service_name in blocked_services:
             blocked_services.remove(service_name)
-            status_text = ("unblocked")
+            status_text = i18n.get('unblocked')
         else:
             blocked_services.append(service_name)
-            status_text = ("blocked")
+            status_text = i18n.get('blocked')
 
         # Обновляем в базе данных
         if chat.type in ("group", "supergroup"):
@@ -422,15 +422,15 @@ async def toggle_service_block(callback: CallbackQuery):
 
         # Обновляем интерфейс
         # await blocked_services_menu(callback)
-        await callback.answer(("Service {service} {status}!").format(service=service_name, status=status_text))
+        await callback.answer(i18n.get('service-status-changed', service=service_name, status=status_text))
 
     except Exception as e:
         logging.error(f"Error toggling service block {service_name}: {e}")
-        await callback.answer(("Error updating service status!"))
+        await callback.answer(i18n.get('error-service-status'))
 
 # Language selection
 @dp.callback_query(lambda c: c.data == "settings_lang")
-async def settings_lang_menu(callback: CallbackQuery):
+async def settings_lang_menu(callback: CallbackQuery, i18n: TranslatorRunner):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="English 🇺🇲", callback_data="settings_lang_en"),
@@ -442,10 +442,10 @@ async def settings_lang_menu(callback: CallbackQuery):
         ],
         [
             InlineKeyboardButton(text="Tiếng Việt 🇻🇳", callback_data="settings_lang_vi"),
-            InlineKeyboardButton(text="🔙 " + ("Back"), callback_data="settings_back"),
+            InlineKeyboardButton(text=f"🔙 {i18n.get('back')}", callback_data="settings_back"),
         ]
     ])
-    text = "Pick a language!"
+    text = i18n.get('pick-language')
     if isinstance(callback.message, InaccessibleMessage) or callback.message is None:
         if callback.bot is None:
             return
@@ -480,14 +480,14 @@ async def settings_lang_set(callback: CallbackQuery, state: FSMContext, i18n: Tr
 
     await state.clear()
 
-    text = ("Language has been changed to *{language}*!").format(language=lang.upper())
+    text = i18n.get('language-changed', language=lang.upper())
     await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=build_back_keyboard(i18n))
-    await callback.answer(("Language updated!"))
+    await callback.answer(i18n.get('language-updated'))
 
 
 # Title language selection
 @dp.callback_query(lambda c: c.data == "settings_title_language")
-async def settings_title_language_menu(callback: CallbackQuery):
+async def settings_title_language_menu(callback: CallbackQuery, i18n: TranslatorRunner):
     buttons = []
     for lang in LANGUAGES:
         buttons.append(
@@ -499,10 +499,10 @@ async def settings_title_language_menu(callback: CallbackQuery):
 
     rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
     kb = InlineKeyboardMarkup(
-        inline_keyboard=rows + [[InlineKeyboardButton(text="🔙 " + ("Back"), callback_data="settings_back")]]
+        inline_keyboard=rows + [[InlineKeyboardButton(text=f"🔙 {i18n.get('back')}", callback_data="settings_back")]]
     )
 
-    await callback.message.edit_text(("Pick a title language!"), reply_markup=kb)
+    await callback.message.edit_text(i18n.get('pick-title-language'), reply_markup=kb)
     await callback.answer()
 
 
@@ -516,9 +516,9 @@ async def settings_title_language_set(callback: CallbackQuery, i18n: TranslatorR
     else:
         await update_chat_settings(chat_id=chat.id, title_language=lang)
 
-    text = ("Title language has been changed to *{language}*!").format(language=lang.upper())
+    text = i18n.get('title-language-changed', language=lang.upper())
     await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=build_back_keyboard(i18n))
-    await callback.answer(("Title language updated!"))
+    await callback.answer(i18n.get('title-language-updated'))
 
 
 async def check_if_admin_or_owner(bot: Bot, chat_id: int, user_id: int) -> bool:

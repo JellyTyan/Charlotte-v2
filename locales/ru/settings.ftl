@@ -3,8 +3,8 @@ settings-back = 🔙 Назад
 settings-title = Настройки
 settings-no-permission = У вас нет прав на изменение этих настроек!
 settings-saved = Настройки обновлены!
-settings-no-allowed-groups = This setting is not available for groups!
-settings-no-allowed-dm = This setting is not available for private chats!
+settings-no-allowed-groups = Эта настройка недоступна для групп!
+settings-no-allowed-dm = Эта настройка недоступна для личных чатов!
 
 btn-language = Язык
 btn-title-language = Язык описаний
@@ -16,7 +16,7 @@ btn-send-raw = { $is_enabled ->
 }
 btn-send-music-covers = { $is_enabled ->
     [true] ✅ Муз. обложки
-    *[false] ❌ Муз. обложи
+    *[false] ❌ Муз. обложки
 }
 btn-send-reactions = { $is_enabled ->
     [true] ✅ Реакции
@@ -51,3 +51,25 @@ setting-status-changed = { $is_enabled ->
     [true] Настройка *{ $setting_name }* была включена!
     *[false] Настройка *{ $setting_name }* была выключена!
 }
+
+pick-language = Выберите язык!
+pick-title-language = Выберите язык описаний!
+language-changed = Язык был изменён на *{ $language }*!
+language-updated = Язык обновлён!
+title-language-changed = Язык описаний был изменён на *{ $language }*!
+title-language-updated = Язык описаний обновлён!
+setting-updated = Настройка обновлена!
+invalid-setting = Неверная настройка!
+error-updating = Ошибка обновления настройки!
+setting-changed = Настройка *{ $setting }* была { $status }!
+enabled = включена
+disabled = выключена
+enable = Включить
+disable = Выключить
+back = Назад
+service-status-changed = Сервис { $service } { $status }!
+blocked = заблокирован
+unblocked = разблокирован
+settings-not-found = Настройки не найдены!
+no-permission-service = У вас нет прав на изменение этих настроек!
+error-service-status = Ошибка обновления статуса сервиса!
