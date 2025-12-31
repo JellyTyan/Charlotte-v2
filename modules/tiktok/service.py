@@ -28,7 +28,6 @@ class TiktokService(BaseService):
     def __init__(self, output_path: str = "storage/temp/") -> None:
         super().__init__()
         self.output_path = output_path
-        os.makedirs(self.output_path, exist_ok=True)
 
     async def download(self, url: str) -> List[MediaContent]:
         expanded_url = await self._resolve_url(url)

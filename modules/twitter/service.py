@@ -20,10 +20,9 @@ logger = logging.getLogger(__name__)
 class TwitterService(BaseService):
     name = "Twitter"
 
-    def __init__(self, output_path: str = "storage/temp/twitter") -> None:
+    def __init__(self, output_path: str = "storage/temp") -> None:
         super().__init__()
         self.output_path = output_path
-        os.makedirs(self.output_path, exist_ok=True)
         self.auth = "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
 
     async def download(self, url: str) -> List[MediaContent]:

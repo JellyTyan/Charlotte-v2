@@ -27,10 +27,9 @@ class InstagramService(BaseService):
     # Created via command: instaloader -l username
     SESSION_FILE_PATH = "session-charlottelopster"
 
-    def __init__(self, output_path: str = "storage/temp/instagram") -> None:
+    def __init__(self, output_path: str = "storage/temp") -> None:
         super().__init__()
         self.output_path = output_path
-        os.makedirs(self.output_path, exist_ok=True)
 
         self.L = instaloader.Instaloader(
             download_pictures=False,
