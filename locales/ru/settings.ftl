@@ -73,3 +73,4 @@ unblocked = разблокирован
 settings-not-found = Настройки не найдены!
 no-permission-service = У вас нет прав на изменение этих настроек!
 error-service-status = Ошибка обновления статуса сервиса!
+current-status = Текущий статус: { $status }

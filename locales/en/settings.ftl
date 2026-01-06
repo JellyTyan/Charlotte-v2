@@ -73,3 +73,4 @@ unblocked = unblocked
 settings-not-found = Settings not found!
 no-permission-service = You don't have permission to edit these settings!
 error-service-status = Error updating service status!
+current-status = Current status: { $status }

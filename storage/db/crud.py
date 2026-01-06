@@ -369,7 +369,7 @@ async def ban_user(user_id: int) -> None:
         return
 
     async with database_manager.async_session() as session:
-        user.banned = True
+        user.is_banned = True
         session.add(user)
         await session.commit()
     await cache_delete(f"user:{user_id}")
@@ -384,7 +384,7 @@ async def unban_user(user_id: int) -> None:
         return
 
     async with database_manager.async_session() as session:
-        user.banned = False
+        user.is_banned = False
         session.add(user)
         await session.commit()
     await cache_delete(f"user:{user_id}")

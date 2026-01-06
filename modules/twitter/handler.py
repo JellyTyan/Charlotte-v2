@@ -19,7 +19,7 @@ async def twitter_handler(message: Message):
     if not message.text or not message.from_user:
         return
 
-    await task_manager.add_task(message.from_user.id, process_twitter_url(message), message)
+    await task_manager.add_task(message.from_user.id, process_twitter_url(message), message, message.text)
 
 
 async def process_twitter_url(message: Message):
@@ -27,10 +27,11 @@ async def process_twitter_url(message: Message):
         return
 
     user_id = message.from_user.id if message.from_user else message.chat.id
+    url = message.text.strip()
 
     try:
         # Download content
-        media_content = await TwitterService().download(message.text)
+        media_content = await TwitterService().download(url)
 
         # Send content
         send_manager = MediaSender()

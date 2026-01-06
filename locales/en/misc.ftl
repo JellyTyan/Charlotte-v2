@@ -18,9 +18,8 @@ msg-help =
       - SoundCloud
     I’ll fetch the music, with title, artist, and cover.
     <b>Video Platforms</b>
-      - YouTube – Videos, Shorts, or just audio (up to 50 MB)
+      - YouTube – Videos, Shorts, or just audio (up to 100 MB)
       - TikTok – Videos and images
-      - BiliBili – Full video support (with limitations)
       - Instagram – Reels and posts
       - Twitter (X) – Videos and images
       - Reddit – Media from posts

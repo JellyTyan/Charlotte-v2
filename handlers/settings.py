@@ -240,10 +240,9 @@ async def toggle_setting(callback: CallbackQuery, i18n: TranslatorRunner):
     description = i18n.get(f"desc-{key.replace('_', '-')}")
 
     # Статус
-    status_text = i18n.setting.status.changed(
-        setting_name=key,
-        is_enabled='true' if new_value else 'false'
-    )
+    # Статус
+    status_word = i18n.get('enabled') if current_value else i18n.get('disabled')
+    status_text = i18n.get('current-status', status=status_word)
     text = f"{description}\n\n{status_text}"
     if isinstance(callback.message, InaccessibleMessage) or callback.message is None:
         if callback.bot is None:

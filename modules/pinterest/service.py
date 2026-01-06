@@ -60,6 +60,7 @@ class PinterestService(BaseService):
                         type=MediaType.VIDEO,
                         path=Path(filename),
                         title=title,
+                        original_size=True
                     ))
 
                 elif post_dict["ext"] == "carousel":
@@ -73,6 +74,7 @@ class PinterestService(BaseService):
                             type=MediaType.PHOTO,
                             path=Path(filename),
                             title=title,
+                            original_size=True
                         ))
 
                 elif post_dict["ext"] == "jpg":
@@ -84,6 +86,7 @@ class PinterestService(BaseService):
                         result.append(MediaContent(
                             type=MediaType.GIF,
                             path=Path(filename),
+                            original_size=True
                         ))
                     else:
                         filename = os.path.join(self.output_path, f"{image_signature}.jpg")
@@ -92,6 +95,7 @@ class PinterestService(BaseService):
                             type=MediaType.PHOTO,
                             path=Path(filename),
                             title=title,
+                            original_size=True
                         ))
 
                 else:

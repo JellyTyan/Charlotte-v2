@@ -44,12 +44,21 @@ async def main():
 
     dp["_translator_hub"] = translator_hub
 
+    dp["_translator_hub"] = translator_hub
+
     dp.update.middleware(TranslatorRunnerMiddleware())
+
+    from middlewares.ban_check import BanCheckMiddleware
+    dp.update.middleware(BanCheckMiddleware())
 
     logger.info("📊 Setting up statistics collection...")
     from middlewares.statistics import StatisticsMiddleware
     dp.message.middleware(StatisticsMiddleware())
-    logger.info("✅ Statistics middleware registered")
+
+    logger.info("📊 Setting up rate limiter...")
+    from middlewares.rate_limiter import RateLimiter
+    dp.message.middleware(RateLimiter(rate=10, per=60))
+    logger.info("✅ All middlewares registered")
 
     import core.error_handler
     logger.info("✅ Error handler registered")

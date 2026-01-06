@@ -20,6 +20,14 @@ async def download_file(
     cookies: Optional[dict] = None,
     client: Optional[httpx.AsyncClient] = None,
 ) -> Optional[Path]:
+    from utils.url_validator import validate_url
+    if not validate_url(url):
+         raise BotError(
+             code=ErrorCode.INVALID_URL,
+             message="Domain not allowed",
+             url=url
+         )
+
     retries = 3
 
     for attempt in range(retries):

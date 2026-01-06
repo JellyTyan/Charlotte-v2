@@ -74,6 +74,11 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
     if not isinstance(message, Message):
         return
 
+    if callback_query.message.reply_to_message:
+        if callback_query.message.reply_to_message.from_user.id != callback_query.from_user.id:
+            await callback_query.answer("❌ This is not your request")
+            return
+
     from utils.url_cache import get_url
 
     if not callback_data.url_hash:
@@ -96,9 +101,11 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
     else:
         await callback_query.answer(i18n.get('starting-download'))
 
+    original_message = message.reply_to_message if message.reply_to_message else message
+
     await message.delete()
 
-    await task_manager.add_task(user_id, download_youtube_media(message, url, format_choice, user_id), message)
+    await task_manager.add_task(user_id, download_youtube_media(original_message, url, format_choice, user_id), original_message)
 
 
 async def download_youtube_media(message: Message, url: str, format_choice: str, user_id: int):

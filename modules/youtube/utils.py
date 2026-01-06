@@ -23,6 +23,9 @@ def get_ytdlp_options():
         "geo_bypass": True,
         "age_limit": 99,
         "retries": 10,
+        "restrictfilenames": True,
+        "no_exec": True,
+        "allowed_extractors": ["youtube", "youtubetab"],
         "js_runtimes": {"deno": {}},
         "remote_components": ["ejs:npm"],
         "extractor_args": {
@@ -100,7 +103,7 @@ async def  get_video_info(info_dict: dict, max_size_mb: int = 50) -> dict:
                 if size_mb <= max_size_mb and abr > best_audio_score:
                     best_audio_score = abr
                     best_audio = a
-        
+
         # Second pass: if no original found, take best available
         if not best_audio:
             for a in audio_formats:

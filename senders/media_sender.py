@@ -13,6 +13,11 @@ from models.errors import BotError, ErrorCode
 from storage.db.crud import get_user_settings, get_chat_settings, create_chat, create_user
 from storage.db.models import UserSettings, ChatSettings
 from utils import translate_text
+import random
+
+REACTION_EMOJIS = [
+    "👍", "❤", "🔥", "🥰", "👏", "😁", "🤔", "🤯", "😱", "🎉", "🤩", "🙏", "👌", "🕊", "😍", "🐳", "❤‍🔥", "🌭", "💯", "🤣", "⚡", "🍌", "🏆", "🍾", "💋", "👻", "👨‍💻", "👀", "🎃", "😇", "😨", "🤝", "✍", "🤗", "🫡", "🎅", "🎄", "☃", "💅", "🤪", "🆒", "💘", "🦄", "😘",  "😎", "👾"
+]
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +40,8 @@ class MediaSender:
                 logger.info(f"Creating new user {user_id}")
                 await create_user(user_id)
                 settings = await get_user_settings(user_id)
+        if not settings:
+             raise BotError(code=ErrorCode.INTERNAL_ERROR, message="Failed to load settings")
         return settings
 
     async def send(self, message: types.Message, content: List[MediaContent], user_id: Optional[int] = None) -> None:
@@ -65,6 +72,14 @@ class MediaSender:
                 self._files_to_cleanup.append(gif.path)
 
             logger.info(f"Successfully sent all media to chat {message.chat.id}")
+
+            if settings.send_reactions:
+                try:
+                    from aiogram.types import ReactionTypeEmoji
+                    emoji = random.choice(REACTION_EMOJIS)
+                    await message.react([ReactionTypeEmoji(emoji=emoji)])
+                except Exception as e:
+                    logger.warning(f"Failed to react to message: {e}")
 
         finally:
             if self._files_to_cleanup:
@@ -102,7 +117,9 @@ class MediaSender:
                         is_logged=True
                     )
 
-                if item.type == MediaType.PHOTO:
+                if settings.send_raw and item.original_size:
+                    media_group.add_document(media=types.FSInputFile(item.path))
+                elif item.type == MediaType.PHOTO:
                     media_group.add_photo(media=types.FSInputFile(item.path))
                 elif item.type == MediaType.VIDEO:
                     media_group.add_video(
@@ -115,7 +132,8 @@ class MediaSender:
                 self._files_to_cleanup.append(item.path)
 
             if message.bot:
-                await message.bot.send_chat_action(message.chat.id, "upload_video")
+                should_send_as_doc = settings.send_raw and any(item.original_size for item in group_items)
+                await message.bot.send_chat_action(message.chat.id, "upload_document" if should_send_as_doc else "upload_video")
 
             try:
                 await message.answer_media_group(

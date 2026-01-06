@@ -67,6 +67,9 @@ def get_ytdlp_options():
         "geo_bypass": True,
         "age_limit": 99,
         "retries": 10,
+        "restrictfilenames": True,
+        "no_exec": True,
+        "allowed_extractors": ["youtube", "youtubetab", "soundcloud"],
         "js_runtimes": {"deno": {}},
         "remote_components": ["ejs:npm"],
         "extractor_args": {

@@ -33,6 +33,9 @@ def get_ytdlp_options():
         "retries": 10,
         "quiet": True,
         "no_warnings": True,
+        "restrictfilenames": True,
+        "no_exec": True,
+        "allowed_extractors": ["tiktok"],
     }
 
 
@@ -41,6 +44,11 @@ async def get_gallery_dl_info(url: str) -> List[dict]:
     Executes gallery-dl to fetch metadata for a given URL.
     Returns a list of dictionaries containing the metadata.
     """
+    from utils.url_validator import validate_url
+
+    if not validate_url(url):
+        raise BotError(code=ErrorCode.INVALID_URL, message="Domain not allowed")
+
     gallery_dl_exe = shutil.which("gallery-dl")
     if not gallery_dl_exe:
          venv_path = os.path.join(os.getcwd(), "venv", "bin", "gallery-dl")

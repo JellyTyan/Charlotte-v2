@@ -11,3 +11,9 @@ class Config:
     SPOTIFY_CLIENT_ID: str = os.getenv("SPOTIFY_CLIENT_ID", "")
     SPOTIFY_SECRET: str = os.getenv("SPOTIFY_SECRET", "")
     APPLE_MUSIC_TOKEN: str = os.getenv("APPLEMUSIC_DEV_TOKEN", "")
+
+    # Telegram API Server Config
+    TELEGRAM_API_ID: str = os.getenv("TELEGRAM_API_ID", "")
+    TELEGRAM_API_HASH: str = os.getenv("TELEGRAM_API_HASH", "")
+    TELEGRAM_LOCAL: bool = os.getenv("TELEGRAM_LOCAL", "False").lower() == "true"
+    TELEGRAM_SERVER_URL: str = os.getenv("TELEGRAM_SERVER_URL", "http://nginx:80")
