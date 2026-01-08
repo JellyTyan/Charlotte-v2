@@ -24,17 +24,8 @@ class TaskManager:
         # Initial reaction if enabled (before queue)
         if message:
             try:
-                from storage.db.crud import get_user_settings, get_chat_settings
                 from aiogram.types import ReactionTypeEmoji
-
-                settings = None
-                if message.chat.type in ("group", "supergroup"):
-                     settings = await get_chat_settings(message.chat.id)
-                else:
-                     settings = await get_user_settings(user_id)
-
-                if settings and settings.send_reactions:
-                     await message.react([ReactionTypeEmoji(emoji="👍")])
+                await message.react([ReactionTypeEmoji(emoji="👍")])
             except Exception as e:
                 logger.warning(f"Failed to set initial reaction: {e}")
 
@@ -51,10 +42,6 @@ class TaskManager:
                         from models.errors import BotError
                         if isinstance(e, BotError):
                             await self._handle_bot_error(e, message, user_id)
-
-                    # Remove reaction on error if needed?
-                    # Usually we might want to change it to '😢' or something?
-                    # Or just leave it. User didn't specify error case.
                     raise
                 finally:
                     # Remove URL from pending after task completes

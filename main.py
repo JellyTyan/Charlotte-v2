@@ -66,6 +66,9 @@ async def main():
 
     import modules
     from modules.router import service_router
+    from modules.payment.handler import payment_router
+
+    dp.include_router(payment_router)
     dp.include_router(service_router)
 
     import handlers

@@ -1,0 +1,10 @@
+error-invalid-url = Hoppla! Der Link sieht kaputt aus oder es ist privater/18+ Inhalt. 🤯
+error-large-file = Wow, riesige Datei! 🐘 So groß schaffe ich noch nicht.
+error-size-fail-check = Uff, die Datei ist zu schwer für mich! Versuch eine kleinere, bitte 😭
+error-download-error = Sorry! Ich hab's versucht, konnte aber nicht herunterladen. 💔
+error-download-canceled = Alles klar, Download abgebrochen! 🛑
+error-playlist-info = Konnte keine Playlist-Infos finden. Privat?
+error-metadata = Keine Metadaten gefunden. Gruselig! 👻
+error-no-found = Sorry, hab überall gesucht aber nichts gefunden. 🔍
+error-internal = Oh nein, in mir ist was kaputt gegangen! Später nochmal? 🧡
+error-generic = ❌ Ein Fehler ist aufgetreten. Sorry!

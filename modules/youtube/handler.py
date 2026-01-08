@@ -103,22 +103,60 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
 
     original_message = message.reply_to_message if message.reply_to_message else message
 
+    # Premium Logic
+    from storage.db.crud import get_user
+    user = await get_user(user_id)
+    is_premium = user.is_premium if user else False
+
+    # Check if format requires premium (sponsored flag in callback_data)
+    if callback_data.sponsored and not is_premium:
+        from modules.payment.service import PaymentService
+
+        # Format payload: yt_URLHASH_FORMAT
+        payload = f"yt_{callback_data.url_hash}_{format_choice}"
+
+        invoice_params = await PaymentService.create_single_download_invoice(
+            chat_id=message.chat.id,
+            payload=payload,
+            provider_token="" # Empty for Stars
+        )
+
+        await message.delete()
+        await message.answer_invoice(**invoice_params)
+        return
+
     await message.delete()
 
-    await task_manager.add_task(user_id, download_youtube_media(original_message, url, format_choice, user_id), original_message)
+    await task_manager.add_task(user_id, download_youtube_media(original_message, url, format_choice, user_id, None), original_message)
 
 
-async def download_youtube_media(message: Message, url: str, format_choice: str, user_id: int):
+async def download_youtube_media(message: Message, url: str, format_choice: str, user_id: int, payment_charge_id: str = None):
     from senders.media_sender import MediaSender
     from utils.statistics_helper import log_download_event
+    from models.errors import BotError, ErrorCode
 
     from .service import YouTubeService
 
     if message.bot:
         await message.bot.send_chat_action(message.chat.id, "record_video")
+    
+    try:
+        media_content = await YouTubeService().download(url, format_choice)
 
-    media_content = await YouTubeService().download(url, format_choice)
-
-    send_manager = MediaSender()
-    await send_manager.send(message, media_content, user_id)
-    await log_download_event(user_id, 'YouTube', 'success')
+        send_manager = MediaSender()
+        await send_manager.send(message, media_content, user_id)
+        await log_download_event(user_id, 'YouTube', 'success')
+    except BotError as e:
+        # Refund if download failed and user paid
+        if payment_charge_id and e.code == ErrorCode.DOWNLOAD_FAILED:
+            if message.bot:
+                try:
+                    await message.bot.refund_star_payment(user_id, telegram_payment_charge_id=payment_charge_id)
+                    await message.reply("❌ Download failed. Your payment has been refunded.")
+                    
+                    # Update payment status in DB
+                    from storage.db import update_payment_status
+                    await update_payment_status(payment_charge_id, "refunded")
+                except Exception as refund_error:
+                    logger.error(f"Failed to refund payment: {refund_error}")
+        raise

@@ -1,0 +1,13 @@
+download-cancel = Anulowano! Ztrzymałam pobieranie.
+download-no-found = Nie widzę żadnego pobierania do anulowania!
+processing = Czaruję... ✨
+invalid-callback = Ups, ten przycisk jest stary!
+url-expired = Link wygasł lub zniknął! 🕵️‍♀️
+added-to-queue = Dodano do kolejki! Jesteś #{ $count }. ⏳
+starting-download = Zaczynam pobierać! 🚀
+downloading-tracks = Zbieram utwory... 🎵
+download-stats = Gotowe! Pobrano { $success }, błędów { $failed }.
+all-tracks-success = Hurra! Wszystkie utwory pobrały się idealnie! 🎉
+total-tracks = Razem utworów: { $count }
+release-date = Wydano: { $date }
+year = Rok: { $year }

@@ -1,0 +1,10 @@
+error-invalid-url = Ups! Ten link wygląda na uszkodzony albo to treść prywatna/18+. 🤯
+error-large-file = Wow, jaki ogromny plik! 🐘 Nie dam rady z takim rozmiarem.
+error-size-fail-check = Uff, plik jest dla mnie za ciężki! Spróbuj mniejszego, proszę 😭
+error-download-error = Wybacz! Starałam się, ale nie udało się pobrać. 💔
+error-download-canceled = Dobra, anuluję pobieranie! 🛑
+error-playlist-info = Nie udało się zdobyć info o playliście. Jest prywatna?
+error-metadata = Nie znalazłam metadanych. Strasznie to dziwne! 👻
+error-no-found = Przepraszam, szukałam wszędzie, ale nic nie znalazłam. 🔍
+error-internal = O nie, coś we mnie pękło! Spróbujesz później? 🧡
+error-generic = ❌ Coś poszło nie tak. Przepraszam!

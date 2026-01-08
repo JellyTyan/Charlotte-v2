@@ -3,10 +3,14 @@ import datetime
 import json
 from datetime import date
 
-from . import database_manager
 from sqlalchemy import select, update, func, desc, or_
-from .models import Users, UserSettings, Chats, ChatSettings, Statistics, BotSetting
+from .models import Users, UserSettings, Chats, ChatSettings, Statistics, BotSetting, Payment
 from storage.cache.redis_client import cache_get, cache_set, cache_delete, orm_to_dict, dict_to_orm
+
+
+def _get_db():
+    from . import database_manager
+    return database_manager
 
 
 async def get_user(user_id: int) -> Users | None:
@@ -18,12 +22,14 @@ async def get_user(user_id: int) -> Users | None:
     Returns:
         Users | None: User object
     """
+    from . import database_manager
+    
     cache_key = f"user:{user_id}"
     cached = await cache_get(cache_key)
     if cached:
         return dict_to_orm(Users, cached)
 
-    async with database_manager.async_session() as session:
+    async with _get_db().async_session() as session:
         result = await session.execute(select(Users).where(Users.user_id == user_id))
         user = result.scalar_one_or_none()
         if user:
@@ -37,7 +43,7 @@ async def create_user(user_id: int) -> Users | None:
         user_id (int): User ID
     """
     try:
-        async with database_manager.async_session() as session:
+        async with _get_db().async_session() as session:
             stmt = select(Users).where(Users.user_id == user_id)
             result = await session.execute(stmt)
             existing_user = result.scalar_one_or_none()
@@ -71,7 +77,7 @@ async def get_user_settings(user_id: int) -> UserSettings | None:
     if cached:
         return dict_to_orm(UserSettings, cached)
 
-    async with database_manager.async_session() as session:
+    async with _get_db().async_session() as session:
         result = await session.execute(select(UserSettings).where(UserSettings.user_id == user_id))
         settings = result.scalar_one_or_none()
         if settings:
@@ -79,7 +85,7 @@ async def get_user_settings(user_id: int) -> UserSettings | None:
         return settings
 
 async def update_user_premium(user_id: int, is_premium: bool, premium_ends: date):
-    async with database_manager.async_session() as session:
+    async with _get_db().async_session() as session:
         await session.execute(
             update(Users)
             .where(Users.user_id == user_id)
@@ -100,7 +106,7 @@ async def update_user_settings(user_id: int, **kwargs):
         logging.warning(f"No valid fields to update for user {user_id}. Received kwargs: {kwargs}")
         return
 
-    async with database_manager.async_session() as session:
+    async with _get_db().async_session() as session:
         await session.execute(
             update(UserSettings)
             .where(UserSettings.user_id == user_id)
@@ -124,7 +130,7 @@ async def get_chat(chat_id: int) -> Chats | None:
     if cached:
         return dict_to_orm(Chats, cached)
 
-    async with database_manager.async_session() as session:
+    async with _get_db().async_session() as session:
         result = await session.execute(select(Chats).where(Chats.chat_id == chat_id))
         chat = result.scalar_one_or_none()
         if chat:
@@ -139,7 +145,7 @@ async def create_chat(chat_id: int, owner_id: int) -> Chats | None:
         owner_id (int): User ID
     """
     try:
-        async with database_manager.async_session() as session:
+        async with _get_db().async_session() as session:
             chat = Chats(chat_id=chat_id, owner_id=owner_id)
             settings = ChatSettings(chat_id=chat_id)
             session.add_all([chat, settings])
@@ -166,7 +172,7 @@ async def get_chat_settings(chat_id: int) -> ChatSettings | None:
     if cached:
         return dict_to_orm(ChatSettings, cached)
 
-    async with database_manager.async_session() as session:
+    async with _get_db().async_session() as session:
         result = await session.execute(select(ChatSettings).where(ChatSettings.chat_id == chat_id))
         settings = result.scalar_one_or_none()
         if settings:
@@ -185,7 +191,7 @@ async def update_chat_settings(chat_id: int, **kwargs):
         logging.warning(f"No valid fields to update for chat {chat_id}. Received kwargs: {kwargs}")
         return
 
-    async with database_manager.async_session() as session:
+    async with _get_db().async_session() as session:
         await session.execute(
             update(ChatSettings)
             .where(ChatSettings.chat_id == chat_id)
@@ -196,11 +202,39 @@ async def update_chat_settings(chat_id: int, **kwargs):
 
 
 async def create_usage_log(user_id: int, service_name: str, event_type: str, status: str) -> Statistics | None:
-    async with database_manager.async_session() as session:
+    async with _get_db().async_session() as session:
         statistics = Statistics(service_name=service_name, user_id=user_id, event_type=event_type, status=status)
         session.add_all([statistics])
         await session.commit()
         return statistics
+
+
+async def create_payment_log(user_id: int, amount: int, currency: str, payload: str, 
+                             telegram_payment_charge_id: str, provider_payment_charge_id: str = None):
+    from .models import Payment
+    async with _get_db().async_session() as session:
+        payment = Payment(
+            user_id=user_id,
+            amount=amount,
+            currency=currency,
+            payload=payload,
+            telegram_payment_charge_id=telegram_payment_charge_id,
+            provider_payment_charge_id=provider_payment_charge_id
+        )
+        session.add(payment)
+        await session.commit()
+        return payment
+
+
+async def update_payment_status(telegram_payment_charge_id: str, status: str):
+    from .models import Payment
+    async with _get_db().async_session() as session:
+        await session.execute(
+            update(Payment)
+            .where(Payment.telegram_payment_charge_id == telegram_payment_charge_id)
+            .values(status=status)
+        )
+        await session.commit()
 
 
 async def get_user_counts():
@@ -210,7 +244,7 @@ async def get_user_counts():
     week_ago = now - datetime.timedelta(days=7)
     month_ago = now - datetime.timedelta(days=30)
 
-    async with database_manager.async_session() as session:
+    async with _get_db().async_session() as session:
         results = {}
 
         # Сегодня
@@ -245,7 +279,7 @@ async def get_user_counts():
 
 
 async def get_top_services(limit: int = 10):
-    async with database_manager.async_session() as session:
+    async with _get_db().async_session() as session:
         query = (
             select(
                 Statistics.service_name,
@@ -260,7 +294,7 @@ async def get_top_services(limit: int = 10):
 
 
 async def get_status_stats():
-    async with database_manager.async_session() as session:
+    async with _get_db().async_session() as session:
         query = select(
             func.count().filter(Statistics.status == "complete").label("complete_count"),
             func.count().filter(Statistics.status == "error").label("error_count")
@@ -273,7 +307,7 @@ async def get_status_stats():
         }
 
 async def get_premium_events_by_user(user_id: int):
-    async with database_manager.async_session() as session:
+    async with _get_db().async_session() as session:
         query = (
             select(Statistics)
             .where(
@@ -286,7 +320,7 @@ async def get_premium_events_by_user(user_id: int):
         return result.scalars().all()
 
 async def get_premium_and_donation_stats() -> dict:
-    async with database_manager.async_session() as session:
+    async with _get_db().async_session() as session:
         stmt = select(
             func.count().filter(or_(Users.is_premium == True, Users.is_lifetime_premium == True)).label("premium_count"),
             func.sum(Users.stars_donated).label("total_stars")
@@ -338,7 +372,7 @@ async def toggle_lifetime_premium(user_id: int) -> bool | None:
         return None
 
     if user.is_premium:
-        async with database_manager.async_session() as session:
+        async with _get_db().async_session() as session:
             await session.execute(
                 update(Users)
                 .where(Users.user_id == user_id)
@@ -348,7 +382,7 @@ async def toggle_lifetime_premium(user_id: int) -> bool | None:
         await cache_delete(f"user:{user_id}")
         return False
     elif not user.is_premium:
-        async with database_manager.async_session() as session:
+        async with _get_db().async_session() as session:
             await session.execute(
                 update(Users)
                 .where(Users.user_id == user_id)
@@ -368,7 +402,7 @@ async def ban_user(user_id: int) -> None:
     if not user:
         return
 
-    async with database_manager.async_session() as session:
+    async with _get_db().async_session() as session:
         user.is_banned = True
         session.add(user)
         await session.commit()
@@ -383,14 +417,14 @@ async def unban_user(user_id: int) -> None:
     if not user:
         return
 
-    async with database_manager.async_session() as session:
+    async with _get_db().async_session() as session:
         user.is_banned = False
         session.add(user)
         await session.commit()
     await cache_delete(f"user:{user_id}")
 
 async def list_of_banned_users() -> list[Users]:
-    async with database_manager.async_session() as session:
+    async with _get_db().async_session() as session:
         stmt = select(Users).where(Users.is_banned == True)
         result = await session.execute(stmt)
         return list(result.scalars().all())
@@ -400,7 +434,7 @@ async def get_global_settings() -> dict:
     if cached:
         return cached
 
-    async with database_manager.async_session() as session:
+    async with _get_db().async_session() as session:
         stmt = select(BotSetting)
         result = await session.execute(stmt)
         settings = result.scalars().all()
@@ -422,7 +456,7 @@ async def update_global_settings(key: str, value) -> None:
     if not isinstance(value, str):
         value = json.dumps(value)
 
-    async with database_manager.async_session() as session:
+    async with _get_db().async_session() as session:
         stmt = select(BotSetting).where(BotSetting.key == key)
         result = await session.execute(stmt)
         setting = result.scalars().first()

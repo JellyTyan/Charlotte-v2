@@ -94,3 +94,19 @@ class BotSetting(Base):
 
     key = mapped_column(String, primary_key=True)
     value = mapped_column(String)
+
+
+class Payment(Base):
+    __tablename__ = "payments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    currency: Mapped[str] = mapped_column(String(10), nullable=False)
+    payload: Mapped[str] = mapped_column(String, nullable=False)
+    telegram_payment_charge_id: Mapped[str] = mapped_column(String, nullable=False)
+    provider_payment_charge_id: Mapped[str] = mapped_column(String, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="completed")
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.datetime.now, nullable=False
+    )

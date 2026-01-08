@@ -1,14 +1,13 @@
-download-cancel = Your download has been cancelled.
-download-no-found = No active download task found to cancel.
-
-processing = Processing...
-invalid-callback = Invalid callback data
-url-expired = URL expired or not found
-added-to-queue = Added to queue ({ $count } in queue)
-starting-download = Starting download...
-downloading-tracks = Downloading tracks...
-download-stats = Downloaded { $success } tracks. { $failed } failed.
-all-tracks-success = All tracks downloaded successfully!
+download-cancel = Cancelled! Stopped the download for you.
+download-no-found = I don't see any active downloads to cancel!
+processing = Working my magic... ✨
+invalid-callback = Oops, that button is old!
+url-expired = Link expired or gone! 🕵️‍♀️
+added-to-queue = Added to queue! You're #{ $count } in line. ⏳
+starting-download = Starting your download! 🚀
+downloading-tracks = Grabbing those tracks for you... 🎵
+download-stats = Done! { $success } tracks downloaded, { $failed } failed.
+all-tracks-success = Yay! All tracks downloaded perfectly! 🎉
 total-tracks = Total tracks: { $count }
-release-date = Release Date: { $date }
+release-date = Released: { $date }
 year = Year: { $year }

@@ -437,10 +437,17 @@ async def settings_lang_menu(callback: CallbackQuery, i18n: TranslatorRunner):
         ],
         [
             InlineKeyboardButton(text="Українська 🇺🇦", callback_data="settings_lang_uk"),
-            InlineKeyboardButton(text="Polski 🇵🇱", callback_data="settings_lang_pl"),
+            InlineKeyboardButton(text="Беларуская 🇧🇾", callback_data="settings_lang_be"),
         ],
         [
-            InlineKeyboardButton(text="Tiếng Việt 🇻🇳", callback_data="settings_lang_vi"),
+            InlineKeyboardButton(text="Polski 🇵🇱", callback_data="settings_lang_pl"),
+            InlineKeyboardButton(text="Deutsch 🇩🇪", callback_data="settings_lang_de"),
+        ],
+        [
+            InlineKeyboardButton(text="Español 🇪🇸", callback_data="settings_lang_es"),
+            InlineKeyboardButton(text="فارسی 🇮🇷", callback_data="settings_lang_fa"),
+        ],
+        [
             InlineKeyboardButton(text=f"🔙 {i18n.get('back')}", callback_data="settings_back"),
         ]
     ])
