@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
     # gallery-dl often requires git if installing from source or specific system deps, but
     # pip install is usually enough. Just in case it needs more:
     git \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -24,7 +25,8 @@ RUN pip install --no-cache-dir gallery-dl
 COPY --chown=charlotte:charlotte . .
 RUN chmod +x /app/entrypoint.sh
 
-USER charlotte
+# User context is now handled in entrypoint.sh using gosu
+# USER charlotte
 
 # Volumes for persistence
 VOLUME ["/app/storage", "/app/logs"]

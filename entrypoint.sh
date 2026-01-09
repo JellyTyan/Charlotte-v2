@@ -1,10 +1,13 @@
 #!/bin/bash
 set -e
 
-# Run migrations
-echo "Running database migrations..."
-alembic upgrade head
+# Fix permissions for mounted volumes
+chown -R charlotte:charlotte /app/logs /app/storage
 
-# Start application
+# Run migrations (as user charlotte)
+echo "Running database migrations..."
+gosu charlotte alembic upgrade head
+
+# Start application (as user charlotte)
 echo "Starting application..."
-exec python main.py
+exec gosu charlotte python main.py
