@@ -47,8 +47,7 @@ async def process_youtube_url(message: Message, i18n: TranslatorRunner):
 
     caption = f"<b>{media_metadata.title}</b>\n\n"
     caption += f"<b>Channel:</b><a href='{media_metadata.performer_url}'> {media_metadata.performer}</a>\n"
-    caption += f"<b>Duration:</b> {format_duration(media_metadata.duration) \
-        if media_metadata.duration else "00"}\n\n"
+    caption += f"<b>Duration:</b> {format_duration(media_metadata.duration) if media_metadata.duration else '00'}\n\n"
     caption += f"{media_metadata.description}"
 
     await process_message.delete()
@@ -139,7 +138,7 @@ async def download_youtube_media(message: Message, url: str, format_choice: str,
 
     if message.bot:
         await message.bot.send_chat_action(message.chat.id, "record_video")
-    
+
     try:
         media_content = await YouTubeService().download(url, format_choice)
 
@@ -153,7 +152,7 @@ async def download_youtube_media(message: Message, url: str, format_choice: str,
                 try:
                     await message.bot.refund_star_payment(user_id, telegram_payment_charge_id=payment_charge_id)
                     await message.reply("❌ Download failed. Your payment has been refunded.")
-                    
+
                     # Update payment status in DB
                     from storage.db import update_payment_status
                     await update_payment_status(payment_charge_id, "refunded")
