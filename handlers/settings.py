@@ -448,6 +448,9 @@ async def settings_lang_menu(callback: CallbackQuery, i18n: TranslatorRunner):
             InlineKeyboardButton(text="Español 🇪🇸", callback_data="settings_lang_es"),
         ],
         [
+            InlineKeyboardButton(text="فارسی 🇮🇷", callback_data="settings_lang_fa"),
+        ],
+        [
             InlineKeyboardButton(text=f"🔙 {i18n.get('back')}", callback_data="settings_back"),
         ]
     ])

@@ -2,7 +2,7 @@ msg-hello =
     ¡Hola! 👋
     ¡Qué alegría conocerte, { $name }!
     Escribe _/help_ para saber cómo puedo ayudarte!
-    💜 ¡Visita mi rincón acogedor @charlottesbasement — allí hay actualizaciones y cosas divertidas!
+    🧡 ¡Visita mi rincón acogedor @charlottesbasement — allí hay actualizaciones y cosas divertidas!
 
 msg-help =
     Aquí están mis comandos:
@@ -31,7 +31,7 @@ msg-help =
       - Pixiv – Hermosas ilustraciones
       - Pinterest – Todos los pines que amas
 
-    ¡Solo envíame un enlace y me encargaré del resto! 💜
+    ¡Solo envíame un enlace y me encargaré del resto! 🧡
 
 processing = ✨ Trabajando en ello, un momento...
 added-to-queue = 📬 ¡Agregado a la cola! { $count } descarga(s) por delante.

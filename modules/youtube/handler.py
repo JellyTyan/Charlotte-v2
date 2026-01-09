@@ -73,8 +73,8 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
     if not isinstance(message, Message):
         return
 
-    if callback_query.message.reply_to_message:
-        if callback_query.message.reply_to_message.from_user.id != callback_query.from_user.id:
+    if message.reply_to_message and message.reply_to_message.from_user:
+        if message.reply_to_message.from_user.id != callback_query.from_user.id:
             await callback_query.answer("❌ This is not your request")
             return
 
@@ -126,10 +126,10 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
 
     await message.delete()
 
-    await task_manager.add_task(user_id, download_youtube_media(original_message, url, format_choice, user_id, None), original_message)
+    await task_manager.add_task(user_id, download_youtube_media(original_message, url, format_choice, user_id, ""), original_message)
 
 
-async def download_youtube_media(message: Message, url: str, format_choice: str, user_id: int, payment_charge_id: str = None):
+async def download_youtube_media(message: Message, url: str, format_choice: str, user_id: int, payment_charge_id: str = ""):
     from senders.media_sender import MediaSender
     from utils.statistics_helper import log_download_event
     from models.errors import BotError, ErrorCode

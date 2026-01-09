@@ -2,7 +2,7 @@ msg-hello =
     Hey there! 👋
     So happy to meet you, { $name }!
     Type _/help_ to learn what I can do for you!
-    💜 Join my cozy corner @charlottesbasement for updates and fun stuff!
+    🧡 Join my cozy corner @charlottesbasement for updates and fun stuff!
 
 msg-help =
     Here's what I can help you with:
@@ -31,7 +31,7 @@ msg-help =
       - Pixiv – Beautiful illustrations
       - Pinterest – All the pins you love
 
-    Just drop me a link and I'll take care of the rest! 💜
+    Just drop me a link and I'll take care of the rest! 🧡
 
 processing = ✨ Working my magic, hang tight...
 added-to-queue = 📬 Added to your queue! { $count } download(s) ahead of you.
