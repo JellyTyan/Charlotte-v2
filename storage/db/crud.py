@@ -237,6 +237,18 @@ async def update_payment_status(telegram_payment_charge_id: str, status: str):
         await session.commit()
 
 
+async def get_last_payment(user_id: int):
+    from .models import Payment
+    async with _get_db().async_session() as session:
+        result = await session.execute(
+            select(Payment)
+            .where(Payment.user_id == user_id)
+            .order_by(desc(Payment.created_at))
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+
 async def get_user_counts():
     now = datetime.datetime.now(datetime.timezone.utc)
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)

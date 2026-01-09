@@ -27,6 +27,36 @@ async def premium_command(message: Message):
     await message.answer(text, parse_mode="Markdown")
 
 
+@payment_router.message(Command("refund"))
+async def refund_command(message: Message, bot: Bot):
+    """Refund last successful payment for user"""
+    from storage.db import get_last_payment
+    
+    payment = await get_last_payment(message.from_user.id)
+    
+    if not payment:
+        await message.answer("❌ No payments found")
+        return
+    
+    if payment.status == "refunded":
+        await message.answer("❌ This payment was already refunded")
+        return
+    
+    try:
+        await bot.refund_star_payment(
+            message.from_user.id,
+            telegram_payment_charge_id=payment.telegram_payment_charge_id
+        )
+        
+        from storage.db import update_payment_status
+        await update_payment_status(payment.telegram_payment_charge_id, "refunded")
+        
+        await message.answer(f"✅ Refunded {payment.amount} {payment.currency}")
+    except Exception as e:
+        logger.error(f"Refund failed: {e}")
+        await message.answer(f"❌ Refund failed: {e}")
+
+
 @payment_router.pre_checkout_query()
 async def pre_checkout_handler(pre_checkout_query: PreCheckoutQuery):
     await pre_checkout_query.answer(ok=True)

@@ -190,33 +190,41 @@ class YouTubeService(BaseService):
         logger.info(f"Starting video download for URL: {url}")
         options = get_ytdlp_options()
         options["format"] = format
-        with yt_dlp.YoutubeDL(options) as ydl:
-            loop = asyncio.get_event_loop()
+        try:
+            with yt_dlp.YoutubeDL(options) as ydl:
+                loop = asyncio.get_event_loop()
 
-            info_dict = await loop.run_in_executor(
-                self._download_executor,
-                lambda: ydl.extract_info(url, download=True)
+                info_dict = await loop.run_in_executor(
+                    self._download_executor,
+                    lambda: ydl.extract_info(url, download=True)
+                )
+
+                if not info_dict:
+                    raise BotError(
+                        code=ErrorCode.DOWNLOAD_FAILED,
+                        message="Failed to download video",
+                        url=url,
+                        critical=True,
+                        is_logged=True
+                    )
+
+                return [
+                    MediaContent(
+                        type=MediaType.VIDEO,
+                        path=Path(ydl.prepare_filename(info_dict)),
+                        width=info_dict.get("width", None),
+                        height=info_dict.get("height", None),
+                        duration=info_dict.get("duration", None),
+                        title=info_dict.get("title", "video"),
+                    )
+                ]
+        except yt_dlp.utils.DownloadError as e:
+            raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                message=str(e),
+                url=url,
+                is_logged=True
             )
-
-            if not info_dict:
-                raise BotError(
-                    code=ErrorCode.DOWNLOAD_FAILED,
-                    message="Failed to download video",
-                    url=url,
-                    critical=True,
-                    is_logged=True
-                )
-
-            return [
-                MediaContent(
-                    type=MediaType.VIDEO,
-                    path=Path(ydl.prepare_filename(info_dict)),
-                    width=info_dict.get("width", None),
-                    height=info_dict.get("height", None),
-                    duration=info_dict.get("duration", None),
-                    title=info_dict.get("title", "video"),
-                )
-            ]
 
     async def download_audio(self, url: str, format: str) -> List[MediaContent]:
         options = get_ytdlp_options()
@@ -227,49 +235,57 @@ class YouTubeService(BaseService):
             "preferredquality": "192",
         }]
 
-        with yt_dlp.YoutubeDL(options) as ydl:
-            loop = asyncio.get_running_loop()
+        try:
+            with yt_dlp.YoutubeDL(options) as ydl:
+                loop = asyncio.get_running_loop()
 
-            info_dict = await loop.run_in_executor(
-                self._download_executor,
-                lambda: ydl.extract_info(url, download=True)
-            )
-            if not info_dict:
-                raise BotError(
-                    code=ErrorCode.DOWNLOAD_FAILED,
-                    message="Failed to download audio",
-                    url=url
-                )
-
-            # Use yt-dlp's prepare_filename to get actual file path
-            audio_path = ydl.prepare_filename(info_dict).rsplit('.', 1)[0] + '.mp3'
-            base_path = audio_path.rsplit('.', 1)[0]
-            thumbnail_path = f"{base_path}.jpg"
-
-            thumbnail_url = info_dict.get("thumbnail", None)
-            if thumbnail_url:
-                try:
-                    await download_file(thumbnail_url, thumbnail_path)
-                except Exception as e:
-                    logger.warning(f"Failed to download thumbnail: {e}")
-
-            try:
-                await loop.run_in_executor(
+                info_dict = await loop.run_in_executor(
                     self._download_executor,
-                    lambda: update_metadata(
-                        audio_path,
-                        title=info_dict.get("title", "audio"),
-                        artist=info_dict.get("uploader", "unknown"),
-                        cover_file=thumbnail_path
-                    )
+                    lambda: ydl.extract_info(url, download=True)
                 )
-            except Exception as e:
-                logger.warning(f"Failed to update audio metadata: {e}")
+                if not info_dict:
+                    raise BotError(
+                        code=ErrorCode.DOWNLOAD_FAILED,
+                        message="Failed to download audio",
+                        url=url
+                    )
 
-            return [MediaContent(
-                type=MediaType.AUDIO,
-                path=Path(audio_path),
-                duration=info_dict.get("duration", 0),
-                title=info_dict.get("title", "audio"),
-                cover=Path(thumbnail_path)
-            )]
+                # Use yt-dlp's prepare_filename to get actual file path
+                audio_path = ydl.prepare_filename(info_dict).rsplit('.', 1)[0] + '.mp3'
+                base_path = audio_path.rsplit('.', 1)[0]
+                thumbnail_path = f"{base_path}.jpg"
+
+                thumbnail_url = info_dict.get("thumbnail", None)
+                if thumbnail_url:
+                    try:
+                        await download_file(thumbnail_url, thumbnail_path)
+                    except Exception as e:
+                        logger.warning(f"Failed to download thumbnail: {e}")
+
+                try:
+                    await loop.run_in_executor(
+                        self._download_executor,
+                        lambda: update_metadata(
+                            audio_path,
+                            title=info_dict.get("title", "audio"),
+                            artist=info_dict.get("uploader", "unknown"),
+                            cover_file=thumbnail_path
+                        )
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to update audio metadata: {e}")
+
+                return [MediaContent(
+                    type=MediaType.AUDIO,
+                    path=Path(audio_path),
+                    duration=info_dict.get("duration", 0),
+                    title=info_dict.get("title", "audio"),
+                    cover=Path(thumbnail_path)
+                )]
+        except yt_dlp.utils.DownloadError as e:
+            raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                message=str(e),
+                url=url,
+                is_logged=True
+            )
