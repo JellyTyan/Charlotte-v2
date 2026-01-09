@@ -38,6 +38,9 @@ def get_ytdlp_options():
 
 
 async def  get_video_info(info_dict: dict, max_size_mb: int = 50) -> dict:
+        import logging
+        logger = logging.getLogger(__name__)
+        
         title = info_dict.get("title", "Unknown Title")
         uploader = info_dict.get("uploader", "Unknown Uploader")
         thumbnail = info_dict.get("thumbnail", None)
@@ -60,9 +63,11 @@ async def  get_video_info(info_dict: dict, max_size_mb: int = 50) -> dict:
                     and vcodec.startswith("avc1") and ext == "mp4" and acodec == "none":
                 video_formats.append(f)
 
-            # Select best audio: prefer m4a with highest bitrate
+            # Select all m4a audio formats
             if vcodec == "none" and acodec and ext == "m4a":
                 audio_formats.append(f)
+        
+        logger.info(f"Available audio formats: {[a.get('format_id') for a in audio_formats]}")
 
         max_bytes = max_size_mb * 1024 * 1024
         all_pairs = []
