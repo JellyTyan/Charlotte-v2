@@ -27,6 +27,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Install gallery-dl (if not in requirements.txt, but it should be. If not, uncomment next line)
 RUN pip install --no-cache-dir gallery-dl
 
+RUN pip install -U --pre "yt-dlp"
+
 COPY --chown=charlotte:charlotte . .
 RUN chmod +x /app/entrypoint.sh
 

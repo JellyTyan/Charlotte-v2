@@ -71,7 +71,7 @@ def get_ytdlp_options():
         "no_exec": True,
         "allowed_extractors": ["youtube", "youtubetab", "soundcloud"],
         "js_runtimes": {"deno": {}},
-        "remote_components": ["ejs:npm"],
+        "remote_components": ["ejs:github"],
         "extractor_args": {
             "youtube": {
                 "player_client": ["tv", "web_safari", "web_embedded"]
