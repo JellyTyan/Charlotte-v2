@@ -225,8 +225,9 @@ class YouTubeService(BaseService):
             {
                 "key": "FFmpegExtractAudio",
                 "preferredcodec": "mp3",
+                "preferredquality": "192",
             }
-        ],
+        ]
         with yt_dlp.YoutubeDL(options) as ydl:
             loop = asyncio.get_running_loop()
 

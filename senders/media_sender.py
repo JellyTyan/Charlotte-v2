@@ -108,7 +108,7 @@ class MediaSender:
             for item in group_items:
                 # Check file size before sending
                 file_size_mb = item.path.stat().st_size / (1024 * 1024)
-                max_size_mb = 4000 if os.getenv("TELEGRAM_BOT_API_URL") else 2000
+                max_size_mb = 2000 if os.getenv("TELEGRAM_LOCAL") else 50
 
                 if file_size_mb > max_size_mb:
                     raise BotError(
