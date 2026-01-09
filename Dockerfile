@@ -17,6 +17,8 @@ RUN apt-get update && apt-get install -y \
 RUN curl -fsSL https://deno.land/install.sh | sh && \
     ln -s /root/.deno/bin/deno /usr/local/bin/deno
 
+ENV PATH="/root/.deno/bin:${PATH}"
+
 WORKDIR /app
 
 # Copy requirements and install
