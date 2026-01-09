@@ -11,10 +11,10 @@ services:
     tmpfs:
       - /tmp:noexec,nosuid,nodev
     read_only: false # Changing this to false for now as many python libs write to random places, can be hardened later
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
+    # security_opt:
+    #   - no-new-privileges:true
+    # cap_drop:
+    #   - ALL
     networks:
       - charlotte-net
     depends_on:
