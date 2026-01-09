@@ -190,10 +190,49 @@ class YouTubeService(BaseService):
         logger.info(f"Starting video download for URL: {url} with format: {format}")
         options = get_ytdlp_options()
         options["format"] = format
+        
         try:
             with yt_dlp.YoutubeDL(options) as ydl:
                 loop = asyncio.get_event_loop()
-
+                info_dict = await loop.run_in_executor(
+                    self._download_executor,
+                    lambda: ydl.extract_info(url, download=False)
+                )
+                
+                if not info_dict:
+                    raise BotError(
+                        code=ErrorCode.DOWNLOAD_FAILED,
+                        message="Failed to get video info",
+                        url=url,
+                        is_logged=True
+                    )
+                
+                # Check if requested format exists
+                available_formats = {f.get('format_id'): f for f in info_dict.get('formats', [])}
+                
+                if "+" in format:
+                    video_id, audio_id = format.split("+", 1)
+                    
+                    # If audio format not available, find alternative
+                    if audio_id not in available_formats:
+                        logger.warning(f"Audio format {audio_id} not available, searching for alternative")
+                        
+                        # Get base audio ID (e.g., 140 from 140-drc-0)
+                        base_audio = audio_id.split("-")[0]
+                        
+                        # Find any audio format starting with base ID
+                        for fmt_id in available_formats:
+                            if fmt_id.startswith(base_audio) and available_formats[fmt_id].get('acodec') != 'none':
+                                format = f"{video_id}+{fmt_id}"
+                                logger.info(f"Using alternative audio format: {fmt_id}")
+                                break
+                        
+                        # Update format in ydl params
+                        ydl.params['format'] = format
+                
+                logger.info(f"Final format for download: {format}")
+                
+                # Now download with correct format
                 info_dict = await loop.run_in_executor(
                     self._download_executor,
                     lambda: ydl.extract_info(url, download=True)
