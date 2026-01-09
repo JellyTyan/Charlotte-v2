@@ -18,6 +18,7 @@ msg-help =
       - Apple Music
       - Deezer
       - SoundCloud
+      - YouTube Music
     I'll grab the track with artwork and all the tags!
 
     <b>Video Platforms</b>

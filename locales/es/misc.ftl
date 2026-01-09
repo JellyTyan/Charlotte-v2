@@ -18,6 +18,7 @@ msg-help =
       - Apple Music
       - Deezer
       - SoundCloud
+      - YouTube Music
     ¡Obtendré la canción con la portada y todas las etiquetas!
 
     <b>Plataformas de video</b>

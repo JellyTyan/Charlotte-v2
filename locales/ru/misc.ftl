@@ -18,6 +18,7 @@ msg-help =
       - Apple Music
       - Deezer
       - SoundCloud
+      - YouTube Music
     Найду трек, обложку, все теги — красота!
 
     <b>Видео платформы</b>

@@ -18,6 +18,7 @@ msg-help =
       - Apple Music
       - Deezer
       - SoundCloud
+      - YouTube Music
     Pobiorę utwór z okładką i wszystkimi tagami!
 
     <b>Platformy wideo</b>

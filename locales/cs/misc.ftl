@@ -18,6 +18,7 @@ msg-help =
       - Apple Music
       - Deezer
       - SoundCloud
+      - YouTube Music
     Stáhnu skladbu i s obalem a všemi tagy!
 
     <b>Video platformy</b>
