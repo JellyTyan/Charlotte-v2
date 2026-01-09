@@ -28,7 +28,7 @@ def get_ytdlp_options():
         "allowed_extractors": ["youtube", "youtubetab"],
         "extractor_args": {
             "youtube": {
-                "player_client": ["tv", "web_safari", "web_embedded"]
+                "player_client": ["tv", "web_safari", "web_embedded", "ios"]
             },
             "youtubepot-bgutilhttp": {
                 "base_url": ["http://bgutil:4416"]
@@ -40,7 +40,7 @@ def get_ytdlp_options():
 async def  get_video_info(info_dict: dict, max_size_mb: int = 50) -> dict:
         import logging
         logger = logging.getLogger(__name__)
-        
+
         title = info_dict.get("title", "Unknown Title")
         uploader = info_dict.get("uploader", "Unknown Uploader")
         thumbnail = info_dict.get("thumbnail", None)
@@ -66,7 +66,7 @@ async def  get_video_info(info_dict: dict, max_size_mb: int = 50) -> dict:
             # Select all m4a audio formats
             if vcodec == "none" and acodec and ext == "m4a":
                 audio_formats.append(f)
-        
+
         logger.info(f"Available audio formats: {[a.get('format_id') for a in audio_formats]}")
 
         max_bytes = max_size_mb * 1024 * 1024
