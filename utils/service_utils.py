@@ -70,14 +70,12 @@ def get_ytdlp_options():
         "restrictfilenames": True,
         "no_exec": True,
         "allowed_extractors": ["youtube", "youtubetab", "soundcloud"],
-        "js_runtimes": {"deno": {}},
-        "remote_components": ["ejs:github"],
         "extractor_args": {
-            "youtube": {
-                "player_client": ["tv", "web_safari", "web_embedded"]
-            },
-            "youtubepot-bgutilhttp": {
-                "base_url": ["http://bgutil:4416"]
+                "youtube": {
+                    "player_client": ["tv", "web_safari", "web_embedded"]
+                },
+                "youtubepot-bgutilhttp": {
+                    "base_url": ["http://bgutil:4416"]
+                }
             }
-        }
     }
