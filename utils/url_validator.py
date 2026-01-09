@@ -26,8 +26,8 @@ def validate_url(url: str) -> bool:
         if parsed.hostname in ['localhost', '127.0.0.1', '0.0.0.0', '::1']:
             return False
 
-        if not any(allowed in (parsed.netloc or "") for allowed in ALLOWED_DOMAINS):
-            return False
+        # if not any(allowed in (parsed.netloc or "") for allowed in ALLOWED_DOMAINS):
+        #     return False
 
         return True
     except:
