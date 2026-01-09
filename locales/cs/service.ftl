@@ -1,0 +1,13 @@
+download-cancel = Zrušeno! Zastavila jsem stahování.
+download-no-found = Nevidím nic, co by šlo zrušit!
+processing = Čaruji... ✨
+invalid-callback = Jejda, tohle tlačítko je staré!
+url-expired = Odkaz vypršel nebo zmizel! 🕵️‍♀️
+added-to-queue = Přidáno do fronty! Jsi #{ $count }. ⏳
+starting-download = Začínám stahovat! 🚀
+downloading-tracks = Sbírám skladby... 🎵
+download-stats = Hotovo! Staženo { $success }, chyb { $failed }.
+all-tracks-success = Hurá! Všechny skladby se stáhly perfektně! 🎉
+total-tracks = Celkem skladeb: { $count }
+release-date = Vydáno: { $date }
+year = Rok: { $year }

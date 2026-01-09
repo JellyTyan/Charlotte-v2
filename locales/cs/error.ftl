@@ -1,0 +1,10 @@
+error-invalid-url = Jejda! Ten odkaz vypadá rozbitě, nebo je to soukromý/18+ obsah. 🤯
+error-large-file = Páni, to je obří soubor! 🐘 S takovou velikostí si zatím neporadím.
+error-size-fail-check = Uff, ten soubor je na mě moc těžký! Zkus nějaký menší, prosím 😭
+error-download-error = Promiň! Snažila jsem se, ale nepovedlo se to stáhnout. 💔
+error-download-canceled = Dobře, ruším stahování! 🛑
+error-playlist-info = Nepovedlo se zjistit info o playlistu. Je soukromý?
+error-metadata = Nenašla jsem metadata. To je záhada! 👻
+error-no-found = Promiň, hledala jsem všude, ale nic jsem nenašla. 🔍
+error-internal = Jejda, něco se ve mně pokazilo! Zkusíš to později? 🧡
+error-generic = ❌ Něco se pokazilo. Omlouvám se!
