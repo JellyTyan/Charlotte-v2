@@ -221,13 +221,12 @@ class YouTubeService(BaseService):
     async def download_audio(self, url: str, format: str) -> List[MediaContent]:
         options = get_ytdlp_options()
         options["format"] = format
-        options["postprocessors"] = [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "192",
-            }
-        ]
+        options["postprocessors"] = [{
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "mp3",
+            "preferredquality": "192",
+        }]
+
         with yt_dlp.YoutubeDL(options) as ydl:
             loop = asyncio.get_running_loop()
 
