@@ -120,6 +120,9 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
             provider_token="" # Empty for Stars
         )
 
+        # Remove chat_id since answer_invoice uses message.chat.id automatically
+        invoice_params.pop('chat_id', None)
+        
         await message.delete()
         await message.answer_invoice(**invoice_params)
         return
