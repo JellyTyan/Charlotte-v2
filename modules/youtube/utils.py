@@ -63,9 +63,11 @@ async def  get_video_info(info_dict: dict, max_size_mb: int = 50) -> dict:
                     and vcodec.startswith("avc1") and ext == "mp4" and acodec == "none":
                 video_formats.append(f)
 
-            # Select all m4a audio formats
+            # Select all m4a audio formats, skip DRC
             if vcodec == "none" and acodec and ext == "m4a":
-                audio_formats.append(f)
+                format_id = f.get("format_id", "")
+                if "-drc" not in format_id.lower():
+                    audio_formats.append(f)
 
         logger.info(f"Available audio formats: {[a.get('format_id') for a in audio_formats]}")
 
