@@ -12,7 +12,8 @@ ALLOWED_DOMAINS = [
     'apple.com', 'mzstatic.com',
     'deezer.com', 'dzcdn.net',
     'pinterest.com', 'pinimg.com',
-    'pixiv.net', 'pximg.net'
+    'pixiv.net', 'pximg.net',
+    'image-cdn-ak.spotifycdn.com'
 ]
 
 def validate_url(url: str) -> bool:
