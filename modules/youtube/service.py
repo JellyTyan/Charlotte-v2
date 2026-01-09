@@ -187,7 +187,7 @@ class YouTubeService(BaseService):
         )
 
     async def download_video(self, url: str, format: str) -> List[MediaContent]:
-        logger.info(f"Starting video download for URL: {url}")
+        logger.info(f"Starting video download for URL: {url} with format: {format}")
         options = get_ytdlp_options()
         options["format"] = format
         try:
@@ -219,6 +219,7 @@ class YouTubeService(BaseService):
                     )
                 ]
         except yt_dlp.utils.DownloadError as e:
+            logger.error(f"yt-dlp download failed for format {format}: {e}")
             raise BotError(
                 code=ErrorCode.DOWNLOAD_FAILED,
                 message=str(e),
@@ -227,6 +228,7 @@ class YouTubeService(BaseService):
             )
 
     async def download_audio(self, url: str, format: str) -> List[MediaContent]:
+        logger.info(f"Starting audio download for URL: {url} with format: {format}")
         options = get_ytdlp_options()
         options["format"] = format
         options["postprocessors"] = [{
@@ -283,6 +285,7 @@ class YouTubeService(BaseService):
                     cover=Path(thumbnail_path)
                 )]
         except yt_dlp.utils.DownloadError as e:
+            logger.error(f"yt-dlp download failed for format {format}: {e}")
             raise BotError(
                 code=ErrorCode.DOWNLOAD_FAILED,
                 message=str(e),

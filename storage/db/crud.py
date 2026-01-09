@@ -249,6 +249,16 @@ async def get_last_payment(user_id: int):
         return result.scalar_one_or_none()
 
 
+async def get_payment_by_charge_id(telegram_payment_charge_id: str):
+    from .models import Payment
+    async with _get_db().async_session() as session:
+        result = await session.execute(
+            select(Payment)
+            .where(Payment.telegram_payment_charge_id == telegram_payment_charge_id)
+        )
+        return result.scalar_one_or_none()
+
+
 async def get_user_counts():
     now = datetime.datetime.now(datetime.timezone.utc)
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)

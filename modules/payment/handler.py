@@ -29,13 +29,22 @@ async def premium_command(message: Message):
 
 @payment_router.message(Command("refund"))
 async def refund_command(message: Message, bot: Bot):
-    """Refund last successful payment for user"""
-    from storage.db import get_last_payment
+    """Admin command to refund payment by transaction ID"""
+    if message.from_user.id != Config.ADMIN_ID:
+        return
     
-    payment = await get_last_payment(message.from_user.id)
+    args = message.text.split(maxsplit=1)
+    if len(args) < 2:
+        await message.answer("Usage: /refund <telegram_payment_charge_id>")
+        return
+    
+    charge_id = args[1].strip()
+    
+    from storage.db import get_payment_by_charge_id
+    payment = await get_payment_by_charge_id(charge_id)
     
     if not payment:
-        await message.answer("❌ No payments found")
+        await message.answer("❌ Payment not found")
         return
     
     if payment.status == "refunded":
@@ -44,14 +53,14 @@ async def refund_command(message: Message, bot: Bot):
     
     try:
         await bot.refund_star_payment(
-            message.from_user.id,
-            telegram_payment_charge_id=payment.telegram_payment_charge_id
+            payment.user_id,
+            telegram_payment_charge_id=charge_id
         )
         
         from storage.db import update_payment_status
-        await update_payment_status(payment.telegram_payment_charge_id, "refunded")
+        await update_payment_status(charge_id, "refunded")
         
-        await message.answer(f"✅ Refunded {payment.amount} {payment.currency}")
+        await message.answer(f"✅ Refunded {payment.amount} {payment.currency} to user {payment.user_id}")
     except Exception as e:
         logger.error(f"Refund failed: {e}")
         await message.answer(f"❌ Refund failed: {e}")
@@ -85,14 +94,41 @@ async def successful_payment_handler(message: Message, bot: Bot):
         try:
             parts = payload.split("_", 2)
             if len(parts) < 3:
+                logger.error(f"Invalid payload format: {payload}")
                 await message.answer("⚠️ Error: Invalid payment data.")
+                # Refund invalid payment
+                await bot.refund_star_payment(
+                    message.from_user.id,
+                    telegram_payment_charge_id=payment.telegram_payment_charge_id
+                )
+                from storage.db import update_payment_status
+                await update_payment_status(payment.telegram_payment_charge_id, "refunded")
                 return
 
             _, url_hash, format_choice = parts
+            
+            # Validate format_choice
+            if not format_choice.startswith(("youtube_video_", "youtube_audio_")):
+                logger.error(f"Invalid format_choice: {format_choice}")
+                await message.answer("⚠️ Error: Invalid format data.")
+                await bot.refund_star_payment(
+                    message.from_user.id,
+                    telegram_payment_charge_id=payment.telegram_payment_charge_id
+                )
+                from storage.db import update_payment_status
+                await update_payment_status(payment.telegram_payment_charge_id, "refunded")
+                return
+            
             url = get_url(url_hash)
-
             if not url:
+                logger.error(f"URL expired for hash: {url_hash}")
                 await message.answer("⚠️ Error: Link expired. Please try again.")
+                await bot.refund_star_payment(
+                    message.from_user.id,
+                    telegram_payment_charge_id=payment.telegram_payment_charge_id
+                )
+                from storage.db import update_payment_status
+                await update_payment_status(payment.telegram_payment_charge_id, "refunded")
                 return
 
             await message.answer("✅ Payment received! Starting download...")
@@ -114,7 +150,16 @@ async def successful_payment_handler(message: Message, bot: Bot):
 
         except Exception as e:
             logger.error(f"Error processing payment payload: {e}")
-            await message.answer("❌ Error processing your purchase. Please contact support.")
+            await message.answer("❌ Error processing your purchase. Refunding...")
+            try:
+                await bot.refund_star_payment(
+                    message.from_user.id,
+                    telegram_payment_charge_id=payment.telegram_payment_charge_id
+                )
+                from storage.db import update_payment_status
+                await update_payment_status(payment.telegram_payment_charge_id, "refunded")
+            except Exception as refund_error:
+                logger.error(f"Refund failed: {refund_error}")
 
     elif payload == "subscription":
         # Handle subscription implementation
