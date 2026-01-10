@@ -31,8 +31,8 @@ btn-auto-caption = { $is_enabled ->
     *[false] ❌ توضیحات خودکار
 }
 btn-notifications = { $is_enabled ->
-    [true] ✅ اعلان‌های بی‌صدا
-    *[false] ❌ اعلان‌های بی‌صدا
+    [true] ✅ تبلیغات
+    *[false] ❌ تبلیغات
 }
 btn-allow-playlists = { $is_enabled ->
     [true] ✅ اجازه پلی‌لیست

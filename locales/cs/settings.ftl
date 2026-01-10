@@ -31,8 +31,8 @@ btn-auto-caption = { $is_enabled ->
     *[false] ❌ Auto-popisky
 }
 btn-notifications = { $is_enabled ->
-    [true] ✅ Tichá oznámení
-    *[false] ❌ Tichá oznámení
+    [true] ✅ Oznámení
+    *[false] ❌ Oznámení
 }
 btn-allow-playlists = { $is_enabled ->
     [true] ✅ Povolit playlisty
@@ -42,7 +42,7 @@ btn-allow-playlists = { $is_enabled ->
 desc-send-raw = Pošlu arty jako nekomprimované soubory, takže kvalita bude vesmírná! 🎨
 desc-send-music-covers = Ke každé skladbě připojím krásný obal. 🎵
 desc-send-reactions = Budu reagovat emoji, ať vidíš, že na tom makám! ⚡
-desc-send-notifications = Vypni, pokud chceš dostávat soubory potichu (bez zvuku). 🔕
+desc-send-notifications = Vypni, pokud chceš dostávat média bez zvuku oznámení. 🔕
 desc-auto-caption = Sama zkontroluji a přidám popis k médiím. 📝
 desc-auto-translate-titles = Přeložím názvy videí do tvého jazyka! 🌍
 desc-allow-playlists = Stáhnu celé playlisty (opatrně s tím!). 📂

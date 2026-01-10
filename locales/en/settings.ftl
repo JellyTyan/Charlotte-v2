@@ -31,8 +31,8 @@ btn-auto-caption = { $is_enabled ->
     *[false] ❌ Auto-captions
 }
 btn-notifications = { $is_enabled ->
-    [true] ✅ Silent Notifications
-    *[false] ❌ Silent Notifications
+    [true] ✅ Notifications
+    *[false] ❌ Notifications
 }
 btn-allow-playlists = { $is_enabled ->
     [true] ✅ Allow Playlists
@@ -42,7 +42,7 @@ btn-allow-playlists = { $is_enabled ->
 desc-send-raw = I'll send art as uncompressed files so you get the absolute best quality! 🎨
 desc-send-music-covers = I'll attach the album art to every song I download for you. 🎵
 desc-send-reactions = I'll react with emojis to show you I'm working! ⚡
-desc-send-notifications = Disable this to receive media silently (no sound). 🔕
+desc-send-notifications = Disable this to receive media without notification sound. 🔕
 desc-auto-caption = I'll automatically verify and add captions to media. 📝
 desc-auto-translate-titles = I'll translate video titles to your language automatically! 🌍
 desc-allow-playlists = I'll handle full playlists for you (use carefully!). 📂

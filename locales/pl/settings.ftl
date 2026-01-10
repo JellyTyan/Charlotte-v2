@@ -31,8 +31,8 @@ btn-auto-caption = { $is_enabled ->
     *[false] ❌ Auto-opisy
 }
 btn-notifications = { $is_enabled ->
-    [true] ✅ Ciche powiadomienia
-    *[false] ❌ Ciche powiadomienia
+    [true] ✅ Powiadomienia
+    *[false] ❌ Powiadomienia
 }
 btn-allow-playlists = { $is_enabled ->
     [true] ✅ Zezwól na playlisty
@@ -42,7 +42,7 @@ btn-allow-playlists = { $is_enabled ->
 desc-send-raw = Wyślę arty jako nieskompresowane pliki, więc jakość będzie kosmiczna! 🎨
 desc-send-music-covers = Dołączę okładkę albumu do każdego utworu. 🎵
 desc-send-reactions = Będę reagować emotkami, żebyś widział(a) postęp! ⚡
-desc-send-notifications = Wyłącz, jeśli chcesz otrzymywać media po cichu (bez dźwięku). 🔕
+desc-send-notifications = Wyłącz, jeśli chcesz otrzymywać media bez dźwięku powiadomienia. 🔕
 desc-auto-caption = Sama sprawdzę i dodam opisy do mediów. 📝
 desc-auto-translate-titles = Przetłumaczę tytuły wideo na Twój język! 🌍
 desc-allow-playlists = Pobiorę całe playlisty (ostrożnie z tym!). 📂

@@ -31,8 +31,8 @@ btn-auto-caption = { $is_enabled ->
     *[false] ❌ Auto-Captions
 }
 btn-notifications = { $is_enabled ->
-    [true] ✅ Stille Benachrichtigungen
-    *[false] ❌ Stille Benachrichtigungen
+    [true] ✅ Benachrichtigungen
+    *[false] ❌ Benachrichtigungen
 }
 btn-allow-playlists = { $is_enabled ->
     [true] ✅ Playlists erlauben
@@ -42,7 +42,7 @@ btn-allow-playlists = { $is_enabled ->
 desc-send-raw = Ich sende Arts als unkomprimierte Dateien für die absolut beste Qualität! 🎨
 desc-send-music-covers = Ich hänge das Album-Cover an jeden Song an. 🎵
 desc-send-reactions = Ich reagiere mit Emojis, damit du siehst, dass ich arbeite! ⚡
-desc-send-notifications = Deaktivieren, um Medien lautlos zu empfangen. 🔕
+desc-send-notifications = Deaktivieren, um Medien ohne Benachrichtigungston zu empfangen. 🔕
 desc-auto-caption = Ich überprüfe und füge automatisch Beschreibungen hinzu. 📝
 desc-auto-translate-titles = Ich übersetze Videotitel automatisch in deine Sprache! 🌍
 desc-allow-playlists = Ich lade ganze Playlists herunter (vorsichtig nutzen!). 📂
