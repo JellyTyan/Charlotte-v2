@@ -53,32 +53,36 @@ class AppleMusicService(BaseService):
         match_album = re.search(r"album/([^/?]+)", url)
         if match_track:
             song_pattern = re.compile(
-                r"^https?:\/\/music\.apple\.com\/(?P<region>[a-z]{2})\/song\/(?:[^\/\s]+\/)?(?P<id>\d+)$"
+                r"^https?://music\.apple\.com/(?P<region>[a-z]{2})/song/(?:[^/]+/)?(?P<id>\d+)"
             )
             m = song_pattern.match(url)
 
-            return await get_track_info(m.group("id"), token, m.group("region"))
+            if m:
+                return await get_track_info(m.group("id"), token, m.group("region"))
         elif match_album_track:
             album_track_pattern = re.compile(
-                r"^https?:\/\/music\.apple\.com\/(?P<region>[a-z]{2})\/album\/(?:[^\/\s]+\/)?(?P<album_id>\d+)\?i=(?P<track_id>\d+)$"
+                r"^https?://music\.apple\.com/(?P<region>[a-z]{2})/album/(?:[^/]+/)?(?P<album_id>\d+).*?[?&]i=(?P<track_id>\d+)"
             )
             m = album_track_pattern.match(url)
 
-            return await get_track_info(m.group("track_id"), token, m.group("region"))
+            if m:
+                return await get_track_info(m.group("track_id"), token, m.group("region"))
         elif match_playlist:
             playlist_pattern = re.compile(
-                r"^https?:\/\/music\.apple\.com\/(?P<region>[a-z]{2})\/playlist\/(?:[^\/\s]+\/)?(?P<id>[^\/\s]+)$"
+                r"^https?://music\.apple\.com/(?P<region>[a-z]{2})/playlist/(?:[^/]+/)?(?P<id>[^/?\s]+)"
             )
             m = playlist_pattern.match(url)
 
-            return await get_playlist_info(m.group("id"), token, m.group("region"))
+            if m:
+                return await get_playlist_info(m.group("id"), token, m.group("region"))
         elif match_album:
             playlist_pattern = re.compile(
-                r"^https?:\/\/music\.apple\.com\/(?P<region>[a-z]{2})\/album\/(?:[^\/\s]+\/)?(?P<id>[^\/\s]+)$"
+                r"^https?://music\.apple\.com/(?P<region>[a-z]{2})/album/(?:[^/]+/)?(?P<id>[^/?\s]+)"
             )
             m = playlist_pattern.match(url)
 
-            return await get_album_info(m.group("id"), token, m.group("region"))
+            if m:
+                return await get_album_info(m.group("id"), token, m.group("region"))
         else:
             logger.warning(f"Unrecognized AppleMusic URL pattern: {url}")
             raise BotError(
@@ -87,6 +91,12 @@ class AppleMusicService(BaseService):
                 url=url,
                 is_logged=True
             )
+        raise BotError(
+            code=ErrorCode.METADATA_ERROR,
+            message=f"Failed to get parse data",
+            url=url,
+            is_logged=True
+        )
 
     async def download(self, performer: str, title: str, cover_url: Optional[str] = None, full_cover_url: Optional[str] = None) -> List[MediaContent]:
         logger.debug(f"Starting download for: {performer} - {title}")
