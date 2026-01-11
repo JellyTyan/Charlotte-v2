@@ -71,6 +71,17 @@ async def  get_video_info(info_dict: dict, max_size_mb: int = 50) -> dict:
 
         logger.info(f"Available audio formats: {[a.get('format_id') for a in audio_formats]}")
 
+        explicit_original = [
+            f for f in audio_formats
+            if "original" in (f.get('format_note') or '').lower()
+        ]
+
+        if explicit_original:
+            audio_formats = explicit_original
+            logger.info(f"Found {len(audio_formats)} explicit 'original' audio tracks. Using only them.")
+        else:
+            logger.info(f"No explicit 'original' tag found. Using all {len(audio_formats)} audio candidates.")
+
         max_bytes = max_size_mb * 1024 * 1024
         all_pairs = []
         added_resolutions = set()
@@ -97,28 +108,19 @@ async def  get_video_info(info_dict: dict, max_size_mb: int = 50) -> dict:
         best_audio = None
         best_audio_score = -1
 
-        # First pass: try to find original audio
         for a in audio_formats:
-            format_note = (a.get('format_note') or '').lower()
-            if 'original' in format_note:
-                a_size = a.get('filesize') or a.get('filesize_approx') or 0
-                size_mb = a_size / (1024 * 1024)
-                abr = a.get("abr", 0)
+            a_size = a.get('filesize') or a.get('filesize_approx') or 0
+            size_mb = a_size / (1024 * 1024)
+            if size_mb > max_size_mb:
+                continue
 
-                if size_mb <= max_size_mb and abr > best_audio_score:
-                    best_audio_score = abr
-                    best_audio = a
+            abr = a.get("abr", 0)
+            is_original = 'original' in (a.get('format_note') or '').lower()
+            score = (is_original, abr)
 
-        # Second pass: if no original found, take best available
-        if not best_audio:
-            for a in audio_formats:
-                a_size = a.get('filesize') or a.get('filesize_approx') or 0
-                size_mb = a_size / (1024 * 1024)
-                abr = a.get("abr", 0)
-
-                if size_mb <= max_size_mb and abr > best_audio_score:
-                    best_audio_score = abr
-                    best_audio = a
+            if score > (best_audio_score > -1, best_audio_score):
+                best_audio_score = abr
+                best_audio = a
 
         result = {
             "title": title,

@@ -21,8 +21,6 @@ from .utils import get_video_info, get_ytdlp_options
 
 logger = logging.getLogger(__name__)
 
-LOCAL_SERVER = os.getenv("TELEGRAM_BOT_API_URL", None)
-
 
 class YouTubeService(BaseService):
     name = "YouTube"
