@@ -38,7 +38,8 @@ class InstagramService(BaseService):
             download_geotags=False,
             download_comments=False,
             save_metadata=False,
-            compress_json=False
+            compress_json=False,
+            iphone_support=True
         )
 
         self._load_session()
