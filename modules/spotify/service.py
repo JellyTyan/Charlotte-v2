@@ -17,9 +17,9 @@ from modules.base_service import BaseService
 from storage.cache.redis_client import get_or_cache
 from utils import download_file, search_music, update_metadata
 
+from utils.service_utils import get_audio_options
 from .utils import (
     fetch_spotify_token,
-    get_audio_options,
     get_spotify_author,
     get_set_list
 )
@@ -90,7 +90,7 @@ class SpotifyService(BaseService):
 
     async def download(self, performer: str, title: str, cover_url: Optional[str] = None) -> List[MediaContent]:
         logger.debug(f"Starting download for: {performer} - {title}")
-        options = get_audio_options()
+        options = get_audio_options(f"{performer} - {title}")
         logger.debug(f"Searching YouTube for: {performer} - {title}")
         video_link = await search_music(performer, title)
         if not video_link:
@@ -125,7 +125,9 @@ class SpotifyService(BaseService):
 
                 # Use yt-dlp's prepare_filename to get actual file path
                 audio_path = ydl.prepare_filename(info_dict).rsplit('.', 1)[0] + '.mp3'
+                print(audio_path)
                 base_path = audio_path.rsplit('.', 1)[0]
+                print(base_path)
                 logger.debug(f"Audio path: {audio_path}")
 
                 # Use cover from get_info if available, otherwise download from YouTube

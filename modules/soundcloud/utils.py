@@ -1,18 +1,4 @@
-from utils import get_ytdlp_options
-
-def get_audio_options():
-    opts = get_ytdlp_options()
-    opts["format"] = "bestaudio"
-    opts["outtmpl"] = "storage/temp/%(title)s.%(ext)s"
-    opts["postprocessors"] = [
-        {
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": "192",
-        }
-    ]
-
-    return opts
+from utils.service_utils import get_audio_options
 
 def get_cover_url(info_dict: dict):
     """

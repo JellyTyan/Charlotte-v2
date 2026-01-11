@@ -1,42 +1,12 @@
 import logging
-import json
 
 import httpx
 
 from models.errors import BotError, ErrorCode
 from models.metadata import MediaMetadata, MetadataType
-from utils import get_ytdlp_options, random_cookie_file
 from utils.download_utils import download_file
 
 logger = logging.getLogger(__name__)
-
-
-def get_audio_options():
-    opts = get_ytdlp_options()
-    opts["format"] = "bestaudio"
-    opts["outtmpl"] = "storage/temp/%(title)s.%(ext)s"
-    opts["postprocessors"] = [
-        {
-            'key': 'SponsorBlock',
-            'api': 'https://sponsor.ajay.app',
-            'categories': ['sponsor', 'intro', 'outro', 'selfpromo', 'preview', 'interaction', 'filler'],
-        },
-        {
-            'key': 'ModifyChapters',
-            'remove_sponsor_segments': ['sponsor', 'intro', 'outro', 'selfpromo', 'preview', 'interaction', 'filler']
-        },
-        {
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": "192",
-        }
-    ]
-
-    cookie_file = random_cookie_file("youtube")
-    if cookie_file:
-        opts["cookiefile"] = cookie_file
-
-    return opts
 
 
 async def get_track_info(song_id: int, token: str, region_code: str = "us") -> MediaMetadata:

@@ -15,7 +15,7 @@ from models.metadata import MediaMetadata, MetadataType
 from modules.base_service import BaseService
 from utils import download_file, update_metadata
 
-from .utils import get_audio_options
+from utils.service_utils import get_audio_options
 
 logger = logging.getLogger(__name__)
 

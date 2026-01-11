@@ -15,8 +15,8 @@ from models.metadata import MediaMetadata
 from modules.base_service import BaseService
 from utils import download_file, search_music, update_metadata
 
+from utils.service_utils import get_audio_options
 from .utils import (
-    get_audio_options,
     get_track_info,
     get_album_info,
     get_playlist_info
@@ -63,7 +63,7 @@ class DeezerService(BaseService):
 
     async def download(self, performer: str, title: str, cover_url: Optional[str] = None, full_cover_url: Optional[str] = None) -> List[MediaContent]:
         logger.debug(f"Starting download for: {performer} - {title}")
-        options = get_audio_options()
+        options = get_audio_options(f"{performer} - {title}")
         logger.debug(f"Searching YouTube for: {performer} - {title}")
         video_link = await search_music(performer, title)
         if not video_link:

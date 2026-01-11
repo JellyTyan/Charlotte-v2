@@ -15,7 +15,8 @@ from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from modules.base_service import BaseService
 from utils import download_file, update_metadata
-from .utils import get_audio_options, get_cover_url
+from utils.service_utils import get_audio_options
+from .utils import get_cover_url
 
 logger = logging.getLogger(__name__)
 

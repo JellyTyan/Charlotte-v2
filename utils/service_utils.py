@@ -2,6 +2,7 @@ import logging
 import asyncio
 import os
 import random
+import uuid
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor
 from models.errors import BotError, ErrorCode
@@ -12,6 +13,24 @@ logger = logging.getLogger(__name__)
 
 
 _search_executor = ThreadPoolExecutor(max_workers=5)
+
+
+CYRILLIC_TO_LATIN = {
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh',
+    'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
+    'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'ts',
+    'ч': 'ch', 'ш': 'sh', 'щ': 'sch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu',
+    'я': 'ya',
+    'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'Yo', 'Ж': 'Zh',
+    'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M', 'Н': 'N', 'О': 'O',
+    'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U', 'Ф': 'F', 'Х': 'H', 'Ц': 'Ts',
+    'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Sch', 'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu',
+    'Я': 'Ya'
+}
+
+
+def transliterate(text: str) -> str:
+    return ''.join(CYRILLIC_TO_LATIN.get(c, c) for c in text)
 
 async def search_music(performer: str, title: str) -> Optional[str]:
     try:
@@ -79,3 +98,34 @@ def get_ytdlp_options():
                 }
             }
     }
+
+
+def get_audio_options(title: str | None = None):
+    opts = get_ytdlp_options()
+    opts["format"] = "bestaudio"
+    if title:
+        opts["outtmpl"] = f"storage/temp/{transliterate(title)}.%(ext)s"
+    else:
+        opts["outtmpl"] = f"storage/temp/{uuid.uuid4()}.%(ext)s"
+    opts["postprocessors"] = [
+        {
+            'key': 'SponsorBlock',
+            'api': 'https://sponsor.ajay.app',
+            'categories': ['sponsor', 'intro', 'outro', 'selfpromo', 'preview', 'interaction', 'filler'],
+        },
+        {
+            'key': 'ModifyChapters',
+            'remove_sponsor_segments': ['sponsor', 'intro', 'outro', 'selfpromo', 'preview', 'interaction', 'filler']
+        },
+        {
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "mp3",
+            "preferredquality": "192",
+        }
+    ]
+
+    cookie_file = random_cookie_file("youtube")
+    if cookie_file:
+        opts["cookiefile"] = cookie_file
+
+    return opts
