@@ -1,5 +1,6 @@
 import logging
 
+from aiofiles import os as aios
 from aiogram import F
 from aiogram.types import CallbackQuery, FSInputFile, Message
 from fluentogram import TranslatorRunner
@@ -52,7 +53,7 @@ async def process_youtube_url(message: Message, i18n: TranslatorRunner):
 
     await process_message.delete()
 
-    if media_metadata.cover:
+    if media_metadata.cover and await aios.path.exists(media_metadata.cover):
         await message.reply_photo(
             photo=FSInputFile(media_metadata.cover),
             caption=truncate_string(caption, 1024),
@@ -122,7 +123,7 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
 
         # Remove chat_id since answer_invoice uses message.chat.id automatically
         invoice_params.pop('chat_id', None)
-        
+
         await message.delete()
         await message.answer_invoice(**invoice_params)
         return
