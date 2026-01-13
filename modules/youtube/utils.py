@@ -25,7 +25,7 @@ def get_ytdlp_options():
         "retries": 10,
         "restrictfilenames": True,
         "no_exec": True,
-        "allowed_extractors": ["youtube", "youtubetab"],
+        # "allowed_extractors": ["youtube", "youtubetab"],
         "extractor_args": {
             "youtube": {
                 "player_client": ["tv", "web_safari", "web_embedded", "ios"]
