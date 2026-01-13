@@ -12,18 +12,6 @@ from yt_dlp.utils import sanitize_filename
 logger = logging.getLogger(__name__)
 
 
-def random_cookie_file():
-    try:
-        cookie_dir = "storage/cookies/youtube"
-        if not os.path.exists(cookie_dir):
-            return None
-
-        cookie_files = [f for f in os.listdir(cookie_dir) if f.endswith('.txt')]
-        return f"{cookie_dir}/{random.choice(cookie_files)}" if cookie_files else None
-    except (OSError, IndexError):
-        return None
-
-
 def get_ytdlp_options():
     return {
         "outtmpl": f"temp/%(id)s_{sanitize_filename('%(title)s')}.%(ext)s",
@@ -35,7 +23,6 @@ def get_ytdlp_options():
         "no_warnings": True,
         "restrictfilenames": True,
         "no_exec": True,
-        "allowed_extractors": ["tiktok"],
     }
 
 
