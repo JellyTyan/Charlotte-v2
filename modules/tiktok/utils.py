@@ -7,6 +7,7 @@ import shutil
 from typing import List
 
 from models.errors import BotError, ErrorCode
+from utils.user_agents import get_user_agent
 from yt_dlp.utils import sanitize_filename
 
 logger = logging.getLogger(__name__)
@@ -19,10 +20,9 @@ def get_ytdlp_options():
         "geo_bypass": True,
         "age_limit": 99,
         "retries": 10,
-        "quiet": True,
-        "no_warnings": True,
         "restrictfilenames": True,
         "no_exec": True,
+        "user_agent": get_user_agent(),
     }
 
 
