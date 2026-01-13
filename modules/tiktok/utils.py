@@ -13,16 +13,32 @@ from yt_dlp.utils import sanitize_filename
 logger = logging.getLogger(__name__)
 
 
+def random_cookie_file():
+    try:
+        cookie_dir = "storage/cookies/tiktok"
+        if not os.path.exists(cookie_dir):
+            return None
+
+        cookie_files = [f for f in os.listdir(cookie_dir) if f.endswith('.txt')]
+        return f"{cookie_dir}/{random.choice(cookie_files)}" if cookie_files else None
+    except (OSError, IndexError):
+        return None
+
+
 def get_ytdlp_options():
     return {
         "outtmpl": f"temp/%(id)s_{sanitize_filename('%(title)s')}.%(ext)s",
         "noplaylist": True,
+        "cookiefile": random_cookie_file(),
         "geo_bypass": True,
         "age_limit": 99,
         "retries": 10,
         "restrictfilenames": True,
         "no_exec": True,
         "user_agent": get_user_agent(),
+        "http_headers": {
+            "Referer": "https://www.tiktok.com/",
+        },
     }
 
 
