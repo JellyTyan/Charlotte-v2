@@ -28,13 +28,9 @@ def random_cookie_file():
 def get_ytdlp_options():
     return {
         "outtmpl": f"temp/%(id)s_{sanitize_filename('%(title)s')}.%(ext)s",
-        "noplaylist": True,
         "cookiefile": random_cookie_file(),
-        "geo_bypass": True,
-        "age_limit": 99,
         "retries": 10,
         "restrictfilenames": True,
-        "no_exec": True,
         "user_agent": get_user_agent(),
         "http_headers": {
             "Referer": "https://www.tiktok.com/",
