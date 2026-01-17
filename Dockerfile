@@ -23,7 +23,7 @@ RUN curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh
 COPY --chown=charlotte:charlotte requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir gallery-dl
-RUN pip install -U  --no-cache-dir --pre "yt-dlp[default,curl-cffi]"
+RUN pip install -U --no-cache-dir --pre yt-dlp[default,curl-cffi]
 
 COPY --chown=charlotte:charlotte . .
 RUN chmod +x /app/entrypoint.sh

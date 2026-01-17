@@ -14,7 +14,7 @@ from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
 from modules.base_service import BaseService
-from utils import download_file, truncate_string, update_metadata
+from utils import download_file, truncate_string, update_metadata, escape_html
 
 from .utils import get_ytdlp_options, get_gallery_dl_info
 
@@ -58,40 +58,49 @@ class TiktokService(BaseService):
         options = get_ytdlp_options()
         options["outtmpl"] = f"{self.output_path}/%(id)s_%(title)s.%(ext)s"
 
-        with yt_dlp.YoutubeDL(options) as ydl:
-            loop = asyncio.get_running_loop()
+        try:
+            with yt_dlp.YoutubeDL(options) as ydl:
+                loop = asyncio.get_running_loop()
 
-            info = await loop.run_in_executor(
-                self._download_executor,
-                lambda: ydl.extract_info(url, download=True)
+                info = await loop.run_in_executor(
+                    self._download_executor,
+                    lambda: ydl.extract_info(url, download=True)
+                )
+
+                if not info:
+                    raise BotError(
+                        code=ErrorCode.DOWNLOAD_FAILED,
+                        message="Failed to download video",
+                        url=url,
+                        is_logged=True
+                    )
+
+                video_path = Path(ydl.prepare_filename(info))
+
+                author = info.get("uploader", "Unknown")
+                description = escape_html(info.get("description", "") or "")
+                full_caption = f"{author} - {description}"
+                final_caption = truncate_string(full_caption, 1024)
+
+                return [
+                    MediaContent(
+                        type=MediaType.VIDEO,
+                        path=video_path,
+                        width=info.get("width"),
+                        height=info.get("height"),
+                        duration=info.get("duration"),
+                        title=final_caption,
+                        performer=author
+                    )
+                ]
+        except yt_dlp.utils.DownloadError as e:
+            logger.error(f"yt-dlp download failed: {e}")
+            raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                message=str(e),
+                url=url,
+                is_logged=True
             )
-
-            if not info:
-                raise BotError(
-                    code=ErrorCode.DOWNLOAD_FAILED,
-                    message="Failed to download video",
-                    url=url,
-                    is_logged=True
-                )
-
-            video_path = Path(ydl.prepare_filename(info))
-
-            author = info.get("uploader", "Unknown")
-            description = info.get("description", "") or ""
-            full_caption = f"{author} - {description}"
-            final_caption = truncate_string(full_caption, 1024)
-
-            return [
-                MediaContent(
-                    type=MediaType.VIDEO,
-                    path=video_path,
-                    width=info.get("width"),
-                    height=info.get("height"),
-                    duration=info.get("duration"),
-                    title=final_caption,
-                    performer=author
-                )
-            ]
 
     async def _process_photos(self, url: str) -> List[MediaContent]:
         logger.info(f"Processing as Photos: {url}")
@@ -122,7 +131,7 @@ class TiktokService(BaseService):
 
         author_data = first_item.get("author", {})
         author = author_data.get("nickname") or author_data.get("uniqueId") or "Unknown"
-        description = first_item.get("desc") or first_item.get("description") or ""
+        description = escape_html(first_item.get("desc") or first_item.get("description") or "")
 
         full_caption = f"{author} - {description}"
         final_caption = truncate_string(full_caption, 1024)

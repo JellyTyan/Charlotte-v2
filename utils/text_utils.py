@@ -1,4 +1,5 @@
 import asyncio
+import html
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
@@ -9,6 +10,11 @@ def truncate_string(text: str, max_length: int = 1024) -> str:
     if not text or len(text) <= max_length:
         return text
     return text[:max_length - 3] + "..."
+
+
+def escape_html(text: str) -> str:
+    """Escape HTML special characters to prevent parsing errors."""
+    return html.escape(text) if text else ""
 
 logger = logging.getLogger(__name__)
 
