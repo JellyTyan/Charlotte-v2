@@ -27,7 +27,21 @@ class RedditService(BaseService):
         super().__init__()
         self.output_path = output_path
 
+    async def _resolve_shortened_url(self, url: str) -> str:
+        """Resolve shortened Reddit URLs to full URLs."""
+        try:
+            async with httpx.AsyncClient(follow_redirects=True) as client:
+                response = await client.head(url)
+                return str(response.url)
+        except Exception as e:
+            logger.warning(f"Failed to resolve shortened URL {url}: {e}")
+            return url
+
     async def download(self, url: str) -> List[MediaContent]:
+        # Resolve shortened URLs first
+        if "/s/" in url:
+            url = await self._resolve_shortened_url(url)
+        
         # Extract clean URL using regex pattern
         match = re.match(r'(https://www\.reddit\.com/r/[^/]+/comments/[^/?]+(?:/[^/?]+)?)', url)
         if match:

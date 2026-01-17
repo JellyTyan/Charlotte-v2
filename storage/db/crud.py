@@ -318,8 +318,8 @@ async def get_top_services(limit: int = 10):
 async def get_status_stats():
     async with _get_db().async_session() as session:
         query = select(
-            func.count().filter(Statistics.status == "complete").label("complete_count"),
-            func.count().filter(Statistics.status == "error").label("error_count")
+            func.count().filter(Statistics.status == "success").label("complete_count"),
+            func.count().filter(Statistics.status == "failed").label("error_count")
         )
         result = await session.execute(query)
         complete_count, error_count = result.one()

@@ -40,3 +40,4 @@ starting-download = 🚀 شروع دانلود!
 invalid-callback = ❌ اوه! این دکمه منقضی شده.
 url-expired = ⏰ لینک منقضی شده. دوباره با یکی جدید امتحان کن!
 setting-changed = ⚙️ تنظیم *{ $setting }* اکنون { $status } است!
+premium-granted = 🎉 Great news! The owner has granted you free access to premium features. Enjoy unlimited downloads!

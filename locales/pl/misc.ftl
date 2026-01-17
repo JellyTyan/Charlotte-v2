@@ -40,3 +40,4 @@ starting-download = 🚀 Rozpoczynam pobieranie!
 invalid-callback = ❌ Ups! Ten przycisk wygasł.
 url-expired = ⏰ Link wygasł. Spróbuj ponownie ze świeżym!
 setting-changed = ⚙️ Ustawienie *{ $setting }* zostało { $status }!
+premium-granted = 🎉 Great news! The owner has granted you free access to premium features. Enjoy unlimited downloads!

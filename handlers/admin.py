@@ -123,17 +123,21 @@ async def admin_panel_stats(callback: CallbackQuery, state: FSMContext):
 
     user_count = await get_user_counts()
     status_stats = await get_status_stats()
+    
+    total_requests = status_stats['complete'] + status_stats['error']
+    success_rate = (status_stats['complete'] / total_requests * 100) if total_requests > 0 else 0
 
     text = (
-        "This is your statistics:\n"
-        f"Users today: {user_count['today']}\n"
-        f"Users yesterday: {user_count['yesterday']}\n"
-        f"Users this week: {user_count['week']}\n"
-        f"Users this month: {user_count['month']}\n\n"
-        "Number of requests: \n"
-        f"Successful: {status_stats['complete']}\n\n"
-        f"Unsuccessful: {status_stats['error']}\n\n"
-    )
+        "📊 <b>Global Statistics</b>\n\n"
+        "<b>👥 Active Users:</b>\n"
+        f"  Today: {user_count['today']}\n"
+        f"  Yesterday: {user_count['yesterday']}\n"
+        f"  This week: {user_count['week']}\n"
+        f"  This month: {user_count['month']}\n\n"
+        "<b>📥 Total Requests:</b> {total}\n"
+        f"  ✅ Successful: {status_stats['complete']} ({success_rate:.1f}%)\n"
+        f"  ❌ Failed: {status_stats['error']} ({100-success_rate:.1f}%)\n"
+    ).format(total=total_requests)
 
     if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
         if callback.bot is None:
@@ -164,10 +168,13 @@ async def admin_panel_top_services(callback: CallbackQuery, state: FSMContext):
 
     await state.update_data(current_admin_screen="top_services")
 
-    text = "Top services:\n"
+    text = "🏆 <b>Top Services (All Time)</b>\n\n"
     top_services = await get_top_services()
-    for service, count in top_services:
-        text += f"{service}: {count}\n"
+    
+    medals = ["🥇", "🥈", "🥉"]
+    for idx, (service, count) in enumerate(top_services):
+        medal = medals[idx] if idx < 3 else f"{idx + 1}."
+        text += f"{medal} <b>{service}</b>: {count}\n"
 
     if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
         if callback.bot is None:
@@ -200,9 +207,9 @@ async def admin_panel_prem_stats(callback: CallbackQuery, state: FSMContext):
 
     stats = await get_premium_and_donation_stats()
     text = (
-        "This is premium stats:\n"
-        f"Total premium users: {stats['total_premium_users']}\n"
-        f"Total stars donated: {stats['total_stars_donated']}\n"
+        "⭐ <b>Premium Statistics</b>\n\n"
+        f"👑 Total premium users: {stats['total_premium_users']}\n"
+        f"⭐ Total stars donated: {stats['total_stars_donated']}\n"
     )
 
     if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
@@ -323,6 +330,25 @@ async def process_user_id(message: types.Message, state: FSMContext):
         ),
         parse_mode=ParseMode.HTML,
     )
+    
+    # Send notification to user if premium was granted
+    if premium_status and message.bot:
+        try:
+            from storage.db.crud import get_user_settings
+            settings = await get_user_settings(user_id)
+            lang = settings.lang if settings else "en"
+            
+            hub = dp.workflow_data.get("_translator_hub")
+            if hub:
+                i18n = hub.get_translator_by_locale(lang)
+                await message.bot.send_message(
+                    user_id,
+                    i18n.premium.granted()
+                )
+        except Exception as e:
+            import logging
+            logging.error(f"Failed to send premium notification to user {user_id}: {e}")
+    
     await state.clear()
 
 # === Ban panel ===
@@ -635,14 +661,23 @@ async def admin_panel_service_usage(callback: CallbackQuery, state: FSMContext):
 
     text = "📊 <b>Service Usage (Last 30 days)</b>\n\n"
     total_all = 0
+    success_all = 0
+    failed_all = 0
+    
     for service, total, success, failed in stats:
+        success_rate = (success / total * 100) if total > 0 else 0
         text += f"<b>{service}</b>\n"
         text += f"  Total: {total}\n"
-        text += f"  ✅ Success: {success}\n"
+        text += f"  ✅ Success: {success} ({success_rate:.1f}%)\n"
         text += f"  ❌ Failed: {failed}\n\n"
         total_all += total
+        success_all += success
+        failed_all += failed
     
-    text += f"<b>Total Downloads:</b> {total_all}"
+    overall_rate = (success_all / total_all * 100) if total_all > 0 else 0
+    text += f"<b>━━━━━━━━━━━━━━━</b>\n"
+    text += f"<b>Total Downloads:</b> {total_all}\n"
+    text += f"<b>Overall Success Rate:</b> {overall_rate:.1f}%"
 
     if isinstance(callback.message, InaccessibleMessage) or callback.message is None:
         if callback.bot:

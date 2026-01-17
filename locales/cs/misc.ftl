@@ -40,3 +40,4 @@ starting-download = 🚀 Začínám stahovat!
 invalid-callback = ❌ Jejda! Toto tlačítko už vypršelo.
 url-expired = ⏰ Odkaz vypršel. Zkus to znovu s novým!
 setting-changed = ⚙️ Nastavení *{ $setting }* bylo { $status }!
+premium-granted = 🎉 Great news! The owner has granted you free access to premium features. Enjoy unlimited downloads!
