@@ -220,7 +220,7 @@ class TidalUtil:
             async with aiofiles.open(list_file_path, "w") as f:
                 for path in segment_files:
                     # ffmpeg concat needs safe paths
-                    safe_path = path.replace("'", "'\\''")
+                    safe_path = os.path.basename(path).replace("'", "'\\''")
                     await f.write(f"file '{safe_path}'\n")
 
             # Run ffmpeg
