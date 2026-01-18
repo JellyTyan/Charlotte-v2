@@ -158,6 +158,7 @@ async def list_supporters_command(message: Message):
 
     await message.answer(text, parse_mode="Markdown")
 
+@payment_router.callback_query(F.data == "support_stars")
 async def support_stars_callback(callback: CallbackQuery, bot: Bot):
     """Handle Stars support button"""
     await callback.answer()
