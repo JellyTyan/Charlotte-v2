@@ -212,24 +212,25 @@ class TidalUtil:
                     except Exception as e:
                         logger.error(f"Error downloading segment {i+1}: {e}")
 
-            # Merge with ffmpeg
-            logger.info("Merging segments with ffmpeg...")
-
-            # Create a file list for ffmpeg
-            list_file_path = os.path.join(temp_dir, "files.txt")
-            async with aiofiles.open(list_file_path, "w") as f:
+            # Binary merge segments (safer for DASH fMP4)
+            logger.info("Binary merging segments...")
+            temp_mp4 = filename + ".mp4"
+            async with aiofiles.open(temp_mp4, 'wb') as outfile:
                 for path in segment_files:
-                    # ffmpeg concat needs safe paths
-                    safe_path = os.path.basename(path).replace("'", "'\\''")
-                    await f.write(f"file '{safe_path}'\n")
+                    async with aiofiles.open(path, 'rb') as infile:
+                        # Chunked copy to avoid memory issues
+                        while True:
+                            chunk = await infile.read(65536) # 64KB chunks
+                            if not chunk:
+                                break
+                            await outfile.write(chunk)
 
-            # Run ffmpeg
+            # Convert merged MP4 to FLAC
+            logger.info("Converting merged file to FLAC...")
             process = await asyncio.create_subprocess_exec(
                 "ffmpeg",
-                "-f", "concat",
-                "-safe", "0",
-                "-i", list_file_path,
-                "-c", "copy",
+                "-i", temp_mp4,
+                "-compression_level", "5",
                 "-y",
                 filename,
                 stdout=asyncio.subprocess.PIPE,
@@ -238,9 +239,12 @@ class TidalUtil:
 
             stdout, stderr = await process.communicate()
 
+            if await aios.path.exists(temp_mp4):
+                await aios.remove(temp_mp4)
+
             if process.returncode != 0:
-                logger.error(f"FFmpeg merge failed: {stderr.decode()}")
-                return None
+                 logger.error(f"FFmpeg conversion failed: {stderr.decode()}")
+                 return None
 
             # Cleanup
             try:
