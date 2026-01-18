@@ -23,7 +23,7 @@ async def get_user(user_id: int) -> Users | None:
         Users | None: User object
     """
     from . import database_manager
-    
+
     cache_key = f"user:{user_id}"
     cached = await cache_get(cache_key)
     if cached:
@@ -97,7 +97,7 @@ async def update_user_premium(user_id: int, is_premium: bool, premium_ends: date
 async def update_user_settings(user_id: int, **kwargs):
     ALLOWED_KEYS = {"lang", "send_notifications", "send_raw", "send_music_covers",
                     "send_reactions", "ping_reaction", "auto_caption", "auto_translate_titles",
-                    "title_language"
+                    "title_language", "lossless_mode"
                     }
     safe_kwargs = {k: v for k, v in kwargs.items() if k in ALLOWED_KEYS}
 
@@ -209,7 +209,7 @@ async def create_usage_log(user_id: int, service_name: str, event_type: str, sta
         return statistics
 
 
-async def create_payment_log(user_id: int, amount: int, currency: str, payload: str, 
+async def create_payment_log(user_id: int, amount: int, currency: str, payload: str,
                              telegram_payment_charge_id: str, provider_payment_charge_id: str = None):
     from .models import Payment
     async with _get_db().async_session() as session:

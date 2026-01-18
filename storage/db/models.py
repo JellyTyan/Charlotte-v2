@@ -40,6 +40,9 @@ class UserSettings(Base):
     auto_translate_titles: Mapped[bool] = mapped_column(Boolean, default=False)
     title_language: Mapped[str] = mapped_column(String(2), default="en")
 
+    # Experimental
+    lossless_mode: Mapped[bool] = mapped_column(Boolean, default=False)
+
     user: Mapped["Users"] = relationship(back_populates="settings")
 
 

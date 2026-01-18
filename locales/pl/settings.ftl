@@ -46,6 +46,7 @@ desc-send-notifications = Wyłącz, jeśli chcesz otrzymywać media bez dźwięk
 desc-auto-caption = Sama sprawdzę i dodam opisy do mediów. 📝
 desc-auto-translate-titles = Przetłumaczę tytuły wideo na Twój język! 🌍
 desc-allow-playlists = Pobiorę całe playlisty (ostrożnie z tym!). 📂
+desc-lossless-mode = Spróbuję znaleźć dla Ciebie utwory w Hi-Res! Ale nie obiecuję, że znajdę, ani że będą to właściwe wersje. 🎧
 
 setting-status-changed = { $is_enabled ->
     [true] Jeej! Ustawienie *{ $setting_name }* włączone!

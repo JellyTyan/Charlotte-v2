@@ -46,6 +46,7 @@ desc-send-notifications = Deaktivieren, um Medien ohne Benachrichtigungston zu e
 desc-auto-caption = Ich überprüfe und füge automatisch Beschreibungen hinzu. 📝
 desc-auto-translate-titles = Ich übersetze Videotitel automatisch in deine Sprache! 🌍
 desc-allow-playlists = Ich lade ganze Playlists herunter (vorsichtig nutzen!). 📂
+desc-lossless-mode = Ich werde versuchen, Hi-Res-Songs für dich zu finden! Aber ich verspreche nicht, dass ich sie finde oder ob es die richtigen sind. 🎧
 
 setting-status-changed = { $is_enabled ->
     [true] Yay! Einstellung *{ $setting_name }* ist jetzt an!

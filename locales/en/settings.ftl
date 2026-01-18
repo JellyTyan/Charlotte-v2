@@ -46,6 +46,7 @@ desc-send-notifications = Disable this to receive media without notification sou
 desc-auto-caption = I'll automatically verify and add captions to media. 📝
 desc-auto-translate-titles = I'll translate video titles to your language automatically! 🌍
 desc-allow-playlists = I'll handle full playlists for you (use carefully!). 📂
+desc-lossless-mode = I'll try to find Hi-Res songs for you! But I don't promise I'll find it or if it's the right one. 🎧
 
 setting-status-changed = { $is_enabled ->
     [true] Yay! Setting *{ $setting_name }* is now enabled!

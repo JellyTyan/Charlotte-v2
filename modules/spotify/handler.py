@@ -30,10 +30,15 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
     from models.errors import BotError, ErrorCode
     from senders.media_sender import MediaSender
     from utils.statistics_helper import log_download_event
+    from storage.db.crud import get_user_settings
 
     from .service import SpotifyService
 
     service = SpotifyService()
+
+    # Get user settings for lossless mode
+    user_settings = await get_user_settings(message.from_user.id)
+    lossless_mode = user_settings.lossless_mode if user_settings else False
 
     media_metadata = await service.get_info(message.text, config=config)
     if not media_metadata:
@@ -57,7 +62,8 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
         track = await service.download(
             media_metadata.performer,
             media_metadata.title,
-            media_metadata.cover
+            media_metadata.cover,
+            lossless_mode=lossless_mode
         )
 
         send_manager = MediaSender()

@@ -4,6 +4,7 @@ import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+import pathlib
 from typing import List, Optional
 
 import yt_dlp
@@ -23,6 +24,8 @@ from .utils import (
     get_spotify_author,
     get_set_list
 )
+
+from utils.tidal import TidalUtil
 
 logger = logging.getLogger(__name__)
 
@@ -88,8 +91,67 @@ class SpotifyService(BaseService):
                 is_logged=True
             )
 
-    async def download(self, performer: str, title: str, cover_url: Optional[str] = None) -> List[MediaContent]:
-        logger.debug(f"Starting download for: {performer} - {title}")
+    async def download(self, performer: str, title: str, cover_url: Optional[str] = None, lossless_mode: bool = False) -> List[MediaContent]:
+        logger.debug(f"Starting download for: {performer} - {title} (Lossless: {lossless_mode})")
+
+        # Experimental Tidal Lossless Download
+        if lossless_mode:
+            try:
+                logger.debug(f"Attempting Tidal download for: {performer} - {title}")
+                tidal = TidalUtil()
+                search_query = f"{performer} - {title}"
+                results = await tidal.search(search_query, limit=10)
+
+                for item in results:
+                    # Simple fuzzy match replacement: clean strings and compare
+                    tidal_artist = item.get('artist', {}).get('name', '').lower()
+                    tidal_title = item.get('title', '').lower()
+
+                    target_artist = performer.lower()
+                    target_title = title.lower()
+
+                    # Check if strings are contained or equal (ignoring case)
+                    if (target_artist in tidal_artist or tidal_artist in target_artist) and \
+                       (target_title in tidal_title or tidal_title in target_title):
+
+                        logger.info(f"Found Tidal match: {item['artist']['name']} - {item['title']} (ID: {item['id']})")
+                        filename = sanitize_filename(f"{performer} - {title}.flac")
+                        filepath = os.path.join(self.output_path, filename)
+
+                        downloaded_path = await tidal.download(item['id'], filepath)
+
+                        if downloaded_path and await aios.path.exists(downloaded_path):
+                            logger.info(f"Successfully downloaded from Tidal: {downloaded_path}")
+
+                            # Download cover if needed
+                            cover_file = None
+                            if cover_url:
+                                try:
+                                    cover_path = os.path.join(self.output_path, f"{pathlib.Path(downloaded_path).stem}.jpg")
+                                    await download_file(cover_url, cover_path)
+                                    if await aios.path.exists(cover_path):
+                                        cover_file = Path(cover_path)
+                                except Exception as e:
+                                    logger.warning(f"Failed to download cover: {e}")
+
+                            # Return MediaContent
+                            # Note: Duration might be missing if not parsed from file, but we can try to get it from Tidal result
+                            duration = item.get('duration', 0)
+
+                            return [MediaContent(
+                                type=MediaType.AUDIO,
+                                path=Path(downloaded_path),
+                                duration=duration,
+                                title=title,
+                                performer=performer,
+                                cover=cover_file
+                            )]
+                        else:
+                            logger.warning("Tidal download returned path but file missing or failed.")
+            except Exception as e:
+                logger.error(f"Tidal download failed: {e}. Falling back to standard method.")
+
+        # Fallback to standard YouTube/yt-dlp method
         options = get_audio_options(f"{performer} - {title}")
         logger.debug(f"Searching YouTube for: {performer} - {title}")
         video_link = await search_music(performer, title)

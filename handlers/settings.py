@@ -20,7 +20,7 @@ from core.loader import dp
 
 settings_keys = [
     "send_raw", "send_music_covers", "send_reactions", "send_notifications",
-    "auto_caption", "auto_translate_titles",
+    "auto_caption", "auto_translate_titles", "lossless_mode"
 ]
 
 chat_only_settings = [
@@ -48,6 +48,8 @@ LANGUAGES = [
     { "code": "ko", "name": "한국어", "flag": "🇰🇷" },
     { "code": "hi", "name": "हिन्दी", "flag": "🇮🇳" }
 ]
+
+# ... existing code ...
 
 def build_main_keyboard(settings: dict, i18n: TranslatorRunner, is_group: bool = False) -> InlineKeyboardMarkup:
     # Добавляем настройки только для групп
@@ -93,6 +95,15 @@ def build_main_keyboard(settings: dict, i18n: TranslatorRunner, is_group: bool =
             ),
         ],
     ]
+
+    if not is_group:
+         keyboards.append([
+            InlineKeyboardButton(
+                text=f"🎧 LOSSLESS (Experimental): {'✅' if settings.get('lossless_mode') else '❌'}",
+                callback_data="settings_lossless_mode"
+            )
+        ])
+
     if is_group:
         keyboards.append([
             InlineKeyboardButton(
@@ -121,6 +132,7 @@ async def get_default_settings():
         "send_notifications": False,
         "auto_caption": False,
         "auto_translate_titles": False,
+        "lossless_mode": False,
         "allow_playlists": True,
         "blocked_services": [],
     }
@@ -148,6 +160,7 @@ async def get_settings_for_chat(chat_id: int, user_id: int) -> dict:
         "send_reactions": settings_obj.send_reactions,
         "auto_caption": settings_obj.auto_caption,
         "auto_translate_titles": settings_obj.auto_translate_titles,
+        "lossless_mode": getattr(settings_obj, 'lossless_mode', False),
         "allow_playlists": getattr(settings_obj, 'allow_playlists', True),
         "blocked_services": getattr(settings_obj, 'blocked_services', []),
     }

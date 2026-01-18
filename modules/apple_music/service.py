@@ -4,9 +4,11 @@ import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+import pathlib
 from typing import List, Optional
 
 import yt_dlp
+from yt_dlp.utils import sanitize_filename
 from aiofiles import os as aios
 
 from models.errors import BotError, ErrorCode
@@ -14,6 +16,7 @@ from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
 from modules.base_service import BaseService
 from utils import download_file, search_music, update_metadata
+from utils.tidal import TidalUtil
 
 from utils.service_utils import get_audio_options
 from .utils import (
@@ -98,8 +101,67 @@ class AppleMusicService(BaseService):
             is_logged=True
         )
 
-    async def download(self, performer: str, title: str, cover_url: Optional[str] = None, full_cover_url: Optional[str] = None) -> List[MediaContent]:
-        logger.debug(f"Starting download for: {performer} - {title}")
+    async def download(self, performer: str, title: str, cover_url: Optional[str] = None, full_cover_url: Optional[str] = None, lossless_mode: bool = False) -> List[MediaContent]:
+        logger.debug(f"Starting download for: {performer} - {title} (Lossless: {lossless_mode})")
+
+        # Experimental Tidal Lossless Download
+        if lossless_mode:
+            try:
+                logger.debug(f"Attempting Tidal download for: {performer} - {title}")
+                tidal = TidalUtil()
+                search_query = f"{performer} - {title}"
+                results = await tidal.search(search_query, limit=10)
+
+                for item in results:
+                    tidal_artist = item.get('artist', {}).get('name', '').lower()
+                    tidal_title = item.get('title', '').lower()
+
+                    target_artist = performer.lower()
+                    target_title = title.lower()
+
+                    if (target_artist in tidal_artist or tidal_artist in target_artist) and \
+                       (target_title in tidal_title or tidal_title in target_title):
+
+                        logger.info(f"Found Tidal match: {item['artist']['name']} - {item['title']} (ID: {item['id']})")
+                        filename = sanitize_filename(f"{performer} - {title}.flac")
+                        filepath = os.path.join(self.output_path, filename)
+
+                        downloaded_path = await tidal.download(item['id'], filepath)
+
+                        if downloaded_path and await aios.path.exists(downloaded_path):
+                            logger.info(f"Successfully downloaded from Tidal: {downloaded_path}")
+
+                            # Download cover if needed
+                            cover_file = None
+                            # Prefer full cover if available
+                            target_cover_url = full_cover_url or cover_url
+
+                            if target_cover_url:
+                                try:
+                                    cover_path = os.path.join(self.output_path, f"{pathlib.Path(downloaded_path).stem}.jpg")
+                                    await download_file(target_cover_url, cover_path)
+                                    if await aios.path.exists(cover_path):
+                                        cover_file = Path(cover_path)
+                                except Exception as e:
+                                    logger.warning(f"Failed to download cover: {e}")
+
+                            # Return MediaContent
+                            duration = item.get('duration', 0)
+
+                            return [MediaContent(
+                                type=MediaType.AUDIO,
+                                path=Path(downloaded_path),
+                                duration=duration,
+                                title=title,
+                                performer=performer,
+                                cover=cover_file
+                            )]
+                        else:
+                            logger.warning("Tidal download returned path but file missing or failed.")
+            except Exception as e:
+                logger.error(f"Tidal download failed: {e}. Falling back to standard method.")
+
+        # Fallback to standard method
         options = get_audio_options(f"{performer} - {title}")
         logger.debug(f"Searching YouTube for: {performer} - {title}")
         video_link = await search_music(performer, title)
