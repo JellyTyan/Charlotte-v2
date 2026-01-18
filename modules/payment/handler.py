@@ -39,13 +39,125 @@ async def support_command(message: Message):
         ],
         [
             InlineKeyboardButton(text="⭐ Support via Stars", callback_data="support_stars")
+        ],
+        [
+            InlineKeyboardButton(text="💝 Our Supporters", callback_data="view_supporters")
         ]
     ])
 
     await message.answer(text, parse_mode="Markdown", reply_markup=kb)
 
 
-@payment_router.callback_query(F.data == "support_stars")
+@payment_router.callback_query(F.data == "view_supporters")
+async def view_supporters_callback(callback: CallbackQuery, bot: Bot):
+    """Show list of supporters"""
+    await callback.answer()
+
+    from storage.db.crud import get_global_settings
+    settings = await get_global_settings()
+    supporters = settings.get("supporters", [])
+
+    if not supporters:
+        text = "💝 **Our Supporters**\n\nBe the first to support Charlotte and see your name here!"
+    else:
+        text = "💝 **Our Supporters**\n\nThank you to these amazing people who help keep Charlotte running:\n\n"
+        for supporter in supporters:
+            text += f"• {supporter}\n"
+        text += "\n🧡 Your support means everything!"
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔙 Back", callback_data="back_to_support")]
+    ])
+
+    await bot.send_message(
+        callback.from_user.id,
+        text,
+        parse_mode="Markdown",
+        reply_markup=kb
+    )
+
+
+@payment_router.callback_query(F.data == "back_to_support")
+async def back_to_support_callback(callback: CallbackQuery):
+    """Go back to support menu"""
+    await callback.answer()
+    await callback.message.delete()
+
+
+@payment_router.message(Command("add_supporter"))
+async def add_supporter_command(message: Message):
+    """Admin command to add supporter to the list"""
+    if message.from_user.id != Config.ADMIN_ID:
+        return
+
+    args = message.text.split(maxsplit=1)
+    if len(args) < 2:
+        await message.answer("Usage: /add_supporter <name>")
+        return
+
+    supporter_name = args[1].strip()
+
+    from storage.db.crud import get_global_settings, update_global_settings
+    settings = await get_global_settings()
+    supporters = settings.get("supporters", [])
+
+    if supporter_name in supporters:
+        await message.answer(f"⚠️ {supporter_name} is already in the supporters list.")
+        return
+
+    supporters.append(supporter_name)
+    await update_global_settings("supporters", supporters)
+
+    await message.answer(f"✅ Added {supporter_name} to supporters list!")
+
+
+@payment_router.message(Command("remove_supporter"))
+async def remove_supporter_command(message: Message):
+    """Admin command to remove supporter from the list"""
+    if message.from_user.id != Config.ADMIN_ID:
+        return
+
+    args = message.text.split(maxsplit=1)
+    if len(args) < 2:
+        await message.answer("Usage: /remove_supporter <name>")
+        return
+
+    supporter_name = args[1].strip()
+
+    from storage.db.crud import get_global_settings, update_global_settings
+    settings = await get_global_settings()
+    supporters = settings.get("supporters", [])
+
+    if supporter_name not in supporters:
+        await message.answer(f"⚠️ {supporter_name} is not in the supporters list.")
+        return
+
+    supporters.remove(supporter_name)
+    await update_global_settings("supporters", supporters)
+
+    await message.answer(f"✅ Removed {supporter_name} from supporters list!")
+
+
+@payment_router.message(Command("list_supporters"))
+async def list_supporters_command(message: Message):
+    """Admin command to list all supporters"""
+    if message.from_user.id != Config.ADMIN_ID:
+        return
+
+    from storage.db.crud import get_global_settings
+    settings = await get_global_settings()
+    supporters = settings.get("supporters", [])
+
+    if not supporters:
+        await message.answer("💝 No supporters yet.")
+        return
+
+    text = "💝 **Supporters List:**\n\n"
+    for idx, supporter in enumerate(supporters, 1):
+        text += f"{idx}. {supporter}\n"
+
+    await message.answer(text, parse_mode="Markdown")
+
 async def support_stars_callback(callback: CallbackQuery, bot: Bot):
     """Handle Stars support button"""
     await callback.answer()
