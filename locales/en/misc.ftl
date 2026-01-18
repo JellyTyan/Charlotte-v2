@@ -9,7 +9,7 @@ msg-help =
       /start – Say hello!
       /help – Get help anytime
       /settings – Customize your experience
-      /premium – Learn about premium downloads
+      /support – Support the project
 
     ✨ I love helping you save media from all these platforms:
 

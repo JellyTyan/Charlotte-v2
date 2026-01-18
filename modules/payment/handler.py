@@ -1,49 +1,134 @@
 import logging
-import json
 
 from aiogram import Router, F, Bot
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, PreCheckoutQuery, ContentType, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
 from core.config import Config
 from storage.db.crud import get_user
 from utils.url_cache import get_url
 from tasks.task_manager import task_manager
+from states import SupportStates
 
 from .service import PaymentService
 
 logger = logging.getLogger(__name__)
 payment_router = Router()
 
-@payment_router.message(Command("premium"))
-async def premium_command(message: Message):
-    user = await get_user(message.from_user.id)
-    is_premium = user.is_premium if user else False
-
-    text = f"🌟 **Premium Downloads**\n\n"
-    text += "You can purchase high-quality YouTube videos (>100MB) for 5 Stars each.\n"
-    text += "Just click the ⭐ button when choosing video quality!\n\n"
+@payment_router.message(Command("support"))
+async def support_command(message: Message):
+    text = (
+        "🧡 **Support Charlotte**\n\n"
+        "Charlotte is a non-commercial project made by people for people! "
+        "I created this bot to help everyone save and share content without restrictions.\n\n"
+        "💻 **About hosting costs:**\n"
+        "Running Charlotte costs around €12/month for servers, and I cover all expenses from my own pocket. "
+        "This bot will always remain free and open for everyone!\n\n"
+        "💚 **How you can help:**\n"
+        "• Tell your friends about Charlotte\n"
+        "• Share the bot in your communities\n"
+        "• Leave a small tip to help with hosting costs\n\n"
+        "Every bit of support helps keep Charlotte running! Thank you for being part of this community! 🌟"
+    )
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💰 I'm Rich!", callback_data="premium_rich")]
+        [
+            InlineKeyboardButton(text="☕ Buy Me a Coffee", url="https://buymeacoffee.com/jellytyan"),
+            InlineKeyboardButton(text="💖 Ko-fi", url="https://ko-fi.com/jellytyan")
+        ],
+        [
+            InlineKeyboardButton(text="⭐ Support via Stars", callback_data="support_stars")
+        ]
     ])
 
     await message.answer(text, parse_mode="Markdown", reply_markup=kb)
 
 
-@payment_router.callback_query(F.data == "premium_rich")
-async def premium_rich_callback(callback: CallbackQuery, bot: Bot):
-    """Handle 'I'm Rich' button - send invoice for lifetime premium"""
+@payment_router.callback_query(F.data == "support_stars")
+async def support_stars_callback(callback: CallbackQuery, bot: Bot):
+    """Handle Stars support button"""
     await callback.answer()
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="⭐ 10 Stars", callback_data="support_10"),
+            InlineKeyboardButton(text="⭐ 50 Stars", callback_data="support_50")
+        ],
+        [
+            InlineKeyboardButton(text="⭐ 100 Stars", callback_data="support_100"),
+            InlineKeyboardButton(text="⭐ Custom", callback_data="support_custom")
+        ]
+    ])
+
+    await bot.send_message(
+        callback.from_user.id,
+        "🌟 Choose support amount:\n\nYour support helps keep Charlotte running!",
+        reply_markup=kb
+    )
+
+
+@payment_router.callback_query(F.data.startswith("support_"))
+async def support_amount_callback(callback: CallbackQuery, bot: Bot, state: FSMContext):
+    """Handle support amount selection"""
+    await callback.answer()
+
+    if callback.data == "support_custom":
+        await bot.send_message(
+            callback.from_user.id,
+            "💸 Please enter the amount of Stars you'd like to donate (1-100000):"
+        )
+        await state.set_state(SupportStates.waiting_for_amount)
+        return
+
+    amount_map = {
+        "support_10": 10,
+        "support_50": 50,
+        "support_100": 100
+    }
+
+    amount = amount_map.get(callback.data, 10)
 
     await bot.send_invoice(
         chat_id=callback.from_user.id,
-        title="👑 Lifetime Premium Access",
-        description="Unlimited downloads forever! No limits, no restrictions. Be a legend!",
-        payload="lifetime_premium",
+        title="🧡 Support Charlotte",
+        description=f"Thank you for supporting this free project! Your {amount} Stars help keep the bot running.",
+        payload=f"support_{amount}",
         currency="XTR",
-        prices=[{"label": "Lifetime Premium", "amount": 9999}]
+        prices=[{"label": "Support", "amount": amount}]
     )
+
+
+@payment_router.message(SupportStates.waiting_for_amount)
+async def process_custom_amount(message: Message, bot: Bot, state: FSMContext):
+    """Process custom support amount input"""
+    if not message.text:
+        return
+
+    try:
+        amount = int(message.text.strip())
+
+        if amount < 1 or amount > 100000:
+            await message.answer(
+                "❌ Amount must be between 1 and 100,000 Stars. Please try again:"
+            )
+            return
+
+        await state.clear()
+
+        await bot.send_invoice(
+            chat_id=message.from_user.id,
+            title="🧡 Support Charlotte",
+            description=f"Thank you for supporting this free project! Your {amount} Stars help keep the bot running.",
+            payload=f"support_{amount}",
+            currency="XTR",
+            prices=[{"label": "Support", "amount": amount}]
+        )
+
+    except ValueError:
+        await message.answer(
+            "❌ Please enter a valid number between 1 and 100,000:"
+        )
 
 
 @payment_router.message(Command("refund"))
@@ -150,7 +235,7 @@ async def successful_payment_handler(message: Message, bot: Bot):
                 await update_payment_status(payment.telegram_payment_charge_id, "refunded")
                 return
 
-            await message.answer("✅ Payment received! Starting download...")
+            await message.answer("✅ Thank you for supporting Charlotte! Starting download...")
 
             # Import here to avoid circular dep
             from modules.youtube.handler import download_youtube_media
@@ -169,7 +254,7 @@ async def successful_payment_handler(message: Message, bot: Bot):
 
         except Exception as e:
             logger.error(f"Error processing payment payload: {e}")
-            await message.answer("❌ Error processing your purchase. Refunding...")
+            await message.answer("❌ Error processing your request. Refunding...")
             try:
                 await bot.refund_star_payment(
                     message.from_user.id,
@@ -180,18 +265,12 @@ async def successful_payment_handler(message: Message, bot: Bot):
             except Exception as refund_error:
                 logger.error(f"Refund failed: {refund_error}")
 
-    elif payload == "lifetime_premium":
-        # Grant lifetime premium
-        from storage.db.crud import toggle_lifetime_premium
-        await toggle_lifetime_premium(user_id=message.from_user.id)
-
+    elif payload.startswith("support_"):
+        # Handle support donations
         await message.answer(
-            "🎉👑 **Welcome to the Elite Club!**\n\n"
-            "You now have **LIFETIME PREMIUM ACCESS**!\n\n"
-            "✨ Unlimited downloads\n"
-            "🚀 No restrictions\n"
-            "🏆 Forever and ever!\n\n"
-            "Thank you for your incredible support! 🧡",
+            "🧡🌟 **Thank you so much!**\n\n"
+            "Your support means the world and helps keep Charlotte running for everyone!\n\n"
+            "You're awesome! 🚀",
             parse_mode="Markdown"
         )
 

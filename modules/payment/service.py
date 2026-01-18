@@ -6,11 +6,11 @@ class PaymentService:
     async def create_single_download_invoice(chat_id: int, payload: str, provider_token: str = ""):
         return {
             "chat_id": chat_id,
-            "title": "Premium Download",
-            "description": "Unlock high-quality download (>100MB) for this video.",
+            "title": "🚀 Support Heavy Download",
+            "description": "This large file (>100MB) requires extra server resources. Your support helps keep Charlotte running for everyone!",
             "payload": payload,
             "provider_token": provider_token,
             "currency": "XTR",
-            "prices": [LabeledPrice(label="Premium Video", amount=5)],
-            "start_parameter": "premium-download"
+            "prices": [LabeledPrice(label="Support Download", amount=5)],
+            "start_parameter": "support-download"
         }
