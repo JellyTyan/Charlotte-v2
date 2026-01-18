@@ -49,7 +49,7 @@ def update_metadata(
     """
     # Checking file extension
     ext = audio_file.lower().split('.')[-1]
-    if ext not in ["mp3", "m4a", "mp4"]:
+    if ext not in ["mp3", "m4a", "mp4", "flac"]:
         logger.error(f"Unsupported audio format: {audio_file}")
         return
 
@@ -96,6 +96,27 @@ def update_metadata(
                         audio["covr"] = [
                             MP4Cover(img.read(), imageformat=MP4Cover.FORMAT_JPEG)
                         ]
+            audio.save()
+
+        elif ext == "flac":
+            from mutagen.flac import FLAC, Picture
+
+            audio = FLAC(audio_file)
+            audio["TITLE"] = title
+            audio["ARTIST"] = artist
+
+            if cover_file:
+                import os
+                if not os.path.isfile(cover_file):
+                    logger.error(f"Cover file not found: {cover_file}")
+                else:
+                    image = Picture()
+                    image.type = 3
+                    image.mime = "image/jpeg"
+                    image.desc = "Cover"
+                    with open(cover_file, "rb") as img:
+                        image.data = img.read()
+                    audio.add_picture(image)
             audio.save()
 
         logger.info(

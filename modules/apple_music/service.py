@@ -131,22 +131,48 @@ class AppleMusicService(BaseService):
                         if downloaded_path and await aios.path.exists(downloaded_path):
                             logger.info(f"Successfully downloaded from Tidal: {downloaded_path}")
 
-                            # Download cover if needed
-                            cover_file = None
-                            # Prefer full cover if available
-                            target_cover_url = full_cover_url or cover_url
+                            # Download covers
+                            cover_path = None
+                            full_cover_path = None
+                            base_path = os.path.join(self.output_path, pathlib.Path(downloaded_path).stem)
 
-                            if target_cover_url:
+                            # 1. Download standard cover (for Telegram preview & embedding)
+                            if cover_url:
                                 try:
-                                    cover_path = os.path.join(self.output_path, f"{pathlib.Path(downloaded_path).stem}.jpg")
-                                    await download_file(target_cover_url, cover_path)
-                                    if await aios.path.exists(cover_path):
-                                        cover_file = Path(cover_path)
+                                    cover_path = f"{base_path}.jpg"
+                                    await download_file(cover_url, cover_path)
                                 except Exception as e:
                                     logger.warning(f"Failed to download cover: {e}")
+                                    cover_path = None
+
+                            # 2. Download full cover (for sending as document)
+                            if full_cover_url:
+                                try:
+                                    full_cover_path = f"{base_path}_full.png"
+                                    await download_file(full_cover_url, full_cover_path)
+                                except Exception as e:
+                                    logger.warning(f"Failed to download full cover: {e}")
+                                    full_cover_path = None
+
+                            # 3. Update Metadata
+                            try:
+                                await asyncio.get_event_loop().run_in_executor(
+                                    self._download_executor,
+                                    lambda: update_metadata(
+                                        downloaded_path,
+                                        title=title,
+                                        artist=performer,
+                                        cover_file=cover_path
+                                    )
+                                )
+                            except Exception as e:
+                                logger.error(f"Failed to update metadata for Tidal track: {e}")
 
                             # Return MediaContent
                             duration = item.get('duration', 0)
+
+                            cover_file = Path(cover_path) if cover_path and await aios.path.exists(cover_path) else None
+                            full_cover_file = Path(full_cover_path) if full_cover_path and await aios.path.exists(full_cover_path) else None
 
                             return [MediaContent(
                                 type=MediaType.AUDIO,
@@ -154,7 +180,8 @@ class AppleMusicService(BaseService):
                                 duration=duration,
                                 title=title,
                                 performer=performer,
-                                cover=cover_file
+                                cover=cover_file,
+                                full_cover=full_cover_file
                             )]
                         else:
                             logger.warning("Tidal download returned path but file missing or failed.")

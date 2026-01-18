@@ -124,19 +124,35 @@ class SpotifyService(BaseService):
                             logger.info(f"Successfully downloaded from Tidal: {downloaded_path}")
 
                             # Download cover if needed
-                            cover_file = None
+                            cover_path = None
+                            base_path = os.path.join(self.output_path, pathlib.Path(downloaded_path).stem)
+
                             if cover_url:
                                 try:
-                                    cover_path = os.path.join(self.output_path, f"{pathlib.Path(downloaded_path).stem}.jpg")
+                                    cover_path = f"{base_path}.jpg"
                                     await download_file(cover_url, cover_path)
-                                    if await aios.path.exists(cover_path):
-                                        cover_file = Path(cover_path)
                                 except Exception as e:
                                     logger.warning(f"Failed to download cover: {e}")
+                                    cover_path = None
+
+                            # Update Metadata
+                            try:
+                                await asyncio.get_event_loop().run_in_executor(
+                                    self._download_executor,
+                                    lambda: update_metadata(
+                                        downloaded_path,
+                                        title=title,
+                                        artist=performer,
+                                        cover_file=cover_path
+                                    )
+                                )
+                            except Exception as e:
+                                logger.error(f"Failed to update metadata for Tidal track: {e}")
 
                             # Return MediaContent
-                            # Note: Duration might be missing if not parsed from file, but we can try to get it from Tidal result
                             duration = item.get('duration', 0)
+
+                            cover_file = Path(cover_path) if cover_path and await aios.path.exists(cover_path) else None
 
                             return [MediaContent(
                                 type=MediaType.AUDIO,
