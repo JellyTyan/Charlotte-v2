@@ -9,7 +9,7 @@ msg-help =
       /start – ¡Di hola!
       /help – Obtener ayuda
       /settings – Personaliza todo a tu gusto
-      /premium – Conoce las descargas premium
+      /support – Apoyar el proyecto
 
     ✨ Me encanta ayudarte a guardar medios de estas plataformas:
 

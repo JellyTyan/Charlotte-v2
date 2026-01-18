@@ -9,7 +9,7 @@ msg-help =
       /start – Przywitaj się!
       /help – Uzyskaj pomoc
       /settings – Dostosuj wszystko do siebie
-      /premium – Dowiedz się o premium pobieraniach
+      /support – Wesprzyj projekt
 
     ✨ Z przyjemnością pomogę Ci zapisać media z tych platform:
 
