@@ -14,6 +14,7 @@ from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from modules.base_service import BaseService
 from utils import download_file, update_metadata
+from models.service_list import Services
 
 from utils.service_utils import get_audio_options
 
@@ -111,6 +112,7 @@ class YTMusicService(BaseService):
                         code=ErrorCode.DOWNLOAD_FAILED,
                         message="Failed to get audio info",
                         url=url,
+                        service=Services.YTMUSIC,
                         is_logged=True
                     )
 
@@ -179,16 +181,19 @@ class YTMusicService(BaseService):
                         code=ErrorCode.DOWNLOAD_FAILED,
                         message="Audio file not found after download",
                         url=url,
+                        service=Services.YTMUSIC,
                         is_logged=True,
                     )
 
-        except BotError:
-            raise
+        except BotError as ebot:
+            ebot.service = Services.YTMUSIC
+            raise ebot
         except Exception as e:
             raise BotError(
                 code=ErrorCode.DOWNLOAD_FAILED,
                 message=f"Error downloading YTMusic Audio: {e}",
                 url=url,
+                service=Services.YTMUSIC,
                 critical=True,
                 is_logged=True
-            )
+            ) from e

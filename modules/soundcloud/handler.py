@@ -10,6 +10,7 @@ from modules.router import service_router as router
 from tasks.task_manager import task_manager
 from utils.download_utils import download_file
 from utils.file_utils import delete_files
+from models.service_list import Services
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ async def process_soundcloud_url(message: Message, config: Config, i18n: Transla
 
         send_manager = MediaSender()
         await send_manager.send(message, track, message.from_user.id)
-        await log_download_event(message.from_user.id, 'SoundCloud', 'success')
+        await log_download_event(message.from_user.id, Services.SOUNDCLOUD, 'success')
 
     elif media_metadata.media_type == "album" or media_metadata.media_type == "playlist":
         text = f"{media_metadata.title} by <a href=\"{media_metadata.performer_url}\">{media_metadata.performer}</a>\n"
@@ -92,7 +93,7 @@ async def process_soundcloud_url(message: Message, config: Config, i18n: Transla
         logger.info(f"Completed {media_metadata.media_type} download: {success_count}/{total} tracks for user {message.from_user.id}")
 
         if success_count > 0:
-            await log_download_event(message.from_user.id, 'SoundCloud', 'success')
+            await log_download_event(message.from_user.id, Services.SOUNDCLOUD, 'success')
 
         if failed_count > 0:
             await message.answer(i18n.get('download-stats', success=success_count, failed=failed_count))

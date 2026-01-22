@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import httpx
+from pydantic.types import T
 
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
@@ -13,6 +14,7 @@ from models.metadata import MediaMetadata
 from modules.base_service import BaseService
 from utils import download_file, truncate_string, get_user_agent
 from .utils import get_guest_token, get_tweet_info, sanitize_filename
+from models.service_list import Services
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +33,10 @@ class TwitterService(BaseService):
             raise BotError(
                 code=ErrorCode.INVALID_URL,
                 message="Invalid Twitter URL",
-                url=url
+                url=url,
+                service=Services.TWITTER,
+                is_logged=False,
+                critical=False
             )
 
         tweet_id = int(match.group(1))
@@ -71,16 +76,20 @@ class TwitterService(BaseService):
                     raise BotError(
                         code=ErrorCode.INVALID_URL,
                         url=url,
-                        message="Tweet is unavailable"
+                        message="Tweet is unavailable",
+                        is_logged=False,
+                        critical=False
                     )
 
                 medias = tweet_dict["data"]["tweetResult"]["result"]["legacy"].get("extended_entities", {}).get("media", [])
 
                 if not medias:
                     raise BotError(
-                        code=ErrorCode.DOWNLOAD_FAILED,
+                        code=ErrorCode.NOT_FOUND,
                         url=url,
-                        message="No media found in tweet"
+                        message="No media found in tweet",
+                        critical=False,
+                        is_logged=False
                     )
 
                 result_data = tweet_dict.get("data", {}).get("tweetResult", {}).get("result", {})
@@ -160,15 +169,17 @@ class TwitterService(BaseService):
 
                 return result
 
-            except BotError:
-                raise
+            except BotError as ebot:
+                ebot.service = Services.TWITTER
+                raise ebot
             except Exception as e:
-                logger.error(f"Error downloading Twitter media: {str(e)}")
                 raise BotError(
                     code=ErrorCode.DOWNLOAD_FAILED,
                     message=str(e),
+                    service=Services.TWITTER,
                     url=url,
-                    is_logged=True
+                    is_logged=True,
+                    critical=True
                 )
 
 

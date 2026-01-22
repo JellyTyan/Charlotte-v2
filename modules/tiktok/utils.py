@@ -9,6 +9,7 @@ from typing import List
 from models.errors import BotError, ErrorCode
 from utils.user_agents import get_user_agent
 from yt_dlp.utils import sanitize_filename
+from yt_dlp.networking.impersonate import ImpersonateTarget
 
 logger = logging.getLogger(__name__)
 
@@ -26,15 +27,18 @@ def random_cookie_file():
 
 
 def get_ytdlp_options():
+    cookie_file = random_cookie_file()
     return {
         "outtmpl": f"temp/%(id)s_{sanitize_filename('%(title)s')}.%(ext)s",
-        "cookiefile": random_cookie_file(),
+        "cookiefile": cookie_file,
         "retries": 10,
         "restrictfilenames": True,
+        'impersonate': ImpersonateTarget(client='chrome'),
+        'referer': 'https://www.tiktok.com/',
         "user_agent": get_user_agent(),
-        "http_headers": {
-            "Referer": "https://www.tiktok.com/",
-        },
+        # "http_headers": {
+        #     "Referer": "https://www.tiktok.com/",
+        # },
     }
 
 

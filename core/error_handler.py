@@ -21,7 +21,7 @@ async def global_error_handler(event: ErrorEvent):
         message = event.message
     elif hasattr(event, 'callback_query') and event.callback_query:
         message = event.callback_query.message
-    
+
     if not message:
         logger.error(f"Error without message context: {exception}")
         return
@@ -39,13 +39,13 @@ async def global_error_handler(event: ErrorEvent):
         user = event.from_user
     elif hasattr(event, 'callback_query') and event.callback_query:
         user = event.callback_query.from_user
-    
+
     chat = None
     if hasattr(event, 'chat'):
         chat = event.chat
     elif message:
         chat = message.chat
-    
+
     lang = "en"
 
     if chat and chat.type != "private":

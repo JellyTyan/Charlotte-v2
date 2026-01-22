@@ -9,6 +9,7 @@ from core.config import Config
 from modules.router import service_router as router
 from tasks.task_manager import task_manager
 from utils.file_utils import delete_files
+from models.service_list import Services
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ async def process_apple_url(message: Message, config: Config, i18n: TranslatorRu
 
         send_manager = MediaSender()
         await send_manager.send(message, track, message.from_user.id)
-        await log_download_event(message.from_user.id, 'AppleMusic', 'success')
+        await log_download_event(message.from_user.id, Services.APPLE_MUSIC, 'success')
 
     elif media_metadata.media_type == "album" or media_metadata.media_type == "playlist":
         text = f"{media_metadata.title} by {media_metadata.performer}\n"
@@ -110,7 +111,7 @@ async def process_apple_url(message: Message, config: Config, i18n: TranslatorRu
         logger.info(f"Completed {media_metadata.media_type} download: {success_count}/{total} tracks for user {message.from_user.id}")
 
         if success_count > 0:
-            await log_download_event(message.from_user.id, 'AppleMusic', 'success')
+            await log_download_event(message.from_user.id, Services.APPLE_MUSIC, 'success')
 
         if failed_count > 0:
             await message.answer(i18n.get('download-stats', success=success_count, failed=failed_count))

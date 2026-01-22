@@ -15,6 +15,7 @@ from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from modules.base_service import BaseService
 from utils import download_file, store_url, update_metadata, url_hash
+from models.service_list import Services
 
 from .models import YoutubeCallback
 from .utils import get_video_info, get_ytdlp_options
@@ -36,6 +37,7 @@ class YouTubeService(BaseService):
                 code=ErrorCode.DOWNLOAD_FAILED,
                 message="Format choice is required",
                 url=url,
+                service=Services.YOUTUBE,
                 is_logged=True
             )
 
@@ -45,6 +47,7 @@ class YouTubeService(BaseService):
                 code=ErrorCode.DOWNLOAD_FAILED,
                 message=f"Invalid format choice: {format_choice}",
                 url=url,
+                service=Services.YOUTUBE,
                 is_logged=True
             )
 
@@ -71,6 +74,7 @@ class YouTubeService(BaseService):
                 code=ErrorCode.METADATA_ERROR,
                 message="No video info returned",
                 url=url,
+                service=Services.YOUTUBE,
                 critical=True,
                 is_logged=True
             )
@@ -95,6 +99,7 @@ class YouTubeService(BaseService):
                 code=ErrorCode.METADATA_ERROR,
                 message="Invalid file path detected",
                 url=url,
+                service=Services.YOUTUBE,
                 critical=True,
                 is_logged=True
             )
@@ -202,6 +207,7 @@ class YouTubeService(BaseService):
                         code=ErrorCode.DOWNLOAD_FAILED,
                         message="Failed to download video",
                         url=url,
+                        service=Services.YOUTUBE,
                         critical=True,
                         is_logged=True
                     )
@@ -216,12 +222,16 @@ class YouTubeService(BaseService):
                         title=info_dict.get("title", "video"),
                     )
                 ]
+        except BotError as ebot:
+            ebot.service = Services.YOUTUBE
+            raise ebot
         except yt_dlp.utils.DownloadError as e:
             logger.error(f"yt-dlp download failed for format {format}: {e}")
             raise BotError(
                 code=ErrorCode.DOWNLOAD_FAILED,
                 message=str(e),
                 url=url,
+                service=Services.YOUTUBE,
                 is_logged=True
             )
 
@@ -247,7 +257,9 @@ class YouTubeService(BaseService):
                     raise BotError(
                         code=ErrorCode.DOWNLOAD_FAILED,
                         message="Failed to download audio",
-                        url=url
+                        service=Services.YOUTUBE,
+                        url=url,
+                        is_logged=True
                     )
 
                 # Use yt-dlp's prepare_filename to get actual file path
@@ -282,11 +294,16 @@ class YouTubeService(BaseService):
                     title=info_dict.get("title", "audio"),
                     cover=Path(thumbnail_path)
                 )]
+        except BotError as ebot:
+            ebot.service = Services.YOUTUBE
+            raise ebot
         except yt_dlp.utils.DownloadError as e:
             logger.error(f"yt-dlp download failed for format {format}: {e}")
             raise BotError(
                 code=ErrorCode.DOWNLOAD_FAILED,
                 message=str(e),
                 url=url,
-                is_logged=True
+                service=Services.YOUTUBE,
+                is_logged=True,
+                critical=True
             )

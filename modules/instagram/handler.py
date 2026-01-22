@@ -8,6 +8,7 @@ from senders.media_sender import MediaSender
 from tasks.task_manager import task_manager
 from utils.statistics_helper import log_download_event
 from .service import InstagramService
+from models.service_list import Services
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ async def process_instagram_url(message: Message):
         await send_manager.send(message, media_content, user_id)
 
         # Log success
-        await log_download_event(user_id, 'Instagram', 'success')
+        await log_download_event(user_id, Services.INSTAGRAM, 'success')
 
     except Exception as e:
         logger.error(f"Error processing Instagram URL: {e}")

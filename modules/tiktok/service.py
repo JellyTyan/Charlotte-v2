@@ -1,3 +1,4 @@
+import json
 import asyncio
 import logging
 import os
@@ -13,6 +14,7 @@ from yt_dlp.utils import sanitize_filename
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
+from models.service_list import Services
 from modules.base_service import BaseService
 from utils import download_file, truncate_string, update_metadata, escape_html
 
@@ -32,6 +34,10 @@ class TiktokService(BaseService):
     async def download(self, url: str) -> List[MediaContent]:
         expanded_url = await self._resolve_url(url)
         logger.info(f"Resolved URL: {url} -> {expanded_url}")
+
+        info_list = await get_gallery_dl_info(expanded_url)
+        with open("info.json", "w") as f:
+            json.dump(info_list, f)
 
         if "/photo/" in expanded_url:
             return await self._process_photos(expanded_url)
@@ -69,10 +75,12 @@ class TiktokService(BaseService):
 
                 if not info:
                     raise BotError(
-                        code=ErrorCode.DOWNLOAD_FAILED,
+                        code=ErrorCode.NOT_FOUND,
                         message="Failed to download video",
                         url=url,
-                        is_logged=True
+                        service=Services.TIKTOK,
+                        is_logged=True,
+                        critical=True
                     )
 
                 video_path = Path(ydl.prepare_filename(info))
@@ -93,13 +101,17 @@ class TiktokService(BaseService):
                         performer=author
                     )
                 ]
+        except BotError as ebot:
+            ebot.service = Services.TIKTOK
+            raise ebot
         except yt_dlp.utils.DownloadError as e:
-            logger.error(f"yt-dlp download failed: {e}")
             raise BotError(
                 code=ErrorCode.DOWNLOAD_FAILED,
                 message=str(e),
                 url=url,
-                is_logged=True
+                service=Services.TIKTOK,
+                is_logged=True,
+                critical=True
             )
 
     async def _process_photos(self, url: str) -> List[MediaContent]:
@@ -111,7 +123,9 @@ class TiktokService(BaseService):
                 code=ErrorCode.METADATA_ERROR,
                 message="Failed to get photo info from gallery-dl",
                 url=url,
-                is_logged=True
+                service=Services.TIKTOK,
+                is_logged=True,
+                critical=True
             )
 
         first_item = info_list[0] if isinstance(info_list, list) and info_list else {}
@@ -219,7 +233,9 @@ class TiktokService(BaseService):
             raise BotError(
                 code=ErrorCode.DOWNLOAD_FAILED,
                 message="Failed to download any content",
-                url=url
+                url=url,
+                is_logged=True,
+                service=Services.TIKTOK,
             )
 
         return media_contents

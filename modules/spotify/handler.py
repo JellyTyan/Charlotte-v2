@@ -9,6 +9,7 @@ from core.config import Config
 from modules.router import service_router as router
 from tasks.task_manager import task_manager
 from utils.file_utils import delete_files
+from models.service_list import Services
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,7 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
 
         send_manager = MediaSender()
         await send_manager.send(message, track, message.from_user.id)
-        await log_download_event(message.from_user.id, 'Spotify', 'success')
+        await log_download_event(message.from_user.id, Services.SPOTIFY, 'success')
 
     elif media_metadata.media_type == "album" or media_metadata.media_type == "playlist":
         text = f"{media_metadata.title} by <a href=\"{media_metadata.performer_url}\">{media_metadata.performer}</a>\n"
@@ -109,7 +110,7 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
         logger.info(f"Completed {media_metadata.media_type} download: {success_count}/{total} tracks for user {message.from_user.id}")
 
         if success_count > 0:
-            await log_download_event(message.from_user.id, 'Spotify', 'success')
+            await log_download_event(message.from_user.id, Services.SPOTIFY, 'success')
 
         if failed_count > 0:
             await message.answer(i18n.get('download-stats', success=success_count, failed=failed_count))

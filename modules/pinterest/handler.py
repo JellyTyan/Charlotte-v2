@@ -8,6 +8,7 @@ from senders.media_sender import MediaSender
 from tasks.task_manager import task_manager
 from utils.statistics_helper import log_download_event
 from .service import PinterestService
+from models.service_list import Services
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ async def process_pinterest_url(message: Message):
         send_manager = MediaSender()
         await send_manager.send(message, media_content, user_id)
 
-        await log_download_event(user_id, 'Pinterest', 'success')
+        await log_download_event(user_id, Services.PINTEREST, 'success')
 
     except Exception as e:
         logger.error(f"Error processing Pinterest URL: {e}")

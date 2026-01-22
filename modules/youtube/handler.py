@@ -10,6 +10,7 @@ from modules.router import service_router as router
 from tasks.task_manager import task_manager
 from utils import format_duration, truncate_string
 from utils.file_utils import delete_files
+from models.service_list import Services
 
 from .models import YoutubeCallback
 
@@ -43,6 +44,7 @@ async def process_youtube_url(message: Message, i18n: TranslatorRunner):
             code=ErrorCode.METADATA_ERROR,
             message="Failed to get metadata",
             url=message.text,
+            service=Services.YOUTUBE,
             is_logged=True
         )
 
@@ -148,7 +150,7 @@ async def download_youtube_media(message: Message, url: str, format_choice: str,
 
         send_manager = MediaSender()
         await send_manager.send(message, media_content, user_id)
-        await log_download_event(user_id, 'YouTube', 'success')
+        await log_download_event(user_id, Services.YOUTUBE, 'success')
     except BotError as e:
         # Refund if download failed and user paid
         if payment_charge_id and e.code == ErrorCode.DOWNLOAD_FAILED:

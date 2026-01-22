@@ -51,10 +51,6 @@ async def main():
     from middlewares.ban_check import BanCheckMiddleware
     dp.update.middleware(BanCheckMiddleware())
 
-    logger.info("📊 Setting up statistics collection...")
-    from middlewares.statistics import StatisticsMiddleware
-    dp.message.middleware(StatisticsMiddleware())
-
     logger.info("📊 Setting up rate limiter...")
     from middlewares.rate_limiter import RateLimiter
     dp.message.middleware(RateLimiter(rate=10, per=60))

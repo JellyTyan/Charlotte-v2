@@ -8,6 +8,7 @@ from senders.media_sender import MediaSender
 from tasks.task_manager import task_manager
 from utils.statistics_helper import log_download_event
 from .service import TiktokService
+from models.service_list import Services
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +38,8 @@ async def process_tiktok_url(message: Message):
         await send_manager.send(message, media_content, user_id)
 
         # Log success
-        await log_download_event(user_id, 'TikTok', 'success')
+        await log_download_event(user_id, Services.TIKTOK, 'success')
 
     except Exception as e:
-        logger.error(f"Error processing TikTok URL: {e}")
         # Error handling is usually done by task wrapper or specific exception catches if needed
         raise e

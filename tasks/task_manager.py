@@ -100,16 +100,10 @@ class TaskManager:
             await message.answer(error_message)
 
         # Log failed statistics
-        if hasattr(exception, 'url') and exception.url:
-            from middlewares.statistics import StatisticsMiddleware
-            from utils.statistics_helper import log_download_event
-            service_name = None
-            for pattern, name in StatisticsMiddleware.SERVICE_PATTERNS.items():
-                if pattern in exception.url:
-                    service_name = name
-                    break
-            if service_name:
-                await log_download_event(user_id, service_name, 'failed')
+        if hasattr(exception, 'service') and exception.service:
+            if hasattr(exception, 'is_logged') and exception.is_logged:
+                from utils.statistics_helper import log_download_event
+                await log_download_event(user_id, exception.service, 'failed')
 
         # Send to admin if critical
         if exception.critical and config.ADMIN_ID:
