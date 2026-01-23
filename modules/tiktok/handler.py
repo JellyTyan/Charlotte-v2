@@ -9,6 +9,7 @@ from tasks.task_manager import task_manager
 from utils.statistics_helper import log_download_event
 from .service import TiktokService
 from models.service_list import Services
+from models.errors import BotError, ErrorCode
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +31,22 @@ async def process_tiktok_url(message: Message):
     user_id = message.from_user.id if message.from_user else message.chat.id
 
     try:
-        # Download content
-        media_content = await TiktokService().download(message.text)
+        service = TiktokService()
+
+        # Get metadata
+        metadata = await service.get_info(message.text)
+        if not metadata:
+             raise BotError(
+                code=ErrorCode.METADATA_ERROR,
+                message="Failed to fetch metadata",
+                url=message.text,
+                service=Services.TIKTOK,
+                is_logged=True,
+                critical=True
+            )
+
+        # Download content using metadata
+        media_content = await service.download(metadata)
 
         # Send content
         send_manager = MediaSender()

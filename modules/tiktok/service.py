@@ -1,24 +1,22 @@
-import json
 import asyncio
 import logging
 import os
-import shutil
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Union
+import time
 
 import httpx
-import yt_dlp
 from yt_dlp.utils import sanitize_filename
 
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
-from models.metadata import MediaMetadata
+from models.metadata import MediaMetadata, MetadataType
 from models.service_list import Services
 from modules.base_service import BaseService
 from utils import download_file, truncate_string, update_metadata, escape_html
 
-from .utils import get_ytdlp_options, get_gallery_dl_info
+from .utils import get_ytdlp_options, get_gallery_dl_info, get_tikwm_info, convert_video
 
 logger = logging.getLogger(__name__)
 
@@ -31,183 +29,260 @@ class TiktokService(BaseService):
         super().__init__()
         self.output_path = output_path
 
-    async def download(self, url: str) -> List[MediaContent]:
-        expanded_url = await self._resolve_url(url)
-        logger.info(f"Resolved URL: {url} -> {expanded_url}")
-
-        info_list = await get_gallery_dl_info(expanded_url)
-        with open("info.json", "w") as f:
-            json.dump(info_list, f)
-
-        if "/photo/" in expanded_url:
-            return await self._process_photos(expanded_url)
+    async def download(self, item: Union[str, MediaMetadata]) -> List[MediaContent]:
+        metadata: MediaMetadata
+        if isinstance(item, str):
+            fetched_metadata = await self.get_info(item)
+            if not fetched_metadata:
+                 raise BotError(
+                    code=ErrorCode.METADATA_ERROR,
+                    message="Failed to fetch metadata",
+                    url=item,
+                    service=Services.TIKTOK,
+                    is_logged=True,
+                    critical=True
+                )
+            metadata = fetched_metadata
         else:
-            return await self._process_video(expanded_url)
+            metadata = item
+
+        if metadata.media_type == "video":
+            return await self._process_video(metadata)
+        elif metadata.media_type == "gallery":
+            return await self._process_photos(metadata)
+        else:
+             raise BotError(
+                code=ErrorCode.INVALID_URL,
+                message="Unsupported media type",
+                url=metadata.url,
+                service=Services.TIKTOK,
+                is_logged=True,
+                critical=True
+            )
+
+    async def get_info(self, url: str) -> Optional[MediaMetadata]:
+        logger.info(f"Getting info for: {url}")
+        resolved_url = await self._resolve_url(url)
+        logger.debug(f"Resolved URL: {resolved_url}")
+
+        # 1. Fetch data from both sources
+        tikwm_info = await get_tikwm_info(resolved_url)
+        tikwm_data = tikwm_info.get("data", {}) if tikwm_info and tikwm_info.get("msg") == "success" else {}
+
+        gallery_data = await get_gallery_dl_info(resolved_url)
+        if not gallery_data:
+             logger.warning(f"Gallery-dl failed for {resolved_url}")
+             # We could fallback to tikwm only, but user requested gallery-dl for metadata.
+             # We will try to proceed with what we have if tikwm is present
+             pass
+
+        # 2. Extract General Metadata (Priority: Gallery-DL)
+        # Author
+        author_data = gallery_data.get("author", {}) if gallery_data else tikwm_data.get("author", {})
+        author_name = author_data.get("nickname") or author_data.get("uniqueId") or author_data.get("unique_id") or "Unknown"
+
+        # Description
+        description = ""
+        if gallery_data:
+             description = gallery_data.get("desc") or gallery_data.get("description") or ""
+        if not description:
+             description = tikwm_data.get("title") or ""
+        escaped_description = escape_html(description)
+
+        # Music Info
+        music_title = "Unknown Title"
+        music_author = "Unknown Artist"
+        music_cover_url = None
+        music_play_url = None
+
+        if gallery_data:
+            music_obj = gallery_data.get("music", {})
+            music_title = music_obj.get("title") or music_title
+            music_author = music_obj.get("authorName") or music_author
+            music_cover_url = music_obj.get("coverLarge") or music_obj.get("coverMedium")
+            music_play_url = music_obj.get("playUrl")
+
+        # Fallback music info from tikwm if missing
+        if music_title == "Unknown Title" and tikwm_data:
+             music_info = tikwm_data.get("music_info", {})
+             music_title = music_info.get("title") or music_title
+             music_author = music_info.get("author") or music_author
+             if not music_cover_url:
+                 music_cover_url = music_info.get("cover")
+             if not music_play_url:
+                 music_play_url = music_info.get("play") # TikWM often has good music links
+
+        # 3. Determine Media Type & Content Sources
+        # Check for images in gallery_dl
+        # logic: gallery_dl usually puts images in 'imagePost' -> 'images' or just 'images'
+        is_gallery = False
+        image_urls = []
+
+        if gallery_data and ("imagePost" in gallery_data or "images" in gallery_data):
+             # It likely is a gallery, but let's check content
+             img_post = gallery_data.get("imagePost", {})
+             imgs = img_post.get("images", []) if img_post else gallery_data.get("images", [])
+
+             if imgs:
+                  is_gallery = True
+                  # Extract URLs
+                  for img in imgs:
+                      if isinstance(img, dict) and "imageURL" in img:
+                           url_list = img["imageURL"].get("urlList", [])
+                           if url_list:
+                               image_urls.append(url_list[-1]) # Best quality
+
+        # Fallback check tikwm for images if gallery detection failed or to verify
+        if not is_gallery and tikwm_data.get("images"):
+             is_gallery = True
+             image_urls = tikwm_data.get("images") # TikWM returns simple list of strings
+
+        media_type = "gallery" if is_gallery else "video"
+
+        # 4. Content Specifics
+        video_url = None
+        if media_type == "video":
+             # Video: Use TikWM
+             video_url = tikwm_data.get("play") or tikwm_data.get("wmplay") or tikwm_data.get("hdplay")
+             # Fallback to gallery-dl if tikwm empty
+             if not video_url and gallery_data:
+                 video_info = gallery_data.get("video", {})
+                 video_url = video_info.get("playAddr") or video_info.get("downloadAddr")
+
+        # Construct MediaMetadata
+        metadata = MediaMetadata(
+            type=MetadataType.METADATA,
+            url=resolved_url,
+            title=truncate_string(description, 100) if description else "TikTok Media",
+            description=escaped_description,
+            performer=author_name,
+            media_type=media_type,
+            extra={
+                "video_url": video_url,
+                "image_urls": image_urls,
+                "music_title": music_title,
+                "music_author": music_author,
+                "music_cover_url": music_cover_url,
+                "music_url": music_play_url,
+                "tikwm_data": tikwm_data, # Keep just in case
+                "gallery_data": gallery_data
+            }
+        )
+        return metadata
 
     async def _resolve_url(self, url: str) -> str:
         """
-        Follows redirects to get the full URL.
+        Follows redirects to get the full URL and cleans it.
         """
         try:
             async with httpx.AsyncClient(follow_redirects=True) as client:
                 response = await client.head(url)
                 if response.status_code >= 400:
                     response = await client.get(url)
-                return str(response.url)
+
+                final_url = str(response.url)
+
+                return final_url
         except Exception as e:
             logger.warning(f"Failed to resolve URL {url}: {e}")
             return url
 
-    async def _process_video(self, url: str) -> List[MediaContent]:
-        logger.info(f"Processing as Video: {url}")
+    async def _process_video(self, metadata: MediaMetadata) -> List[MediaContent]:
+        logger.info(f"Processing as Video: {metadata.url}")
 
-        options = get_ytdlp_options()
-        options["outtmpl"] = f"{self.output_path}/%(id)s_%(title)s.%(ext)s"
+        download_url = metadata.extra.get("video_url")
+        if not download_url:
+             raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                message="No video URL found",
+                url=metadata.url,
+                service=Services.TIKTOK,
+                is_logged=True,
+                critical=True
+            )
 
-        try:
-            with yt_dlp.YoutubeDL(options) as ydl:
-                loop = asyncio.get_running_loop()
+        video_filename = f"{metadata.performer}_{int(time.time())}.mp4"
+        filepath = os.path.join(self.output_path, sanitize_filename(video_filename))
 
-                info = await loop.run_in_executor(
-                    self._download_executor,
-                    lambda: ydl.extract_info(url, download=True)
-                )
+        # Download
+        download_url = await self._resolve_url(f"https://www.tikwm.com{download_url}")
 
-                if not info:
-                    raise BotError(
-                        code=ErrorCode.NOT_FOUND,
-                        message="Failed to download video",
-                        url=url,
-                        service=Services.TIKTOK,
-                        is_logged=True,
-                        critical=True
-                    )
+        video_path = await download_file(download_url, filepath)
 
-                video_path = Path(ydl.prepare_filename(info))
 
-                author = info.get("uploader", "Unknown")
-                description = escape_html(info.get("description", "") or "")
-                full_caption = f"{author} - {description}"
-                final_caption = truncate_string(full_caption, 1024)
+        if not video_path:
+             raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                message="Failed to download video file",
+                url=metadata.url,
+                service=Services.TIKTOK,
+                is_logged=True,
+                critical=True
+            )
 
-                return [
-                    MediaContent(
-                        type=MediaType.VIDEO,
-                        path=video_path,
-                        width=info.get("width"),
-                        height=info.get("height"),
-                        duration=info.get("duration"),
-                        title=final_caption,
-                        performer=author
-                    )
-                ]
-        except BotError as ebot:
-            ebot.service = Services.TIKTOK
-            raise ebot
-        except yt_dlp.utils.DownloadError as e:
+        return [
+            MediaContent(
+                type=MediaType.VIDEO,
+                path=Path(video_path),
+                title=metadata.title,
+                performer=metadata.performer,
+                width=None,
+                height=None,
+                duration=None
+            )
+        ]
+
+    async def _process_photos(self, metadata: MediaMetadata) -> List[MediaContent]:
+        logger.info(f"Processing as Photos: {metadata.url}")
+
+        image_urls = metadata.extra.get("image_urls", [])
+
+        if not image_urls:
             raise BotError(
                 code=ErrorCode.DOWNLOAD_FAILED,
-                message=str(e),
-                url=url,
+                message="No images found",
+                url=metadata.url,
                 service=Services.TIKTOK,
-                is_logged=True,
-                critical=True
+                is_logged=True
             )
-
-    async def _process_photos(self, url: str) -> List[MediaContent]:
-        logger.info(f"Processing as Photos: {url}")
-
-        info_list = await get_gallery_dl_info(url)
-        if not info_list:
-            raise BotError(
-                code=ErrorCode.METADATA_ERROR,
-                message="Failed to get photo info from gallery-dl",
-                url=url,
-                service=Services.TIKTOK,
-                is_logged=True,
-                critical=True
-            )
-
-        first_item = info_list[0] if isinstance(info_list, list) and info_list else {}
-
-        if isinstance(first_item, list):
-            for item in info_list:
-                if isinstance(item, (list, tuple)) and len(item) > 1 and isinstance(item[1], dict) and "author" in item[1]:
-                    first_item = item[1]
-                    break
-                elif isinstance(item, dict) and "author" in item:
-                    first_item = item
-                    break
-
-        if not isinstance(first_item, dict):
-            logger.warning(f"Could not find valid metadata dict in info_list: {info_list[:1]}")
-            first_item = {}
-
-        author_data = first_item.get("author", {})
-        author = author_data.get("nickname") or author_data.get("uniqueId") or "Unknown"
-        description = escape_html(first_item.get("desc") or first_item.get("description") or "")
-
-        full_caption = f"{author} - {description}"
-        final_caption = truncate_string(full_caption, 1024)
 
         image_tasks = []
-        base_id = first_item.get("id", "unknown_id")
+        base_filename = f"{metadata.performer}_{int(time.time())}"
 
-        images_list = first_item.get("imagePost", {}).get("images", [])
+        for idx, img_url in enumerate(image_urls):
+            filename = f"{base_filename}_{idx}.jpg"
+            filepath = os.path.join(self.output_path, sanitize_filename(filename))
+            image_tasks.append(download_file(img_url, filepath))
 
-        if not images_list:
-            images_list = first_item.get("images", [])
-
-        if images_list:
-            for idx, img_data in enumerate(images_list):
-                url_list = img_data.get("imageURL", {}).get("urlList", [])
-                target_url = url_list[-1] if url_list else None
-
-                if target_url:
-                    filename = f"{base_id}_{idx}.jpg"
-                    filepath = os.path.join(self.output_path, sanitize_filename(filename))
-
-                    image_tasks.append(
-                        download_file(target_url, filepath)
-                    )
-
-        if not image_tasks:
-            logger.warning("No images found in TikTok post.")
-
+        # Music download
+        music_url = metadata.extra.get("music_url")
         music_task = None
-        music_data = first_item.get("music", {})
-        play_url = music_data.get("playUrl")
+        music_cover_task = None
 
-        if music_data:
-            logger.info(f"Found music metadata: Title='{music_data.get('title')}', Author='{music_data.get('authorName')}', PlayUrl='{play_url}'")
-        else:
-            logger.warning("No 'music' key found in metadata.")
-
-        if play_url:
-            music_title = music_data.get("title", "Unknown Title")
-            music_author = music_data.get("authorName", "Unknown Artist")
-            music_cover_url = music_data.get("coverLarge") or music_data.get("coverMedium")
-            music_duration = music_data.get("duration", 0)
-
-            music_filename = f"{base_id}_music.mp3"
+        if music_url:
+            music_filename = f"{base_filename}_music.mp3"
             music_filepath = os.path.join(self.output_path, sanitize_filename(music_filename))
-            music_cover_path = os.path.join(self.output_path, sanitize_filename(f"{base_id}_music_cover.jpg"))
+            music_task = download_file(music_url, music_filepath)
 
-            music_task = self._download_and_process_music(
-                play_url, music_filepath, music_cover_url, music_cover_path, music_title, music_author, music_duration
-            )
-        else:
-            logger.warning("No 'playUrl' found for music, skipping download.")
+            music_cover_url = metadata.extra.get("music_cover_url")
+            if music_cover_url:
+                music_cover_path = os.path.join(self.output_path, sanitize_filename(f"{base_filename}_music_cover.jpg"))
+                music_cover_task = download_file(music_cover_url, music_cover_path)
 
+        # Run downloads
         tasks = list(image_tasks)
         if music_task:
             tasks.append(music_task)
+        if music_cover_task:
+            tasks.append(music_cover_task)
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         media_contents = []
-
         num_images = len(image_tasks)
+        full_caption = f"{metadata.performer} - {metadata.description}"
+        final_caption = truncate_string(full_caption, 1024)
+
         for i in range(num_images):
             res = results[i]
             if isinstance(res, BaseException):
@@ -216,79 +291,53 @@ class TiktokService(BaseService):
                 media_contents.append(
                     MediaContent(
                         type=MediaType.PHOTO,
-                        path=res,
+                        path=Path(res),
                         title=final_caption,
-                        performer=author
+                        performer=metadata.performer
                     )
                 )
 
         if music_task:
-            music_res = results[num_images]
+            music_res = results[num_images] # After images
+
+            # Check for cover result if it was queued
+            final_cover_file = None
+            if music_cover_task:
+                # Cover task is last if present
+                cover_res = results[-1]
+                if not isinstance(cover_res, BaseException) and cover_res:
+                    final_cover_file = cover_res
+
             if isinstance(music_res, BaseException):
                 logger.error(f"Error downloading music: {music_res}")
             elif music_res:
-                media_contents.append(music_res)
+                music_title = metadata.extra.get("music_title", "Unknown Title")
+                music_author = metadata.extra.get("music_author", "Unknown Artist")
+
+                await asyncio.to_thread(
+                    update_metadata,
+                    str(music_res),
+                    title=music_title,
+                    artist=music_author,
+                    cover_file=str(final_cover_file) if final_cover_file else None
+                )
+                media_contents.append(
+                    MediaContent(
+                        type=MediaType.AUDIO,
+                        path=Path(music_res),
+                        title=music_title,
+                        performer=music_author,
+                        cover=Path(final_cover_file) if final_cover_file else None
+                    )
+                )
 
         if not media_contents:
             raise BotError(
                 code=ErrorCode.DOWNLOAD_FAILED,
                 message="Failed to download any content",
-                url=url,
+                url=metadata.url,
                 is_logged=True,
                 service=Services.TIKTOK,
             )
 
         return media_contents
-
-    async def _download_and_process_music(
-        self,
-        url: str,
-        filepath: str,
-        cover_url: str,
-        cover_path: str,
-        title: str,
-        artist: str,
-        duration: int = 0
-    ) -> Optional[MediaContent]:
-        try:
-            audio_path = await download_file(url, filepath)
-            if not audio_path or not os.path.exists(str(audio_path)):
-                return None
-
-            try:
-                with open(audio_path, 'rb') as f:
-                    header = f.read(12)
-                    if header[4:8] == b'ftyp':
-                        new_path = str(audio_path).rsplit('.', 1)[0] + ".m4a"
-                        shutil.move(str(audio_path), new_path)
-                        audio_path = Path(new_path)
-                        logger.info(f"Renamed audio to M4A: {audio_path.name}")
-            except Exception as e:
-                logger.error(f"Error checking file type: {e}")
-
-            final_cover_path = None
-            if cover_url:
-                final_cover_path = await download_file(cover_url, cover_path)
-
-            await asyncio.to_thread(
-                update_metadata,
-                str(audio_path),
-                title=title,
-                artist=artist,
-                cover_file=str(final_cover_path) if final_cover_path else None
-            )
-
-            return MediaContent(
-                type=MediaType.AUDIO,
-                path=audio_path,
-                title=title,
-                performer=artist,
-                duration=duration,
-                cover=final_cover_path
-            )
-        except Exception as e:
-            logger.error(f"Failed to process music: {e}")
-            return None
-
-    async def get_info(self, url: str) -> Optional['MediaMetadata']:
-        return None
