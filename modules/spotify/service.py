@@ -16,7 +16,7 @@ from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from modules.base_service import BaseService
 from storage.cache.redis_client import get_or_cache
-from utils import download_file, search_music, update_metadata
+from utils import download_file, search_music, async_update_metadata
 
 from utils.service_utils import get_audio_options
 from .utils import (
@@ -135,19 +135,12 @@ class SpotifyService(BaseService):
                                     logger.warning(f"Failed to download cover: {e}")
                                     cover_path = None
 
-                            # Update Metadata
-                            try:
-                                await asyncio.get_event_loop().run_in_executor(
-                                    self._download_executor,
-                                    lambda: update_metadata(
-                                        downloaded_path,
-                                        title=title,
-                                        artist=performer,
-                                        cover_file=cover_path
-                                    )
-                                )
-                            except Exception as e:
-                                logger.error(f"Failed to update metadata for Tidal track: {e}")
+                            await async_update_metadata(
+                                downloaded_path,
+                                title=title,
+                                artist=performer,
+                                cover_file=cover_path
+                            )
 
                             # Return MediaContent
                             duration = item.get('duration', 0)
@@ -227,14 +220,11 @@ class SpotifyService(BaseService):
                         cover_path = None
 
                 logger.debug("Updating metadata")
-                await loop.run_in_executor(
-                    self._download_executor,
-                    lambda: update_metadata(
-                        audio_path,
-                        title=title,
-                        artist=performer,
-                        cover_file=cover_path
-                    )
+                await async_update_metadata(
+                    audio_path,
+                    title=title,
+                    artist=performer,
+                    cover_file=cover_path
                 )
 
                 if await aios.path.exists(audio_path):

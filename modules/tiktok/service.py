@@ -14,7 +14,7 @@ from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from models.service_list import Services
 from modules.base_service import BaseService
-from utils import download_file, truncate_string, update_metadata, escape_html
+from utils import download_file, truncate_string, async_update_metadata, escape_html
 
 from .utils import get_ytdlp_options, get_gallery_dl_info, get_tikwm_info, convert_video
 
@@ -314,13 +314,13 @@ class TiktokService(BaseService):
                 music_title = metadata.extra.get("music_title", "Unknown Title")
                 music_author = metadata.extra.get("music_author", "Unknown Artist")
 
-                await asyncio.to_thread(
-                    update_metadata,
+                await async_update_metadata(
                     str(music_res),
                     title=music_title,
                     artist=music_author,
                     cover_file=str(final_cover_file) if final_cover_file else None
                 )
+
                 media_contents.append(
                     MediaContent(
                         type=MediaType.AUDIO,

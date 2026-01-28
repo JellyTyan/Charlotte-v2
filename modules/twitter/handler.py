@@ -9,6 +9,8 @@ from tasks.task_manager import task_manager
 from utils.statistics_helper import log_download_event
 from .service import TwitterService
 from models.service_list import Services
+from core.config import Config
+from fluentogram import TranslatorRunner
 
 logger = logging.getLogger(__name__)
 
@@ -16,14 +18,14 @@ logger = logging.getLogger(__name__)
 TWITTER_REGEX = r"https://(?:twitter|x)\.com/\w+/status/\d+"
 
 @router.message(F.text.regexp(TWITTER_REGEX))
-async def twitter_handler(message: Message):
+async def twitter_handler(message: Message, config: Config, i18n: TranslatorRunner):
     if not message.text or not message.from_user:
         return
 
-    await task_manager.add_task(message.from_user.id, process_twitter_url(message), message, message.text)
+    await task_manager.add_task(message.from_user.id, process_twitter_url(message, config, i18n), message, message.text)
 
 
-async def process_twitter_url(message: Message):
+async def process_twitter_url(message: Message, config: Config, i18n: TranslatorRunner):
     if not message.bot or not message.text:
         return
 
@@ -32,7 +34,14 @@ async def process_twitter_url(message: Message):
 
     try:
         # Download content
-        media_content = await TwitterService().download(url)
+        from storage.db.crud import get_user
+        user = await get_user(user_id)
+        is_premium = user.is_premium if user else False
+        
+        if is_premium:
+            media_content = await TwitterService().download(url, premium=True, config=config)
+        else:
+            media_content = await TwitterService().download(url)
 
         # Send content
         send_manager = MediaSender()

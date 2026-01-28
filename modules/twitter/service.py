@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import List, Optional
 
 import httpx
-from pydantic.types import T
 
+from core.config import Config
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
@@ -27,7 +27,7 @@ class TwitterService(BaseService):
         self.output_path = output_path
         self.auth = "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
 
-    async def download(self, url: str) -> List[MediaContent]:
+    async def download(self, url: str, premium: bool = False, config: Optional[Config] = None) -> List[MediaContent]:
         match = re.search(r"status/(\d+)", url)
         if not match:
             raise BotError(
@@ -48,6 +48,23 @@ class TwitterService(BaseService):
         }
 
         async with httpx.AsyncClient(follow_redirects=True, headers=headers) as client:
+            csrf_token: Optional[str] = None
+            auth_token: Optional[str] = None
+
+            if premium:
+                if not isinstance(config, Config):
+                    logger.warning("Config object not provided for premium mode")
+                elif config.TWITTER_CSRF_TOKEN and config.TWITTER_AUTH_TOKEN:
+                    csrf_token = config.TWITTER_CSRF_TOKEN
+                    auth_token = config.TWITTER_AUTH_TOKEN
+                else:
+                    raise BotError(
+                        code=ErrorCode.SPONSORSHIP_ACTIVATE,
+                        message="Premium mode requires Twitter CSRF and Auth tokens",
+                        is_logged=False,
+                        critical=False
+                    )
+
             try:
                 await client.get(url)
 
@@ -58,7 +75,9 @@ class TwitterService(BaseService):
                     self.auth,
                     user_agent,
                     guest_token,
-                    client
+                    client,
+                    csrf_token=csrf_token,
+                    auth_token=auth_token
                 )
 
                 status = tweet_dict.get("data", {}).get("tweetResult")
@@ -81,7 +100,17 @@ class TwitterService(BaseService):
                         critical=False
                     )
 
-                medias = tweet_dict["data"]["tweetResult"]["result"]["legacy"].get("extended_entities", {}).get("media", [])
+                result_data = tweet_dict.get("data", {}).get("tweetResult", {}).get("result", {})
+                
+                # Check if media is blurred
+                is_blurred = bool(result_data.get("mediaVisibilityResults"))
+
+                # Handle different response structures (Tweet vs TweetWithVisibilityResults)
+                if result_data.get("__typename") == "TweetWithVisibilityResults":
+                    result_data = result_data.get("tweet", {})
+
+                legacy = result_data.get("legacy", {})
+                medias = legacy.get("extended_entities", {}).get("media", [])
 
                 if not medias:
                     raise BotError(
@@ -92,20 +121,18 @@ class TwitterService(BaseService):
                         is_logged=False
                     )
 
-                result_data = tweet_dict.get("data", {}).get("tweetResult", {}).get("result", {})
+                sensitive = legacy.get("possibly_sensitive", False) or is_blurred
 
                 user_results = result_data.get("core", {}).get("user_results", {}).get("result", {})
                 author = (
                     user_results.get("core", {}).get("name") or
-                    user_results.get("core", {}).get("screen_name") or
                     user_results.get("legacy", {}).get("name") or
+                    user_results.get("core", {}).get("screen_name") or
                     user_results.get("legacy", {}).get("screen_name") or
                     "Unknown"
                 )
 
-                title = result_data.get("legacy", {}).get("full_text") or \
-                        result_data.get("legacy", {}).get("text") or \
-                        "Twitter Media"
+                title = legacy.get("full_text") or legacy.get("text") or "Twitter Media"
 
                 result = []
                 tasks = []
@@ -122,7 +149,8 @@ class TwitterService(BaseService):
                             type=MediaType.PHOTO,
                             path=Path(filename),
                             title=truncate_string(f"{author} - {title}", 1024),
-                            performer=author
+                            performer=author,
+                            is_blured=sensitive
                         ))
 
                     elif media["type"] == "video":
@@ -145,7 +173,8 @@ class TwitterService(BaseService):
                             type=MediaType.VIDEO,
                             path=Path(filename),
                             title=truncate_string(f"{author} - {title}", 1024),
-                            performer=author
+                            performer=author,
+                            is_blured=sensitive
                         ))
 
                     elif media["type"] == "animated_gif":
@@ -162,7 +191,8 @@ class TwitterService(BaseService):
                             type=MediaType.GIF,
                             path=Path(filename),
                             title=truncate_string(f"{author} - {title}", 1024),
-                            performer=author
+                            performer=author,
+                            is_blured=sensitive
                         ))
 
                 await asyncio.gather(*tasks)
@@ -181,7 +211,6 @@ class TwitterService(BaseService):
                     is_logged=True,
                     critical=True
                 )
-
 
 
     async def get_info(self, url: str) -> Optional[MediaMetadata]:

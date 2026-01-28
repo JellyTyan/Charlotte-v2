@@ -1,4 +1,4 @@
-from .file_utils import delete_files, update_metadata
+from .file_utils import delete_files, sync_update_metadata, async_update_metadata
 from .download_utils import download_file
 from .hash_utils import url_hash
 from .url_cache import store_url, get_url
@@ -9,7 +9,8 @@ from .user_agents import get_user_agent
 
 __all__ = [
     "delete_files",
-    "update_metadata",
+    "sync_update_metadata",
+    "async_update_metadata",
     "download_file",
     "url_hash",
     "store_url",

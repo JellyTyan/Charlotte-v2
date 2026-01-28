@@ -22,3 +22,4 @@ class MediaContent:
     full_cover: Optional[Path] = None
     performer: Optional[str] = None
     original_size: Optional[bool] = None
+    is_blured: bool | None = None

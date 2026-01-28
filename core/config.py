@@ -11,6 +11,8 @@ class Config:
     SPOTIFY_CLIENT_ID: str = os.getenv("SPOTIFY_CLIENT_ID", "")
     SPOTIFY_SECRET: str = os.getenv("SPOTIFY_SECRET", "")
     APPLE_MUSIC_TOKEN: str = os.getenv("APPLEMUSIC_DEV_TOKEN", "")
+    TWITTER_CSRF_TOKEN: str = os.getenv("CSRF_TOKEN", "")
+    TWITTER_AUTH_TOKEN: str = os.getenv("AUTH_TOKEN", "")
 
     # Telegram API Server Config
     TELEGRAM_API_ID: str = os.getenv("TELEGRAM_API_ID", "")

@@ -120,14 +120,15 @@ class MediaSender:
                 if settings.send_raw and item.original_size:
                     media_group.add_document(media=types.FSInputFile(item.path))
                 elif item.type == MediaType.PHOTO:
-                    media_group.add_photo(media=types.FSInputFile(item.path))
+                    media_group.add_photo(media=types.FSInputFile(item.path), has_spoiler=item.is_blured)
                 elif item.type == MediaType.VIDEO:
                     media_group.add_video(
                         media=types.FSInputFile(item.path),
                         supports_streaming=True,
                         width=item.width,
                         height=item.height,
-                        duration=item.duration
+                        duration=item.duration,
+                        has_spoiler=item.is_blured
                     )
                 self._files_to_cleanup.append(item.path)
 

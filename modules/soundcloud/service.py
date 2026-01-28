@@ -14,7 +14,7 @@ from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from modules.base_service import BaseService
-from utils import download_file, update_metadata
+from utils import download_file, async_update_metadata
 from utils.service_utils import get_audio_options
 from .utils import get_cover_url
 
@@ -132,14 +132,11 @@ class SoundCloudService(BaseService):
                 logger.debug("Updating metadata")
                 title = info_dict.get('title', 'Unknown')
                 performer = info_dict.get('uploader', 'Unknown')
-                await loop.run_in_executor(
-                    self._download_executor,
-                    lambda: update_metadata(
-                        audio_path,
-                        title=title,
-                        artist=performer,
-                        cover_file=cover_path
-                    )
+                await async_update_metadata(
+                    audio_path,
+                    title=title,
+                    artist=performer,
+                    cover_file=cover_path
                 )
 
                 if await aios.path.exists(audio_path):

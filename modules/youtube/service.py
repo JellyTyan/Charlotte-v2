@@ -14,7 +14,7 @@ from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from modules.base_service import BaseService
-from utils import download_file, store_url, update_metadata, url_hash
+from utils import download_file, store_url, async_update_metadata, url_hash
 from models.service_list import Services
 
 from .models import YoutubeCallback
@@ -274,18 +274,12 @@ class YouTubeService(BaseService):
                     except Exception as e:
                         logger.warning(f"Failed to download thumbnail: {e}")
 
-                try:
-                    await loop.run_in_executor(
-                        self._download_executor,
-                        lambda: update_metadata(
-                            audio_path,
-                            title=info_dict.get("title", "audio"),
-                            artist=info_dict.get("uploader", "unknown"),
-                            cover_file=thumbnail_path
-                        )
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to update audio metadata: {e}")
+                await async_update_metadata(
+                    audio_path,
+                    title=info_dict.get("title", "audio"),
+                    artist=info_dict.get("uploader", "unknown"),
+                    cover_file=thumbnail_path
+                )
 
                 return [MediaContent(
                     type=MediaType.AUDIO,
