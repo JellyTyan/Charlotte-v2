@@ -1,12 +1,12 @@
 <!-- PROJECT LOGO -->
 <br />
 <div style="text-align: center;">
-  <h2>Charlotte</h2>
+  <h2>Charlotte v2</h2>
   <p align="center">
-    <img src=".github/assets/suzu.png" alt="Suzu from Sewayaki Kitsune No Senko-San">
+    <img src=".github/assets/suzu.png" alt="Suzu from Sewayaki Kitsune No Senko-San" height=500px>
   </p>
   <p align="center">
-    <a href="https://t.me/CharlotteFox_Bot">Charlotte</a> is your go-to Telegram bot for downloading audio and video from various popular sites. Share a link with her, and get your file in seconds.
+    <a href="https://t.me/CharlotteFox_Bot">Charlotte v2 </a> is upgraded version of your go-to Telegram bot for downloading audio and video from various popular sites. Share a link with her, and get your file in seconds.
     <br />
     <br />
     <a href="https://github.com/JellyTyan/Charlotte-v2/issues">Report Bug</a>
