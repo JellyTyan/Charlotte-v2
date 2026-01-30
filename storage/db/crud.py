@@ -492,3 +492,10 @@ async def update_global_settings(key: str, value) -> None:
         await session.commit()
 
     await cache_delete("global_settings")
+
+
+async def get_list_user_ids() -> list[int]:
+    async with _get_db().async_session() as session:
+        stmt = select(Users.user_id).where(Users.is_banned == False)
+        result = await session.execute(stmt)
+        return [row[0] for row in result.fetchall()]

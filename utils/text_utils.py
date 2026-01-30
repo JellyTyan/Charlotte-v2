@@ -16,6 +16,31 @@ def escape_html(text: str) -> str:
     """Escape HTML special characters to prevent parsing errors."""
     return html.escape(text) if text else ""
 
+def escape_markdown(text: str) -> str:
+    special_chars = [
+        "*",
+        "_",
+        "[",
+        "]",
+        "(",
+        ")",
+        "~",
+        "`",
+        ">",
+        "#",
+        "+",
+        "-",
+        "=",
+        "|",
+        "{",
+        "}",
+        ".",
+        "!",
+    ]
+    for char in special_chars:
+        text = text.replace(char, f"\\{char}")
+    return text
+
 logger = logging.getLogger(__name__)
 
 executor = ThreadPoolExecutor()

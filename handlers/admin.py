@@ -1,11 +1,23 @@
-from aiogram import types
+import logging
+import datetime
+import asyncio
+from typing import Optional
+
+from aiogram import types, F, Bot
 from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
-from aiogram.types import InaccessibleMessage, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, FSInputFile, message
-from typing import Optional
-from states import NewsSpamGroup
+from aiogram.types import (
+    InaccessibleMessage,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    CallbackQuery,
+    FSInputFile,
+    ReplyKeyboardRemove
+)
+from aiogram.exceptions import TelegramRetryAfter, TelegramForbiddenError, TelegramBadRequest
+
 from storage.db.crud import (
     get_user_counts,
     get_top_services,
@@ -16,13 +28,16 @@ from storage.db.crud import (
     unban_user,
     list_of_banned_users,
     get_global_settings,
-    update_global_settings
+    update_global_settings,
+    get_list_user_ids
 )
-from storage.db.crud_statistics import get_service_stats, get_user_stats
-# from utils.register_services import SERVICES
+from states import NewsSpamGroup
+from utils import escape_markdown
 
 from core.loader import dp
 from core.config import Config
+
+logger = logging.getLogger(__name__)
 
 class AdminStates(StatesGroup):
     waiting_for_user_id = State()
@@ -123,7 +138,7 @@ async def admin_panel_stats(callback: CallbackQuery, state: FSMContext):
 
     user_count = await get_user_counts()
     status_stats = await get_status_stats()
-    
+
     total_requests = status_stats['complete'] + status_stats['error']
     success_rate = (status_stats['complete'] / total_requests * 100) if total_requests > 0 else 0
 
@@ -170,7 +185,7 @@ async def admin_panel_top_services(callback: CallbackQuery, state: FSMContext):
 
     text = "🏆 <b>Top Services (All Time)</b>\n\n"
     top_services = await get_top_services()
-    
+
     medals = ["🥇", "🥈", "🥉"]
     for idx, (service, count) in enumerate(top_services):
         medal = medals[idx] if idx < 3 else f"{idx + 1}."
@@ -330,14 +345,14 @@ async def process_user_id(message: types.Message, state: FSMContext):
         ),
         parse_mode=ParseMode.HTML,
     )
-    
+
     # Send notification to user if premium was granted
     if premium_status and message.bot:
         try:
             from storage.db.crud import get_user_settings
             settings = await get_user_settings(user_id)
             lang = settings.lang if settings else "en"
-            
+
             hub = dp.workflow_data.get("_translator_hub")
             if hub:
                 i18n = hub.get_translator_by_locale(lang)
@@ -348,7 +363,7 @@ async def process_user_id(message: types.Message, state: FSMContext):
         except Exception as e:
             import logging
             logging.error(f"Failed to send premium notification to user {user_id}: {e}")
-    
+
     await state.clear()
 
 # === Ban panel ===
@@ -541,6 +556,112 @@ async def admin_panel_news(callback: CallbackQuery, state: FSMContext):
     else:
         await callback.message.edit_text(text)
 
+@dp.message(NewsSpamGroup.news_spam)
+async def proccess_spam_news(message: types.Message, state: FSMContext) -> None:
+    escaped_text = escape_markdown(str(message.text))
+    text = "Are you sure you want to send such a message?\n" f"> {escaped_text}"
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="yes", callback_data="news_spam_accept"),
+            InlineKeyboardButton(text="cancel", callback_data="news_spam_decline"),
+        ]
+    ])
+
+    await state.update_data(message_text=escaped_text)
+    await state.set_state(NewsSpamGroup.accept_news_spam)
+    await message.answer(
+        text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN_V2
+    )
+
+@dp.callback_query(lambda c: c.data == "news_spam_accept")
+async def process_spam_news_to_chats(callback: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    bot = callback.bot
+    chat_id = callback.from_user.id
+    message_text = data.get("message_text", "")
+
+    if not bot:
+        await callback.answer("Bot is not initialized")
+        return
+
+    await callback.answer("Mailing list started", reply_markup=ReplyKeyboardRemove())
+    await state.clear()
+
+    start_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    total_chat = 0
+    success_send = 0
+    error_send = 0
+
+    user_ids = await get_list_user_ids()
+
+    for user_id in user_ids:
+        if user_id == chat_id:
+            continue
+
+        if await send_message_safe(bot, user_id, message_text):
+            success_send += 1
+        else:
+            error_send += 1
+
+        await asyncio.sleep(0.05)
+
+    end_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    done_message = (
+        "The mailing has been completed\n"
+        "Beginning at {start_time}\n"
+        "Ended at {end_time}\n"
+        "Number of chats: {total_chat}\n"
+        "Successfully sent: {sucсess_send}\n"
+        "Erros: {error_send}"
+    ).format(
+        start_time=start_time,
+        end_time=end_time,
+        total_chat=total_chat,
+        sucсess_send=success_send,
+        error_send=error_send,
+    )
+
+    await bot.send_message(chat_id=chat_id, text=done_message)
+
+async def send_message_safe(bot: Bot, user_id: int, text: str) -> bool:
+    """
+    Функция отправки сообщения с обработкой ошибок и ретраями.
+    Возвращает True, если отправлено успешно, иначе False.
+    """
+    try:
+        await bot.send_message(chat_id=user_id, text=text, parse_mode=ParseMode.MARKDOWN_V2)
+        logger.info(f"[SUCCESS] Сообщение отправлено пользователю: {user_id}")
+        return True
+
+    except TelegramRetryAfter as e:
+        # Если словили лимит, ждем указанное время и пробуем снова (рекурсия)
+        logger.info(f"[WAIT] Лимит запросов. Ждем {e.retry_after} секунд для пользователя {user_id}...")
+        await asyncio.sleep(e.retry_after)
+        return await send_message_safe(bot, user_id, text)
+
+    except TelegramForbiddenError:
+        # Пользователь заблокировал бота
+        logger.info(f"[FAIL] Пользователь {user_id} заблокировал бота.")
+        return False
+
+    except TelegramBadRequest as e:
+        # Ошибка запроса (например, чат не найден)
+        logger.info(f"[FAIL] Ошибка запроса для {user_id}: {e}")
+        return False
+
+    except Exception as e:
+        # Любая другая непредвиденная ошибка
+        logger.info(f"[ERROR] Неизвестная ошибка для {user_id}: {e}")
+        return False
+
+@dp.callback_query(lambda c: c.data == "news_spam_decline")
+async def decline_spam_news(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.message.delete()
+    await state.clear()
+    await callback.answer()
+
 # === Settings panel ===
 @dp.callback_query(lambda c: c.data == "admin_panel_bot_settings")
 async def admin_panel_bot_settings(callback: CallbackQuery, state: FSMContext):
@@ -644,7 +765,7 @@ async def admin_panel_service_usage(callback: CallbackQuery, state: FSMContext):
 
     async with database_manager.async_session() as session:
         since = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)
-        
+
         result = await session.execute(
             select(
                 Statistics.service_name,
@@ -656,14 +777,14 @@ async def admin_panel_service_usage(callback: CallbackQuery, state: FSMContext):
             .group_by(Statistics.service_name)
             .order_by(func.count(Statistics.event_id).desc())
         )
-        
+
         stats = result.all()
 
     text = "📊 <b>Service Usage (Last 30 days)</b>\n\n"
     total_all = 0
     success_all = 0
     failed_all = 0
-    
+
     for service, total, success, failed in stats:
         success_rate = (success / total * 100) if total > 0 else 0
         text += f"<b>{service}</b>\n"
@@ -673,7 +794,7 @@ async def admin_panel_service_usage(callback: CallbackQuery, state: FSMContext):
         total_all += total
         success_all += success
         failed_all += failed
-    
+
     overall_rate = (success_all / total_all * 100) if total_all > 0 else 0
     text += f"<b>━━━━━━━━━━━━━━━</b>\n"
     text += f"<b>Total Downloads:</b> {total_all}\n"
@@ -721,7 +842,7 @@ async def admin_clean_stats_confirm(callback: CallbackQuery, state: FSMContext):
         return
 
     days = int(callback.data.split("_")[-1])
-    
+
     from storage.db import database_manager
     from sqlalchemy import delete
     from storage.db.models import Statistics
