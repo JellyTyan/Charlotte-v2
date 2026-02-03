@@ -1,7 +1,7 @@
 import logging
 
 from aiogram import Router, F, Bot
-from aiogram.enums import ParseMode
+from aiogram.enums import ParseMode, parse_mode
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, PreCheckoutQuery, ContentType, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -59,9 +59,9 @@ async def view_supporters_callback(callback: CallbackQuery, bot: Bot):
     supporters = settings.get("supporters", [])
 
     if not supporters:
-        text = "💝 **Our Supporters**\n\nBe the first to support Charlotte and see your name here!"
+        text = "💝 <b>Our Supporters</b>\n\nBe the first to support Charlotte and see your name here!"
     else:
-        text = "💝 **Our Supporters**\n\nThank you to these amazing people who help keep Charlotte running:\n\n"
+        text = "💝 <b>Our Supporters</b>\n\nThank you to these amazing people who help keep Charlotte running:\n\n"
         for supporter in supporters:
             text += f"• {supporter}\n"
         text += "\n🧡 Your support means everything!"
@@ -73,7 +73,7 @@ async def view_supporters_callback(callback: CallbackQuery, bot: Bot):
     await bot.send_message(
         callback.from_user.id,
         text,
-        parse_mode="Markdown",
+        parse_mode=ParseMode.HTML,
         reply_markup=kb
     )
 
