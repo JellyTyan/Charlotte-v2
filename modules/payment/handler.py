@@ -1,6 +1,7 @@
 import logging
 
 from aiogram import Router, F, Bot
+from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, PreCheckoutQuery, ContentType, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -152,11 +153,11 @@ async def list_supporters_command(message: Message):
         await message.answer("💝 No supporters yet.")
         return
 
-    text = "💝 **Supporters List:**\n\n"
+    text = "💝 <b>Supporters List:</b>\n\n"
     for idx, supporter in enumerate(supporters, 1):
         text += f"{idx}. {supporter}\n"
 
-    await message.answer(text, parse_mode="Markdown")
+    await message.answer(text, parse_mode=ParseMode.HTML)
 
 @payment_router.callback_query(F.data == "support_stars")
 async def support_stars_callback(callback: CallbackQuery, bot: Bot):
