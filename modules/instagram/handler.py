@@ -29,9 +29,13 @@ async def process_instagram_url(message: Message):
 
     user_id = message.from_user.id if message.from_user else message.chat.id
 
+    from utils.arq_pool import get_arq_pool
+
+    arq = await get_arq_pool('light')
+
     try:
         # Download content
-        media_content = await InstagramService().download(message.text)
+        media_content = await InstagramService(arq=arq).download(message.text)
 
         # Send content
         send_manager = MediaSender()
