@@ -1,14 +1,11 @@
-import asyncio
 import logging
 import re
 import os
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import pathlib
 from typing import List, Optional
-import httpx
+from curl_cffi.requests import AsyncSession
 
-import yt_dlp
 from yt_dlp.utils import sanitize_filename
 from aiofiles import os as aios
 
@@ -16,10 +13,9 @@ from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
 from modules.base_service import BaseService
-from utils import download_file, search_music, async_update_metadata
+from utils import search_music, transliterate, random_cookie_file, get_extra_audio_options
 from utils.tidal import TidalUtil
 
-from utils.service_utils import get_audio_options
 from .utils import (
     get_track_info,
     get_album_info,
@@ -30,20 +26,28 @@ logger = logging.getLogger(__name__)
 
 class DeezerService(BaseService):
     name = "Deezer"
-    _download_executor = ThreadPoolExecutor(max_workers=10)
 
-    def __init__(self, output_path: str = "storage/temp/") -> None:
+    def __init__(self, output_path: str = "storage/temp/", arq=None) -> None:
         super().__init__()
         self.output_path = output_path
+        self.arq = arq
 
     async def get_info(self, url: str, *args, **kwargs) -> MediaMetadata|None:
         logger.debug(f"Getting info for Deezer URL: {url}")
 
+        if not self.arq:
+            raise BotError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message="ARQ pool is required",
+                critical=True,
+                is_logged=True
+            )
+
         match_short = re.search(r"link\.deezer\.com/s/([A-Za-z0-9]+)", url)
 
         if match_short:
-            async with httpx.AsyncClient(follow_redirects=True) as client:
-                response = await client.get(url)
+            async with AsyncSession(impersonate="chrome136") as session:
+                response = await session.get(url, allow_redirects=True)
                 if response.status_code == 200:
                     url = str(response.url)
                     logger.debug(f"Redirected URL: {url}")
@@ -67,6 +71,14 @@ class DeezerService(BaseService):
 
     async def download(self, performer: str, title: str, cover_url: Optional[str] = None, full_cover_url: Optional[str] = None, lossless_mode: bool = False) -> List[MediaContent]:
         logger.debug(f"Starting download for: {performer} - {title} (Lossless: {lossless_mode})")
+
+        if not self.arq:
+            raise BotError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message="ARQ pool is required",
+                critical=True,
+                is_logged=True
+            )
 
         # Experimental Tidal Lossless Download
         if lossless_mode:
@@ -104,7 +116,8 @@ class DeezerService(BaseService):
                             if cover_url:
                                 try:
                                     cover_path = f"{base_path}.jpg"
-                                    await download_file(cover_url, cover_path)
+                                    job = await self.arq.enqueue_job("universal_download", cover_url, cover_path)
+                                    await job.result()
                                 except Exception as e:
                                     logger.warning(f"Failed to download cover: {e}")
                                     cover_path = None
@@ -113,17 +126,20 @@ class DeezerService(BaseService):
                             if full_cover_url:
                                 try:
                                     full_cover_path = f"{base_path}_full.png"
-                                    await download_file(full_cover_url, full_cover_path)
+                                    job = await self.arq.enqueue_job("universal_download", full_cover_url, full_cover_path)
+                                    await job.result()
                                 except Exception as e:
                                     logger.warning(f"Failed to download full cover: {e}")
                                     full_cover_path = None
 
                             # 3. Update Metadata
-                            await async_update_metadata(
+                            job = await self.arq.enqueue_job(
+                                "universal_metadata_update",
                                 downloaded_path,
                                 title=title,
                                 artist=performer,
-                                cover_file=cover_path
+                                cover_file=cover_path,
+                                _queue_name='heavy'
                             )
 
                             # Return MediaContent
@@ -147,7 +163,6 @@ class DeezerService(BaseService):
                 logger.error(f"Tidal download failed: {e}. Falling back to standard method.")
 
         # Fallback to standard method
-        options = get_audio_options(f"{performer} - {title}")
         logger.debug(f"Searching YouTube for: {performer} - {title}")
         video_link = await search_music(performer, title)
         if not video_link:
@@ -158,86 +173,84 @@ class DeezerService(BaseService):
             )
         logger.debug(f"Found YouTube link: {video_link}")
         try:
-            with yt_dlp.YoutubeDL(options) as ydl:
-                loop = asyncio.get_event_loop()
+            job = await self.arq.enqueue_job(
+                "universal_ytdlp_extract",
+                video_link,
+                extract_only = False,
+                format_selector = None,
+                output_template = f"storage/temp/{transliterate(title)}.%(ext)s",
+                cookies_file = random_cookie_file("youtube"),
+                extra_opts=get_extra_audio_options(),
+                _queue_name='heavy'
+            )
+            result = await job.result()
+            info_dict = result.get("info")
+            audio_path = result.get("filepath")
+            audio_path = os.path.splitext(audio_path)[0] + ".mp3"
 
-                logger.debug("Extracting audio info")
-                info_dict = await loop.run_in_executor(
-                    self._download_executor,
-                    lambda: ydl.extract_info(video_link, download=False)
-                )
-                if not info_dict:
-                    raise BotError(
-                        code=ErrorCode.DOWNLOAD_FAILED,
-                        message="Failed to get audio info",
-                        url=video_link,
-                        is_logged=True
-                    )
+            base_path = audio_path.rsplit('.', 1)[0]
+            logger.debug(f"Audio path: {audio_path}")
 
-                logger.debug("Downloading audio")
-                await loop.run_in_executor(
-                    self._download_executor,
-                    lambda: ydl.download([video_link])
-                )
+            # Download cover (prefer provided cover over YouTube thumbnail)
+            cover_path = None
+            full_cover_path = None
 
-                audio_path = ydl.prepare_filename(info_dict).rsplit('.', 1)[0] + '.mp3'
-                base_path = audio_path.rsplit('.', 1)[0]
-                logger.debug(f"Audio path: {audio_path}")
+            if not cover_url:
+                cover_url = info_dict.get("thumbnail")
 
-                cover_path = None
-                full_cover_path = None
+            if cover_url:
+                try:
+                    cover_path = f"{base_path}.jpg"
+                    logger.debug(f"Downloading cover: {cover_url}")
+                    job = await self.arq.enqueue_job("universal_download", cover_url, cover_path)
+                    await job.result()
+                except Exception as e:
+                    logger.warning(f"Failed to download cover: {e}")
+                    cover_path = None
 
-                if not cover_url:
-                    cover_url = info_dict.get("thumbnail")
+            # Download full size cover if available
+            if full_cover_url:
+                try:
+                    full_cover_path = f"{base_path}_full.png"
+                    logger.debug(f"Downloading full cover: {full_cover_url}")
+                    job = await self.arq.enqueue_job("universal_download", full_cover_url, full_cover_path)
+                    await job.result()
+                except Exception as e:
+                    logger.warning(f"Failed to download full cover: {e}")
+                    full_cover_path = None
 
-                if cover_url:
-                    try:
-                        cover_path = f"{base_path}.jpg"
-                        logger.debug(f"Downloading cover: {cover_url}")
-                        await download_file(cover_url, cover_path)
-                    except Exception as e:
-                        logger.warning(f"Failed to download cover: {e}")
-                        cover_path = None
+            logger.debug("Updating metadata")
+            job = await self.arq.enqueue_job(
+                "universal_metadata_update",
+                audio_path,
+                title=title,
+                artist=performer,
+                cover_file=cover_path,
+                _queue_name='heavy'
+            )
+            await job.result()
 
-                if full_cover_url:
-                    try:
-                        full_cover_path = f"{base_path}_full.png"
-                        logger.debug(f"Downloading full cover: {full_cover_url}")
-                        await download_file(full_cover_url, full_cover_path)
-                    except Exception as e:
-                        logger.warning(f"Failed to download full cover: {e}")
-                        full_cover_path = None
+            if await aios.path.exists(audio_path):
+                logger.debug(f"Download completed: {audio_path}")
+                cover_file = Path(cover_path) if cover_path and await aios.path.exists(cover_path) else None
+                full_cover_file = Path(full_cover_path) if full_cover_path and await aios.path.exists(full_cover_path) else None
 
-                logger.debug("Updating metadata")
-                await async_update_metadata(
-                    audio_path,
+                return [MediaContent(
+                    type=MediaType.AUDIO,
+                    path=Path(audio_path),
+                    duration=int(info_dict.get("duration", 0)) if info_dict.get("duration") else None,
                     title=title,
-                    artist=performer,
-                    cover_file=cover_path
+                    performer=performer,
+                    cover=cover_file,
+                    full_cover=full_cover_file
+                )]
+            else:
+                raise BotError(
+                    code=ErrorCode.DOWNLOAD_FAILED,
+                    message="Audio file not found after download",
+                    url=video_link,
+                    is_logged=True,
                 )
-
-                if await aios.path.exists(audio_path):
-                    logger.debug(f"Download completed: {audio_path}")
-                    cover_file = Path(cover_path) if cover_path and await aios.path.exists(cover_path) else None
-                    full_cover_file = Path(full_cover_path) if full_cover_path and await aios.path.exists(full_cover_path) else None
-
-                    return [MediaContent(
-                        type=MediaType.AUDIO,
-                        path=Path(audio_path),
-                        duration=int(info_dict.get("duration", 0)) if info_dict.get("duration") else None,
-                        title=title,
-                        performer=performer,
-                        cover=cover_file,
-                        full_cover=full_cover_file
-                    )]
-                else:
-                    raise BotError(
-                        code=ErrorCode.DOWNLOAD_FAILED,
-                        message="Audio file not found after download",
-                        url=video_link,
-                        is_logged=True,
-                    )
-
         except BotError:
             raise
         except Exception as e:
