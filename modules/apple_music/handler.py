@@ -27,18 +27,24 @@ async def apple_handler(message: Message, config: Config, i18n: TranslatorRunner
 async def process_apple_url(message: Message, config: Config, i18n: TranslatorRunner):
     if not message.text:
         return
+    user = message.from_user
+    if not user:
+        return
 
     from models.errors import BotError, ErrorCode
     from senders.media_sender import MediaSender
     from utils.statistics_helper import log_download_event
     from storage.db.crud import get_user_settings
+    from utils.arq_pool import get_arq_pool
 
     from .service import AppleMusicService
 
-    service = AppleMusicService()
+    # Initialize ARQ pool
+    arq = await get_arq_pool('light')
+    service = AppleMusicService(arq=arq)
 
     # Get user settings for lossless mode
-    user_settings = await get_user_settings(message.from_user.id)
+    user_settings = await get_user_settings(user.id)
     lossless_mode = user_settings.lossless_mode if user_settings else False
 
     media_metadata = await service.get_info(message.text, config=config)
@@ -67,8 +73,8 @@ async def process_apple_url(message: Message, config: Config, i18n: TranslatorRu
         )
 
         send_manager = MediaSender()
-        await send_manager.send(message, track, message.from_user.id)
-        await log_download_event(message.from_user.id, Services.APPLE_MUSIC, 'success')
+        await send_manager.send(message, track, user.id)
+        await log_download_event(user.id, Services.APPLE_MUSIC, 'success')
 
     elif media_metadata.media_type == "album" or media_metadata.media_type == "playlist":
         text = f"{media_metadata.title} by {media_metadata.performer}\n"
@@ -101,17 +107,17 @@ async def process_apple_url(message: Message, config: Config, i18n: TranslatorRu
                     track.cover,
                     track.full_size_cover
                 )
-                await send_manager.send(message, track, message.from_user.id)
+                await send_manager.send(message, track, user.id)
                 success_count += 1
             except Exception as e:
                 logger.error(f"Failed to download track {track.title}: {e}")
                 failed_count += 1
 
         total = success_count + failed_count
-        logger.info(f"Completed {media_metadata.media_type} download: {success_count}/{total} tracks for user {message.from_user.id}")
+        logger.info(f"Completed {media_metadata.media_type} download: {success_count}/{total} tracks for user {user.id}")
 
         if success_count > 0:
-            await log_download_event(message.from_user.id, Services.APPLE_MUSIC, 'success')
+            await log_download_event(user.id, Services.APPLE_MUSIC, 'success')
 
         if failed_count > 0:
             await message.answer(i18n.get('download-stats', success=success_count, failed=failed_count))
