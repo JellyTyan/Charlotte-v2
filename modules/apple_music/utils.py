@@ -1,6 +1,6 @@
 import logging
 
-import httpx
+from curl_cffi. requests import AsyncSession
 
 from models.errors import BotError, ErrorCode
 from models.metadata import MediaMetadata, MetadataType
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 async def get_track_info(song_id: int, token: str, region_code: str = "us") -> MediaMetadata:
-    async with httpx.AsyncClient(follow_redirects=True) as client:
+    async with AsyncSession(impersonate="chrome136") as client:
         response = await client.get(
             f'https://amp-api.music.apple.com/v1/catalog/{region_code}/songs/{song_id}',
             headers={
@@ -67,7 +67,7 @@ async def get_track_info(song_id: int, token: str, region_code: str = "us") -> M
 
 
 async def get_playlist_info(playlist_id: str, token: str, region_code: str = "us") -> MediaMetadata:
-    async with httpx.AsyncClient(follow_redirects=True) as client:
+    async with AsyncSession(impersonate="chrome136") as client:
         response = await client.get(
             f'https://amp-api.music.apple.com/v1/catalog/{region_code}/playlists/{playlist_id}',
             headers={
@@ -155,7 +155,7 @@ async def get_playlist_info(playlist_id: str, token: str, region_code: str = "us
 
 
 async def get_album_info(album_id: str, token: str, region_code: str = "us") -> MediaMetadata:
-    async with httpx.AsyncClient(follow_redirects=True) as client:
+    async with AsyncSession(impersonate="chrome136") as client:
         response = await client.get(
             f'https://amp-api.music.apple.com/v1/catalog/{region_code}/albums/{album_id}',
             headers={
