@@ -1,11 +1,8 @@
-import asyncio
 import logging
 import re
 from typing import Any, Dict, Optional
 
-import aiofiles
-import httpx
-import yt_dlp
+from curl_cffi.requests import AsyncSession
 
 from models.errors import BotError, ErrorCode
 from utils import get_user_agent
@@ -13,106 +10,130 @@ from utils import get_user_agent
 logger = logging.getLogger(__name__)
 
 
-async def get_pin_info(pin_id: int, client: httpx.AsyncClient) -> Dict[str, Any]:
+async def get_pin_info(url: str) -> Dict[str, Any]:
     """Fetch pin information from Pinterest API."""
-    url = "https://www.pinterest.com/resource/PinResource/get/"
-    headers = {
-        "accept": "application/json, text/javascript, */*, q=0.01",
-        "user-agent": get_user_agent(),
-        "x-pinterest-pws-handler": "www/pin/[id]/feedback.js",
-    }
-    params = {
-        "source_url": f"/pin/{pin_id}",
-        "data": f'{{"options":{{"id":"{pin_id}","field_set_key":"auth_web_main_pin","noCache":true,"fetch_visual_search_objects":true}},"context":{{}}}}',
-    }
+    async with AsyncSession(impersonate="chrome136") as session:
+        # Follow redirects for short URLs
+        response = await session.get(url, allow_redirects=True)
+        final_url = str(response.url)
 
-    response = await client.get(url, params=params, headers=headers)
-    if response.status_code != 200:
-        raise BotError(
-            code=ErrorCode.DOWNLOAD_FAILED,
-            message=f"Failed to retrieve pin info. Status code: {response.status_code}",
-            url=url,
-            is_logged=True
-        )
+        # Extract pin ID from URL
+        match = re.search(r"/pin/(\d+)", final_url)
+        if not match:
+            raise BotError(
+                code=ErrorCode.INVALID_URL,
+                message="Failed to extract pin ID from URL",
+                url=url,
+                is_logged=False
+            )
 
-    response_json = response.json()
-    root = response_json["resource_response"]["data"]
+        pin_id = match.group(1)
+        logger.debug(f"Extracted pin ID: {pin_id}")
 
-    title = root.get("title", "Pinterest Media")
-    image_signature = root["image_signature"]
-    ext = ""
-    carousel_data = None
-    video = None
-    image = None
+        # Fetch pin data from API
+        api_url = "https://www.pinterest.com/resource/PinResource/get/"
+        headers = {
+            "accept": "application/json, text/javascript, */*, q=0.01",
+            "user-agent": get_user_agent(),
+            "x-pinterest-pws-handler": "www/pin/[id]/feedback.js",
+        }
+        params = {
+            "source_url": f"/pin/{pin_id}",
+            "data": f'{{"options":{{"id":"{pin_id}","field_set_key":"auth_web_main_pin","noCache":true,"fetch_visual_search_objects":true}},"context":{{}}}}',
+        }
 
-    if root.get("carousel_data"):
-        carousel = root["carousel_data"]["carousel_slots"]
-        carousel_data = []
-        for carousel_element in carousel:
-            image_url = carousel_element["images"]["736x"]["url"]
-            carousel_data.append(image_url)
-        ext = "carousel"
+        response = await session.get(api_url, params=params, headers=headers)
 
-    elif (
-        isinstance(root.get("story_pin_data"), dict)
-        and isinstance(root["story_pin_data"].get("pages"), list)
-        and len(root["story_pin_data"]["pages"]) > 0
-        and isinstance(root["story_pin_data"]["pages"][0].get("blocks"), list)
-        and len(root["story_pin_data"]["pages"][0]["blocks"]) > 0
-        and isinstance(root["story_pin_data"]["pages"][0]["blocks"][0], dict)
-        and isinstance(
-            root["story_pin_data"]["pages"][0]["blocks"][0].get("video"), dict
-        )
-        and isinstance(
-            root["story_pin_data"]["pages"][0]["blocks"][0]["video"].get(
+        if response.status_code != 200:
+            raise BotError(
+                code=ErrorCode.METADATA_ERROR,
+                message=f"Failed to retrieve pin info. Status code: {response.status_code}",
+                url=url,
+                is_logged=True
+            )
+
+        response_json = response.json()
+        root = response_json["resource_response"]["data"]
+
+        title = root.get("title", "Pinterest Media")
+        image_signature = root["image_signature"]
+        ext = ""
+        carousel_data = None
+        video = None
+        image = None
+
+        # Check for carousel
+        if root.get("carousel_data"):
+            carousel = root["carousel_data"]["carousel_slots"]
+            carousel_data = []
+            for carousel_element in carousel:
+                image_url = carousel_element["images"]["736x"]["url"]
+                carousel_data.append(image_url)
+            ext = "carousel"
+
+        # Check for story pin video
+        elif (
+            isinstance(root.get("story_pin_data"), dict)
+            and isinstance(root["story_pin_data"].get("pages"), list)
+            and len(root["story_pin_data"]["pages"]) > 0
+            and isinstance(root["story_pin_data"]["pages"][0].get("blocks"), list)
+            and len(root["story_pin_data"]["pages"][0]["blocks"]) > 0
+            and isinstance(root["story_pin_data"]["pages"][0]["blocks"][0], dict)
+            and isinstance(
+                root["story_pin_data"]["pages"][0]["blocks"][0].get("video"), dict
+            )
+            and isinstance(
+                root["story_pin_data"]["pages"][0]["blocks"][0]["video"].get(
+                    "video_list"
+                ),
+                dict,
+            )
+        ):
+            video_list = root["story_pin_data"]["pages"][0]["blocks"][0]["video"][
                 "video_list"
-            ),
-            dict,
-        )
-    ):
-        video_list = root["story_pin_data"]["pages"][0]["blocks"][0]["video"][
-            "video_list"
-        ]
-        video = get_best_video(video_list)
+            ]
+            video = get_best_video(video_list)
 
-        if video:
-            ext = "mp4"
+            if video:
+                ext = "mp4"
 
-    elif isinstance(root.get("videos"), dict) and isinstance(
-        root["videos"].get("video_list"), dict
-    ):
-        video_list = root["videos"]["video_list"]
-        video = get_best_video(video_list)
+        # Check for regular video
+        elif isinstance(root.get("videos"), dict) and isinstance(
+            root["videos"].get("video_list"), dict
+        ):
+            video_list = root["videos"]["video_list"]
+            video = get_best_video(video_list)
 
-        if video:
-            ext = "mp4"
+            if video:
+                ext = "mp4"
 
-    elif (
-        isinstance(root.get("images"), dict)
-        and isinstance(root["images"].get("orig"), dict)
-        and "url" in root["images"]["orig"]
-    ):
-        image = root["images"]["orig"]["url"]
-        ext = "jpg"
+        # Check for image
+        elif (
+            isinstance(root.get("images"), dict)
+            and isinstance(root["images"].get("orig"), dict)
+            and "url" in root["images"]["orig"]
+        ):
+            image = root["images"]["orig"]["url"]
+            ext = "jpg"
 
-    else:
-        raise BotError(
-            code=ErrorCode.DOWNLOAD_FAILED,
-            message=f"Unknown Pinterest type. Pin id: {pin_id}",
-            url=url,
-            is_logged=True
-        )
+        else:
+            raise BotError(
+                code=ErrorCode.METADATA_ERROR,
+                message=f"Unknown Pinterest media type. Pin id: {pin_id}",
+                url=url,
+                is_logged=True
+            )
 
-    data = {
-        "title": title,
-        "image_signature": image_signature,
-        "ext": ext,
-        "carousel_data": carousel_data,
-        "video": video,
-        "image": image,
-    }
+        data = {
+            "title": title,
+            "image_signature": image_signature,
+            "ext": ext,
+            "carousel_data": carousel_data,
+            "video": video,
+            "image": image,
+        }
 
-    return data
+        return data
 
 
 def get_best_video(video_list: Dict[str, Any]) -> Optional[str]:
@@ -122,73 +143,3 @@ def get_best_video(video_list: Dict[str, Any]) -> Optional[str]:
         if quality in video_list:
             return video_list[quality]["url"]
     return None
-
-
-async def download_photo(
-    url: str,
-    filename: str,
-    client: httpx.AsyncClient,
-) -> None:
-    """Download a photo from Pinterest, trying original quality first."""
-    try:
-        content_url = re.sub(r"/\d+x", "/originals", url)
-
-        async with client.stream("GET", content_url) as response:
-            if response.status_code == 200:
-                async with aiofiles.open(filename, "wb") as f:
-                    async for chunk in response.aiter_bytes(1024):
-                        await f.write(chunk)
-                return
-
-        if response.status_code == 403:
-            async with client.stream("GET", url) as response:
-                if response.status_code == 200:
-                    async with aiofiles.open(filename, "wb") as f:
-                        async for chunk in response.aiter_bytes(1024):
-                            await f.write(chunk)
-                    return
-                else:
-                    raise BotError(
-                        code=ErrorCode.DOWNLOAD_FAILED,
-                        message=f"Failed to retrieve image. Status code: {response.status_code}",
-                        url=url,
-                        is_logged=True
-                    )
-        else:
-            raise BotError(
-                code=ErrorCode.DOWNLOAD_FAILED,
-                message=f"Failed to retrieve image. Status code: {response.status_code}",
-                url=content_url,
-                is_logged=True
-            )
-
-    except BotError:
-        raise
-    except Exception as e:
-        raise BotError(
-            code=ErrorCode.DOWNLOAD_FAILED,
-            message=f"Failed to retrieve image: {url}. {e}",
-            url=url,
-            is_logged=True
-        )
-
-
-async def download_m3u8_video(url: str, filename: str) -> None:
-    """Download m3u8 video stream using yt-dlp."""
-    try:
-        ydl_opts = {
-            'outtmpl': filename,
-            'quiet': True,
-            'no_warnings': True,
-        }
-        loop = asyncio.get_event_loop()
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            await loop.run_in_executor(None, lambda: ydl.download([url]))
-    except Exception as e:
-        logger.error(f"Error downloading m3u8 video: {e}")
-        raise BotError(
-            code=ErrorCode.DOWNLOAD_FAILED,
-            message=f"Failed to download M3U8 video: {e}",
-            url=url,
-            is_logged=True
-        )

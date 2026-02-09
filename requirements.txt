@@ -14,3 +14,5 @@ ytmusicapi==1.11.0
 instaloader
 arq==0.27.0
 gallery-dl
+Pillow==12.1.0
+pillow-heif==1.2.0
