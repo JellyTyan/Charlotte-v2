@@ -6,6 +6,7 @@ from aiogram.types import Message
 from modules.router import service_router as router
 from senders.media_sender import MediaSender
 from tasks.task_manager import task_manager
+from utils.arq_pool import get_arq_pool
 from utils.statistics_helper import log_download_event
 from .service import PixivService
 from models.service_list import Services
@@ -29,8 +30,17 @@ async def process_pixiv_url(message: Message):
 
     user_id = message.from_user.id if message.from_user else message.chat.id
 
+    # Get ARQ pool
+    arq = await get_arq_pool('light')
+
+    # Send chat action for user feedback
+    if message.bot:
+        await message.bot.send_chat_action(message.chat.id, "choose_sticker")
+
     try:
-        media_content = await PixivService().download(message.text)
+        # Pass arq to service
+        service = PixivService(arq=arq)
+        media_content = await service.download(message.text)
 
         send_manager = MediaSender()
         await send_manager.send(message, media_content, user_id)
