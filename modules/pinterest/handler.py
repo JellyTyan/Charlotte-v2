@@ -37,7 +37,7 @@ async def process_pinterest_url(message: Message):
     try:
         # Send chat action for visual feedback
         if message.bot:
-            await message.bot.send_chat_action(message.chat.id, "upload_photo")
+            await message.bot.send_chat_action(message.chat.id, "choose_sticker")
 
         # Download content
         service = PinterestService(arq=arq)

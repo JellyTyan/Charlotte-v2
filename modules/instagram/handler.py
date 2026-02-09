@@ -34,6 +34,8 @@ async def process_instagram_url(message: Message):
     arq = await get_arq_pool('light')
 
     try:
+        if message.bot:
+            await message.bot.send_chat_action(message.chat.id, "choose_sticker")
         # Download content
         media_content = await InstagramService(arq=arq).download(message.text)
 
