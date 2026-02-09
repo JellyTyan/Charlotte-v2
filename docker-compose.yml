@@ -19,7 +19,7 @@ services:
       - charlotte-net
     depends_on:
       - redis
-      # - postgres # Uncomment if using postgres
+      - postgres
 
   redis:
     image: redis:7-alpine
@@ -30,6 +30,46 @@ services:
     networks:
       - charlotte-net
 
+  light-worker:
+    build:
+      context: .
+      dockerfile: workers/Dockerfile
+    restart: unless-stopped
+    command: arq workers.light_worker.WorkerSettings
+    env_file: .env
+    volumes:
+      - ./storage:/app/storage
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - charlotte-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+
+  heavy-worker:
+    build:
+      context: .
+      dockerfile: workers/Dockerfile
+    restart: unless-stopped
+    command: arq workers.heavy_worker.WorkerSettings
+    env_file: .env
+    volumes:
+      - ./storage:/app/storage
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - charlotte-net
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+
   bgutil:
     image: brainicism/bgutil-ytdlp-pot-provider
     container_name: bgutil
@@ -39,33 +79,33 @@ services:
       - charlotte-net
     restart: always
 
-  nginx:
-    image: nginx:alpine
-    container_name: charlotte_nginx
-    restart: always
-    ports:
-      - "8080:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - telegram-bot-api
-    networks:
-      - charlotte-net
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: charlotte_nginx
+  #   restart: always
+  #   ports:
+  #     - "8080:80"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+  #   depends_on:
+  #     - telegram-bot-api
+  #   networks:
+  #     - charlotte-net
 
-  telegram-bot-api:
-    image: aiogram/telegram-bot-api:latest
-    container_name: telegram-bot-api
-    restart: always
-    ports:
-      - "8081:8081"
-    environment:
-      TELEGRAM_API_ID: ${TELEGRAM_API_ID}
-      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
-      TELEGRAM_LOCAL: ${TELEGRAM_LOCAL}
-    volumes:
-      - telegram-bot-api-data:/var/lib/telegram-bot-api
-    networks:
-      - charlotte-net
+  # telegram-bot-api:
+  #   image: aiogram/telegram-bot-api:latest
+  #   container_name: telegram-bot-api
+  #   restart: always
+  #   ports:
+  #     - "8081:8081"
+  #   environment:
+  #     TELEGRAM_API_ID: ${TELEGRAM_API_ID}
+  #     TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
+  #     TELEGRAM_LOCAL: ${TELEGRAM_LOCAL}
+  #   volumes:
+  #     - telegram-bot-api-data:/var/lib/telegram-bot-api
+  #   networks:
+  #     - charlotte-net
 
   postgres:
     image: postgres:15-alpine
