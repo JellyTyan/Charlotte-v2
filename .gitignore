@@ -164,3 +164,4 @@ logs/*
 storage/cookies/*
 storage/temp/*
 tests
+/backups

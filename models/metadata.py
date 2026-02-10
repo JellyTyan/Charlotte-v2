@@ -43,8 +43,8 @@ class MediaMetadata:
 
     # Media type
     media_type: Literal[
-        "video", "audio", "playlist",
-        "album", "track", "gallery", "unknown"
+        "video", "audio", "playlist", "gif", "photo",
+        "album", "track", "gallery", "unknown",
     ] = "unknown"
 
     # Attachments and nested items
