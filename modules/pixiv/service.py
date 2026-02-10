@@ -10,6 +10,7 @@ from curl_cffi.requests import AsyncSession
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
+from models.service_list import Services
 from modules.base_service import BaseService
 from utils import escape_html, get_user_agent
 
@@ -38,7 +39,7 @@ class PixivService(BaseService):
         # Extract pixiv ID
         match = re.search(r'pixiv\.net/.*/artworks/(\d+)', url)
         if not match:
-            raise BotError(ErrorCode.INVALID_URL, "Invalid Pixiv URL", url, is_logged=True)
+            raise BotError(ErrorCode.INVALID_URL, message="Invalid Pixiv URL", service=Services.PIXIV, url=url, is_logged=True)
 
         pixiv_id = match.group(1)
         logger.debug(f"Extracted Pixiv ID: {pixiv_id}")
@@ -59,7 +60,7 @@ class PixivService(BaseService):
                     allow_redirects=True
                 )
                 if response.status_code != 200:
-                    raise BotError(ErrorCode.NOT_FOUND, "Artwork not found", url, is_logged=True)
+                    raise BotError(ErrorCode.NOT_FOUND, message="Artwork not found", service=Services.PIXIV, url=url, is_logged=True)
 
                 info = response.json()
                 title = info.get("body", {}).get("illustTitle", "")
@@ -73,11 +74,11 @@ class PixivService(BaseService):
                     allow_redirects=True
                 )
                 if response.status_code != 200:
-                    raise BotError(ErrorCode.NOT_FOUND, "Failed to retrieve pages", url, is_logged=True)
+                    raise BotError(ErrorCode.NOT_FOUND, message="Failed to retrieve pages", service=Services.PIXIV, url=url, is_logged=True)
 
                 pages = response.json().get("body", [])
                 if not pages:
-                    raise BotError(ErrorCode.NOT_FOUND, "No images found", url, is_logged=True)
+                    raise BotError(ErrorCode.NOT_FOUND, message="No images found", service=Services.PIXIV, url=url, is_logged=True)
 
                 logger.debug(f"Found {len(pages)} page(s)")
 
@@ -121,7 +122,7 @@ class PixivService(BaseService):
                 raise
             except Exception as e:
                 logger.error(f"Error downloading Pixiv media: {e}")
-                raise BotError(ErrorCode.DOWNLOAD_FAILED, str(e), url, is_logged=True)
+                raise BotError(ErrorCode.DOWNLOAD_FAILED, message=str(e), service=Services.PIXIV, url=url, is_logged=True)
 
     async def get_info(self, url: str) -> Optional[MediaMetadata]:
         return None
