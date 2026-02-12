@@ -10,6 +10,7 @@ from utils.statistics_helper import log_download_event
 from .service import TiktokService
 from models.service_list import Services
 from models.errors import BotError, ErrorCode
+from utils.arq_pool import get_arq_pool
 
 logger = logging.getLogger(__name__)
 
@@ -30,31 +31,32 @@ async def process_tiktok_url(message: Message):
 
     user_id = message.from_user.id if message.from_user else message.chat.id
 
-    try:
-        service = TiktokService()
+    arq = await get_arq_pool('light')
 
-        # Get metadata
-        metadata = await service.get_info(message.text)
-        if not metadata:
-             raise BotError(
-                code=ErrorCode.METADATA_ERROR,
-                message="Failed to fetch metadata",
-                url=message.text,
-                service=Services.TIKTOK,
-                is_logged=True,
-                critical=True
-            )
+    service = TiktokService(arq=arq)
 
-        # Download content using metadata
-        media_content = await service.download(metadata)
+    # Send chat action for user feedback
+    if message.bot:
+        await message.bot.send_chat_action(message.chat.id, "choose_sticker")
 
-        # Send content
-        send_manager = MediaSender()
-        await send_manager.send(message, media_content, user_id)
+    # Get metadata
+    metadata = await service.get_info(message.text)
+    if not metadata:
+            raise BotError(
+            code=ErrorCode.METADATA_ERROR,
+            message="Failed to fetch metadata",
+            url=message.text,
+            service=Services.TIKTOK,
+            is_logged=True,
+            critical=True
+        )
 
-        # Log success
-        await log_download_event(user_id, Services.TIKTOK, 'success')
+    # Download content using metadata
+    media_content = await service.download(metadata)
 
-    except Exception as e:
-        # Error handling is usually done by task wrapper or specific exception catches if needed
-        raise e
+    # Send content
+    send_manager = MediaSender()
+    await send_manager.send(message, media_content, user_id)
+
+    # Log success
+    await log_download_event(user_id, Services.TIKTOK, 'success')
