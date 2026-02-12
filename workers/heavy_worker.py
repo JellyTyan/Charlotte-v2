@@ -100,12 +100,13 @@ async def universal_ytdlp_extract(
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=not extract_only)
-            
+
             # Clean info dict to make it serializable
             clean_info = {
                 "title": info.get("title"),
                 "duration": info.get("duration"),
                 "thumbnail": info.get("thumbnail"),
+                "thumbnails": info.get("thumbnails"),
                 "width": info.get("width"),
                 "height": info.get("height"),
                 "ext": info.get("ext"),

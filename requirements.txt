@@ -16,3 +16,4 @@ arq==0.27.0
 gallery-dl
 Pillow==12.1.0
 pillow-heif==1.2.0
+BeautifulSoup4 ==4.14.3

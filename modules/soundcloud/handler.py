@@ -8,7 +8,6 @@ from fluentogram import TranslatorRunner
 from core.config import Config
 from modules.router import service_router as router
 from tasks.task_manager import task_manager
-from utils.download_utils import download_file
 from utils.file_utils import delete_files
 from models.service_list import Services
 
@@ -29,13 +28,21 @@ async def process_soundcloud_url(message: Message, config: Config, i18n: Transla
     if not message.text:
         return
 
+    user_id = message.from_user.id if message.from_user else message.chat.id
+
     from models.errors import BotError, ErrorCode
     from senders.media_sender import MediaSender
     from utils.statistics_helper import log_download_event
-
+    from utils.arq_pool import get_arq_pool
     from .service import SoundCloudService
 
-    service = SoundCloudService()
+    arq = await get_arq_pool('light')
+
+    # Send chat action for user feedback
+    if message.bot:
+        await message.bot.send_chat_action(message.chat.id, "choose_sticker")
+
+    service = SoundCloudService(arq=arq)
 
     media_metadata = await service.get_info(message.text, config=config)
     if not media_metadata:
@@ -57,43 +64,50 @@ async def process_soundcloud_url(message: Message, config: Config, i18n: Transla
         if message.bot:
             await message.bot.send_chat_action(message.chat.id, "record_audio")
         track = await service.download(
-            media_metadata.url
+            media_metadata
         )
 
         send_manager = MediaSender()
-        await send_manager.send(message, track, message.from_user.id)
-        await log_download_event(message.from_user.id, Services.SOUNDCLOUD, 'success')
+        await send_manager.send(message, track, user_id)
+        await log_download_event(user_id, Services.SOUNDCLOUD, 'success')
 
     elif media_metadata.media_type == "album" or media_metadata.media_type == "playlist":
         text = f"{media_metadata.title} by <a href=\"{media_metadata.performer_url}\">{media_metadata.performer}</a>\n"
-        file = await download_file(media_metadata.cover, f"storage/temp/{media_metadata.performer} - {media_metadata.title}.jpg")
+        if media_metadata.media_type == "playlist" and media_metadata.description:
+            text += f"<i>{media_metadata.description}</i>\n"
+        text += i18n.get('total-tracks', count=len(media_metadata.items)) + "\n"
+        job = await arq.enqueue_job(
+            "universal_download",
+            url=media_metadata.cover,
+            destination=f"storage/temp/{media_metadata.performer} - {media_metadata.title}.jpg",
+            _queue_name='light'
+        )
+        album_cover = await job.result()
         await message.answer_photo(
-            photo=FSInputFile(file),
+            photo=FSInputFile(album_cover),
             caption = text,
             parse_mode=ParseMode.HTML
         )
-        await delete_files([file])
+        await delete_files([album_cover])
         await message.reply(i18n.get('downloading-tracks'))
         send_manager = MediaSender()
         success_count = 0
         failed_count = 0
 
-        for track in media_metadata.items:
+        for track_meta in media_metadata.items:
             try:
-                track = await service.download(
-                    track.url
-                )
-                await send_manager.send(message, track, message.from_user.id)
+                track = await service.download(track_meta)
+                await send_manager.send(message, track, user_id)
                 success_count += 1
             except Exception as e:
                 logger.error(f"Failed to download track: {e}")
                 failed_count += 1
 
         total = success_count + failed_count
-        logger.info(f"Completed {media_metadata.media_type} download: {success_count}/{total} tracks for user {message.from_user.id}")
+        logger.info(f"Completed {media_metadata.media_type} download: {success_count}/{total} tracks for user {user_id}")
 
         if success_count > 0:
-            await log_download_event(message.from_user.id, Services.SOUNDCLOUD, 'success')
+            await log_download_event(user_id, Services.SOUNDCLOUD, 'success')
 
         if failed_count > 0:
             await message.answer(i18n.get('download-stats', success=success_count, failed=failed_count))
