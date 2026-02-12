@@ -12,6 +12,7 @@ import yt_dlp
 from arq.connections import RedisSettings
 from mutagen.id3 import ID3
 from mutagen.id3._frames import TIT2, TPE1, TALB, TPE2, TRCK, TCON, APIC
+from mutagen.id3._util import ID3NoHeaderError
 from mutagen.flac import FLAC, Picture
 from mutagen.mp4 import MP4, MP4Cover, MP4Tags
 from mutagen.mp3 import HeaderNotFoundError
@@ -157,53 +158,82 @@ async def universal_gallery_dl(
         }
     """
     logger.info(f"gallery-dl processing: {url}")
+    items = []
+    files = []
 
-    loop = asyncio.get_running_loop()
+    gallery_dl_exe = shutil.which("gallery-dl")
+    if not gallery_dl_exe:
+        venv_path = os.path.join(os.getcwd(), "venv", "bin", "gallery-dl")
+        if os.path.exists(venv_path):
+            gallery_dl_exe = venv_path
 
-    def process():
-        cmd = ["gallery-dl"]
+    if not gallery_dl_exe:
+        logger.error("gallery-dl not found")
+        raise Exception(f"gallery-dl not found")
+
+    cmd = [gallery_dl_exe]
+
+    if extract_only:
+        cmd.append("--dump-json")
+
+    if output_dir:
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        cmd.extend(["--dest", output_dir])
+
+    if options:
+        for key, value in options.items():
+            cmd.extend([f"--{key}", str(value)])
+
+    cmd.append(url)
+    try:
+        logger.debug(f"Running gallery-dl: {' '.join(cmd)}")
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await proc.communicate()
+
+        if proc.returncode != 0:
+            logger.error(f"gallery-dl error: {stderr.decode()}")
+            raise Exception(f"gallery-dl error: {stderr.decode()}")
+
+        output = stdout.decode().strip()
+        if not output:
+            raise Exception(f"gallery-dl error: {stderr.decode()}")
 
         if extract_only:
-            cmd.append("--dump-json")
-
-        if output_dir:
-            Path(output_dir).mkdir(parents=True, exist_ok=True)
-            cmd.extend(["--dest", output_dir])
-
-        if options:
-            for key, value in options.items():
-                cmd.extend([f"--{key}", str(value)])
-
-        cmd.append(url)
-
-        result = subprocess.run(cmd, capture_output=True, text=True)
-
-        if result.returncode != 0:
-            raise Exception(f"gallery-dl failed: {result.stderr}")
-
-        items = []
-        files = []
-
-        if extract_only:
-            # Parse JSON output (one JSON per line)
-            for line in result.stdout.strip().split('\n'):
-                if line:
+            try:
+                data = json.loads(output)
+                if isinstance(data, list) and len(data) > 0:
+                    first_item = data[0]
+                    if isinstance(first_item, list) and len(first_item) > 1:
+                        items.append(first_item[1])
+                    else:
+                        raise Exception(f"Structure mismatch: {stderr.decode()}")
+            except json.JSONDecodeError:
+                lines = output.splitlines()
+                for line in lines:
                     try:
-                        items.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        continue
+                        line_json = json.loads(line)
+                        if isinstance(line_json, list) and len(line_json) > 1:
+                            items.append(line_json[1])
+                    except:
+                        pass
+                if not items:
+                    raise Exception(f"Structure mismatch: {stderr.decode()}")
         else:
             # Parse downloaded files from stdout
-            for line in result.stdout.strip().split('\n'):
+            for line in output.strip().split('\n'):
                 if line and os.path.exists(line):
                     files.append(line)
+    except Exception as e:
+        logger.error(f"Error executing gallery-dl: {e}")
 
-        return {
-            "items": items,
-            "files": files,
-        }
-
-    return await loop.run_in_executor(None, process)
+    return {
+        "items": items,
+        "files": files,
+    }
 
 
 # ============================================================================
@@ -460,7 +490,7 @@ async def universal_metadata_update(
             if ext == "mp3":
                 try:
                     tags = ID3(audio_file)
-                except HeaderNotFoundError:
+                except (HeaderNotFoundError, ID3NoHeaderError):
                     tags = ID3()
 
                 # ВАЖНО: Проверяем на None перед добавлением
