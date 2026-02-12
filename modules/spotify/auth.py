@@ -1,7 +1,7 @@
 import base64
 import logging
 
-import httpx
+from curl_cffi.requests import AsyncSession
 
 from models.errors import BotError, ErrorCode
 
@@ -10,7 +10,7 @@ TOKEN_URL = "https://accounts.spotify.com/api/token"
 logger = logging.getLogger(__name__)
 
 
-async def get_access_token(session: httpx.AsyncClient, spotify_client_id: str, spotify_secret: str) -> str:
+async def get_access_token(session: AsyncSession, spotify_client_id: str, spotify_secret: str) -> str:
     """Получение токена доступа через Client Credentials Flow"""
     logger.debug("Requesting Spotify access token")
     auth_header = base64.b64encode(
@@ -44,7 +44,7 @@ async def get_access_token(session: httpx.AsyncClient, spotify_client_id: str, s
             is_logged=True,
             critical=True,
         )
-    
+
     logger.debug("Spotify access token received")
     if "access_token" not in result:
         raise BotError(
