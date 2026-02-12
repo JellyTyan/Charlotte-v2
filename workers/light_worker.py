@@ -8,7 +8,7 @@ from urllib.parse import urljoin
 from curl_cffi.requests import AsyncSession
 from arq.connections import RedisSettings
 import aiofiles
-# from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
@@ -378,61 +378,61 @@ async def universal_stream_download(
 # DATA EXTRACTION FUNCTIONS
 # ============================================================================
 
-# async def universal_html_parse(
-#     ctx,
-#     html_content: str,
-#     selector_type: str = "css",
-#     selectors: Optional[Dict[str, str]] = None,
-#     extract_type: str = "text",  # text, html, attr
-#     attribute: Optional[str] = None,
-# ) -> Dict[str, Any]:
-#     """
-#     Parse HTML with CSS selectors or XPath.
+async def universal_html_parse(
+    ctx,
+    html_content: str,
+    selector_type: str = "css",
+    selectors: Optional[Dict[str, str]] = None,
+    extract_type: str = "text",  # text, html, attr
+    attribute: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Parse HTML with CSS selectors or XPath.
 
-#     Args:
-#         ctx: ARQ context
-#         html_content: HTML content to parse
-#         selector_type: 'css' or 'xpath'
-#         selectors: Dict of {key: selector_string}
-#         extract_type: What to extract - 'text', 'html', 'attr'
-#         attribute: Attribute name if extract_type='attr'
+    Args:
+        ctx: ARQ context
+        html_content: HTML content to parse
+        selector_type: 'css' or 'xpath'
+        selectors: Dict of {key: selector_string}
+        extract_type: What to extract - 'text', 'html', 'attr'
+        attribute: Attribute name if extract_type='attr'
 
-#     Returns:
-#         dict: Extracted data {key: value}
-#     """
-#     logger.info(f"Parsing HTML with {selector_type} selectors")
+    Returns:
+        dict: Extracted data {key: value}
+    """
+    logger.info(f"Parsing HTML with {selector_type} selectors")
 
-#     try:
-#         soup = BeautifulSoup(html_content, "html.parser")
-#         results = {}
+    try:
+        soup = BeautifulSoup(html_content, "html.parser")
+        results = {}
 
-#         if selectors:
-#             for key, selector in selectors.items():
-#                 if selector_type == "css":
-#                     elements = soup.select(selector)
-#                 else:
-#                     # XPath not directly supported by BeautifulSoup
-#                     raise ValueError("XPath not supported, use CSS selectors")
+        if selectors:
+            for key, selector in selectors.items():
+                if selector_type == "css":
+                    elements = soup.select(selector)
+                else:
+                    # XPath not directly supported by BeautifulSoup
+                    raise ValueError("XPath not supported, use CSS selectors")
 
-#                 if not elements:
-#                     results[key] = None
-#                     continue
+                if not elements:
+                    results[key] = None
+                    continue
 
-#                 # Extract data based on type
-#                 if extract_type == "text":
-#                     results[key] = [el.get_text(strip=True) for el in elements]
-#                 elif extract_type == "html":
-#                     results[key] = [str(el) for el in elements]
-#                 elif extract_type == "attr" and attribute:
-#                     results[key] = [el.get(attribute) for el in elements]
-#                 else:
-#                     results[key] = None
+                # Extract data based on type
+                if extract_type == "text":
+                    results[key] = [el.get_text(strip=True) for el in elements]
+                elif extract_type == "html":
+                    results[key] = [str(el) for el in elements]
+                elif extract_type == "attr" and attribute:
+                    results[key] = [el.get(attribute) for el in elements]
+                else:
+                    results[key] = None
 
-#         return results
+        return results
 
-#     except Exception as e:
-#         logger.error(f"HTML parsing failed: {e}")
-#         raise
+    except Exception as e:
+        logger.error(f"HTML parsing failed: {e}")
+        raise
 
 
 async def universal_json_extract(
@@ -595,7 +595,7 @@ class WorkerSettings:
         universal_download,
         universal_stream_download,
         # Data extraction
-        # universal_html_parse,
+        universal_html_parse,
         universal_json_extract,
         universal_regex_extract,
         # Utilities
