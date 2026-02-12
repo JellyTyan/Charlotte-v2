@@ -28,17 +28,25 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
     if not message.text:
         return
 
+    user_id = message.from_user.id if message.from_user else message.chat.id
+
     from models.errors import BotError, ErrorCode
     from senders.media_sender import MediaSender
     from utils.statistics_helper import log_download_event
     from storage.db.crud import get_user_settings
-
+    from utils.arq_pool import get_arq_pool
     from .service import SpotifyService
 
-    service = SpotifyService()
+    arq = await get_arq_pool('light')
+
+    # Send chat action for user feedback
+    if message.bot:
+        await message.bot.send_chat_action(message.chat.id, "choose_sticker")
+
+    service = SpotifyService(arq=arq)
 
     # Get user settings for lossless mode
-    user_settings = await get_user_settings(message.from_user.id)
+    user_settings = await get_user_settings(user_id)
     lossless_mode = user_settings.lossless_mode if user_settings else False
 
     media_metadata = await service.get_info(message.text, config=config)
@@ -47,6 +55,7 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
             code=ErrorCode.METADATA_ERROR,
             message="Failed to get metadata",
             url=message.text,
+            service= Services.SPOTIFY,
             is_logged=True
         )
 
@@ -56,6 +65,7 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
                 code=ErrorCode.METADATA_ERROR,
                 message="Failed to get metadata",
                 url=message.text,
+                service= Services.SPOTIFY,
                 is_logged=True
             )
         if message.bot:
@@ -68,8 +78,8 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
         )
 
         send_manager = MediaSender()
-        await send_manager.send(message, track, message.from_user.id)
-        await log_download_event(message.from_user.id, Services.SPOTIFY, 'success')
+        await send_manager.send(message, track, user_id)
+        await log_download_event(user_id, Services.SPOTIFY, 'success')
 
     elif media_metadata.media_type == "album" or media_metadata.media_type == "playlist":
         text = f"{media_metadata.title} by <a href=\"{media_metadata.performer_url}\">{media_metadata.performer}</a>\n"
@@ -100,17 +110,17 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
                     track.title,
                     track.cover
                 )
-                await send_manager.send(message, track, message.from_user.id)
+                await send_manager.send(message, track, user_id)
                 success_count += 1
             except Exception as e:
                 logger.error(f"Failed to download track {track.title}: {e}")
                 failed_count += 1
 
         total = success_count + failed_count
-        logger.info(f"Completed {media_metadata.media_type} download: {success_count}/{total} tracks for user {message.from_user.id}")
+        logger.info(f"Completed {media_metadata.media_type} download: {success_count}/{total} tracks for user {user_id}")
 
         if success_count > 0:
-            await log_download_event(message.from_user.id, Services.SPOTIFY, 'success')
+            await log_download_event(user_id, Services.SPOTIFY, 'success')
 
         if failed_count > 0:
             await message.answer(i18n.get('download-stats', success=success_count, failed=failed_count))
