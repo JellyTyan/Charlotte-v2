@@ -35,10 +35,13 @@ async def process_ytmusic_url(message: Message, config: Config, i18n: Translator
     from models.errors import BotError, ErrorCode
     from senders.media_sender import MediaSender
     from utils.statistics_helper import log_download_event
+    from utils.arq_pool import get_arq_pool
 
     from .service import YTMusicService
 
-    service = YTMusicService()
+    arq = await get_arq_pool('light')
+
+    service = YTMusicService(arq=arq)
 
     media_metadata = await service.get_info(message.text, config=config)
     if not media_metadata:
