@@ -1,14 +1,14 @@
 import logging
 import re
 
-import httpx
+from curl_cffi.requests import AsyncSession
 
 from models.errors import BotError, ErrorCode
 
 logger = logging.getLogger(__name__)
 
 
-async def get_guest_token(auth: str, client: httpx.AsyncClient) -> str:
+async def get_guest_token(auth: str, client: AsyncSession) -> str:
     """Get a guest token from Twitter API."""
     guest_token_url = "https://api.twitter.com/1.1/guest/activate.json"
     headers = {"Authorization": auth}
@@ -28,16 +28,15 @@ async def get_guest_token(auth: str, client: httpx.AsyncClient) -> str:
 async def get_tweet_info(
     tweet_id: int,
     auth: str,
-    user_agent: str,
     guest_token: str,
-    client: httpx.AsyncClient,
+    client: AsyncSession,
     retry: bool = True,
     csrf_token: str | None = None,
     auth_token: str | None = None
 ) -> dict:
     """Get tweet information from Twitter API."""
     premium = bool(csrf_token and auth_token)
-    
+
     if premium:
         if auth_token and csrf_token:
             client.cookies.set("auth_token", auth_token, domain=".x.com")
@@ -45,7 +44,6 @@ async def get_tweet_info(
             headers = {
                 "Authorization": auth,
                 "Content-Type": "application/json",
-                "User-Agent": user_agent,
                 "x-csrf-token": csrf_token,
             }
             params = {
@@ -59,7 +57,6 @@ async def get_tweet_info(
         headers = {
             "Authorization": auth,
             "Content-Type": "application/json",
-            "User-Agent": user_agent,
             "X-Guest-Token": guest_token,
         }
         params = {
@@ -77,7 +74,7 @@ async def get_tweet_info(
             if retry and not premium:
                 logger.warning(f"Tweet info request failed with status {response.status_code}, regenerating token and retrying")
                 new_guest_token = await get_guest_token(auth, client)
-                return await get_tweet_info(tweet_id, auth, user_agent, new_guest_token, client, retry=False, csrf_token=csrf_token, auth_token=auth_token)
+                return await get_tweet_info(tweet_id, auth, new_guest_token, client, retry=False, csrf_token=csrf_token, auth_token=auth_token)
             else:
                 raise BotError(
                     code=ErrorCode.DOWNLOAD_FAILED,
@@ -91,7 +88,7 @@ async def get_tweet_info(
         if retry and not premium:
             logger.warning(f"Tweet info request failed with error {e}, regenerating token and retrying")
             new_guest_token = await get_guest_token(auth, client)
-            return await get_tweet_info(tweet_id, auth, user_agent, new_guest_token, client, retry=False, csrf_token=csrf_token, auth_token=auth_token)
+            return await get_tweet_info(tweet_id, auth, new_guest_token, client, retry=False, csrf_token=csrf_token, auth_token=auth_token)
         else:
             raise
 
