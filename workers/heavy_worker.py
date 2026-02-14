@@ -84,9 +84,6 @@ async def universal_ytdlp_extract(
             if output_template:
                 ydl_opts["outtmpl"] = output_template
 
-            if format_selector:
-                ydl_opts["format"] = format_selector
-
             if extract_audio:
                 ydl_opts["format"] = "bestaudio/best"
                 ydl_opts["postprocessors"] = [{
@@ -94,6 +91,9 @@ async def universal_ytdlp_extract(
                     "preferredcodec": audio_format,
                     "preferredquality": audio_quality,
                 }]
+
+            if format_selector:
+                ydl_opts["format"] = format_selector
 
         # Merge extra options
         if extra_opts:
@@ -104,14 +104,18 @@ async def universal_ytdlp_extract(
 
             # Clean info dict to make it serializable
             clean_info = {
+                "id": info.get("id"),
                 "title": info.get("title"),
+                "description": info.get("description"),
+                "uploader": info.get("uploader"),
+                "channel_url": info.get("channel_url"),
                 "duration": info.get("duration"),
                 "thumbnail": info.get("thumbnail"),
                 "thumbnails": info.get("thumbnails"),
                 "width": info.get("width"),
                 "height": info.get("height"),
                 "ext": info.get("ext"),
-                "format": info.get("format"),
+                "formats": info.get("formats"),
                 "filesize": info.get("filesize"),
             }
 

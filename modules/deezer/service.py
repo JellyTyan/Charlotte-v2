@@ -141,6 +141,7 @@ class DeezerService(BaseService):
                                 cover_file=cover_path,
                                 _queue_name='heavy'
                             )
+                            await job.result()
 
                             # Return MediaContent
                             duration = item.get('duration', 0)
