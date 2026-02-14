@@ -1,6 +1,5 @@
 import os
 import random
-from yt_dlp.utils import sanitize_filename
 
 
 def random_cookie_file():
@@ -17,7 +16,7 @@ def random_cookie_file():
 
 def get_ytdlp_options():
     return {
-        "outtmpl": f"temp/%(id)s_{sanitize_filename('%(title)s')}.%(ext)s",
+        # "outtmpl": f"temp/%(id)s_{sanitize_filename('%(title)s')}.%(ext)s",
         "noplaylist": True,
         "cookiefile": random_cookie_file(),
         "geo_bypass": True,
@@ -25,7 +24,6 @@ def get_ytdlp_options():
         "retries": 10,
         "restrictfilenames": True,
         "no_exec": True,
-        # "allowed_extractors": ["youtube", "youtubetab"],
         "extractor_args": {
             "youtube": {
                 "player_client": ["tv", "web_safari", "web_embedded", "ios"]

@@ -1,11 +1,8 @@
-import asyncio
 import logging
 import os
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import List
 
-import yt_dlp
 from aiogram.types import InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from yt_dlp.utils import sanitize_filename
@@ -14,7 +11,7 @@ from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from modules.base_service import BaseService
-from utils import download_file, store_url, async_update_metadata, url_hash
+from utils import store_url, url_hash
 from models.service_list import Services
 
 from .models import YoutubeCallback
@@ -25,11 +22,11 @@ logger = logging.getLogger(__name__)
 
 class YouTubeService(BaseService):
     name = "YouTube"
-    _download_executor = ThreadPoolExecutor(max_workers=10)
 
-    def __init__(self, output_path: str = "storage/temp/") -> None:
+    def __init__(self, output_path: str = "storage/temp/", arq = None) -> None:
         super().__init__()
         self.output_path = output_path
+        self.arq = arq
 
     async def download(self, url: str, format_choice: str = "") -> List[MediaContent]:
         if not format_choice:
@@ -59,17 +56,28 @@ class YouTubeService(BaseService):
         return await self.download_video(url, media_format)
 
     async def get_info(self, url: str) -> MediaMetadata|None:
+        if not self.arq:
+            raise BotError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message="ARQ pool is required",
+                critical=True,
+                is_logged=True
+            )
+
         # Сохраняем URL в кеше для обратного преобразования
         store_url(url)
 
-        with yt_dlp.YoutubeDL(get_ytdlp_options()) as ydl:
-            loop = asyncio.get_running_loop()
-            info_dict = await loop.run_in_executor(
-                self._download_executor,
-                lambda: ydl.extract_info(url, download=False)
-            )
+        job = await self.arq.enqueue_job(
+            "universal_ytdlp_extract",
+            url=url,
+            extract_only = True,
+            extra_opts=get_ytdlp_options(),
+            _queue_name='heavy'
+        )
+        result = await job.result()
+        clean_info = result["info"]
 
-        if not info_dict:
+        if not clean_info:
             raise BotError(
                 code=ErrorCode.METADATA_ERROR,
                 message="No video info returned",
@@ -79,10 +87,10 @@ class YouTubeService(BaseService):
                 is_logged=True
             )
 
-        video_info = await get_video_info(info_dict, max_size_mb=1024)
+        video_info = await get_video_info(clean_info, max_size_mb=1024)
 
-        video_id = info_dict.get('id', 'unknown')
-        video_title = info_dict.get('title', 'video')
+        video_id = clean_info.get('id', 'unknown')
+        video_title = clean_info.get('title', 'video')
 
         # Validate and sanitize to prevent path traversal
         safe_id = sanitize_filename(str(video_id))
@@ -106,10 +114,10 @@ class YouTubeService(BaseService):
 
         thumbnail_path = f"{base_path}.jpg"
 
-        thumbnail_url = info_dict.get("thumbnail", None)
+        thumbnail_url = clean_info.get("thumbnail", None)
         if thumbnail_url:
             try:
-                await download_file(thumbnail_url, thumbnail_path)
+                await self.arq.enqueue_job('universal_download', url=thumbnail_url, destination=thumbnail_path, _queue_name='light')
             except Exception as e:
                 logger.warning(f"Failed to download thumbnail: {e}")
 
@@ -179,11 +187,11 @@ class YouTubeService(BaseService):
         return MediaMetadata(
             type=MetadataType.METADATA,
             url=url,
-            title=info_dict.get("title", None),
-            description=info_dict.get("description", None),
-            duration=info_dict.get("duration", None),
-            performer=info_dict.get("uploader", None),
-            performer_url=info_dict.get("channel_url", None),
+            title=clean_info.get("title", None),
+            description=clean_info.get("description", None),
+            duration=clean_info.get("duration", None),
+            performer=clean_info.get("uploader", None),
+            performer_url=clean_info.get("channel_url", None),
             cover=thumbnail_path,
             media_type="video",
             keyboard=markup.as_markup()
@@ -191,113 +199,114 @@ class YouTubeService(BaseService):
 
     async def download_video(self, url: str, format: str) -> List[MediaContent]:
         logger.info(f"Starting video download for URL: {url} with format: {format}")
-        options = get_ytdlp_options()
-        options["format"] = format
+        if not self.arq:
+            raise BotError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message="ARQ pool is required",
+                critical=True,
+                is_logged=True
+            )
         try:
-            with yt_dlp.YoutubeDL(options) as ydl:
-                loop = asyncio.get_event_loop()
+            job = await self.arq.enqueue_job(
+                "universal_ytdlp_extract",
+                url=url,
+                extract_only = False,
+                format_selector=format,
+                output_template=f"{self.output_path}%(id)s_{sanitize_filename('%(title)s')}.%(ext)s",
+                extra_opts=get_ytdlp_options(),
+                _queue_name='heavy'
+            )
+            result = await job.result()
+            clean_info = result["info"]
+            filepath = result["filepath"]
 
-                info_dict = await loop.run_in_executor(
-                    self._download_executor,
-                    lambda: ydl.extract_info(url, download=True)
+            if not clean_info:
+                raise BotError(
+                    code=ErrorCode.DOWNLOAD_FAILED,
+                    message="Failed to download video",
+                    url=url,
+                    service=Services.YOUTUBE,
+                    critical=True,
+                    is_logged=True
                 )
 
-                if not info_dict:
-                    raise BotError(
-                        code=ErrorCode.DOWNLOAD_FAILED,
-                        message="Failed to download video",
-                        url=url,
-                        service=Services.YOUTUBE,
-                        critical=True,
-                        is_logged=True
-                    )
-
-                return [
-                    MediaContent(
-                        type=MediaType.VIDEO,
-                        path=Path(ydl.prepare_filename(info_dict)),
-                        width=info_dict.get("width", None),
-                        height=info_dict.get("height", None),
-                        duration=info_dict.get("duration", None),
-                        title=info_dict.get("title", "video"),
-                    )
-                ]
+            return [
+                MediaContent(
+                    type=MediaType.VIDEO,
+                    path=Path(filepath),
+                    width=clean_info.get("width", None),
+                    height=clean_info.get("height", None),
+                    duration=clean_info.get("duration", None),
+                    title=clean_info.get("title", "video"),
+                )
+            ]
         except BotError as ebot:
             ebot.service = Services.YOUTUBE
             raise ebot
-        except yt_dlp.utils.DownloadError as e:
-            logger.error(f"yt-dlp download failed for format {format}: {e}")
-            raise BotError(
-                code=ErrorCode.DOWNLOAD_FAILED,
-                message=str(e),
-                url=url,
-                service=Services.YOUTUBE,
-                is_logged=True
-            )
 
     async def download_audio(self, url: str, format: str) -> List[MediaContent]:
         logger.info(f"Starting audio download for URL: {url} with format: {format}")
-        options = get_ytdlp_options()
-        options["format"] = format
-        options["postprocessors"] = [{
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": "192",
-        }]
+        if not self.arq:
+            raise BotError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message="ARQ pool is required",
+                critical=True,
+                is_logged=True
+            )
 
         try:
-            with yt_dlp.YoutubeDL(options) as ydl:
-                loop = asyncio.get_running_loop()
+            job = await self.arq.enqueue_job(
+                "universal_ytdlp_extract",
+                url=url,
+                extract_only = False,
+                format_selector=format,
+                output_template=f"{self.output_path}%(id)s_{sanitize_filename('%(title)s')}.%(ext)s",
+                extra_opts=get_ytdlp_options(),
+                extract_audio=True,
+                _queue_name='heavy'
+            )
+            result = await job.result()
+            clean_info = result["info"]
+            filepath = result["filepath"]
 
-                info_dict = await loop.run_in_executor(
-                    self._download_executor,
-                    lambda: ydl.extract_info(url, download=True)
-                )
-                if not info_dict:
-                    raise BotError(
-                        code=ErrorCode.DOWNLOAD_FAILED,
-                        message="Failed to download audio",
-                        service=Services.YOUTUBE,
-                        url=url,
-                        is_logged=True
-                    )
-
-                # Use yt-dlp's prepare_filename to get actual file path
-                audio_path = ydl.prepare_filename(info_dict).rsplit('.', 1)[0] + '.mp3'
-                base_path = audio_path.rsplit('.', 1)[0]
-                thumbnail_path = f"{base_path}.jpg"
-
-                thumbnail_url = info_dict.get("thumbnail", None)
-                if thumbnail_url:
-                    try:
-                        await download_file(thumbnail_url, thumbnail_path)
-                    except Exception as e:
-                        logger.warning(f"Failed to download thumbnail: {e}")
-
-                await async_update_metadata(
-                    audio_path,
-                    title=info_dict.get("title", "audio"),
-                    artist=info_dict.get("uploader", "unknown"),
-                    cover_file=thumbnail_path
+            if not clean_info:
+                raise BotError(
+                    code=ErrorCode.DOWNLOAD_FAILED,
+                    message="Failed to download audio",
+                    service=Services.YOUTUBE,
+                    url=url,
+                    is_logged=True
                 )
 
-                return [MediaContent(
-                    type=MediaType.AUDIO,
-                    path=Path(audio_path),
-                    duration=info_dict.get("duration", 0),
-                    title=info_dict.get("title", "audio"),
-                    cover=Path(thumbnail_path)
-                )]
+            # Use yt-dlp's prepare_filename to get actual file path
+            base_path = filepath.rsplit('.', 1)[0]
+            thumbnail_path = f"{base_path}.jpg"
+
+            thumbnail_url = clean_info.get("thumbnail", None)
+            if thumbnail_url:
+                try:
+                    await self.arq.enqueue_job('universal_download', url=thumbnail_url, destination=thumbnail_path, _queue_name='light')
+                except Exception as e:
+                    logger.warning(f"Failed to download thumbnail: {e}")
+
+            job = await self.arq.enqueue_job(
+                "universal_metadata_update",
+                filepath,
+                title=clean_info.get("title", "audio"),
+                artist=clean_info.get("uploader", "unknown"),
+                cover_file=thumbnail_path,
+                _queue_name='heavy'
+            )
+
+            await job.result()
+
+            return [MediaContent(
+                type=MediaType.AUDIO,
+                path=Path(filepath),
+                duration=clean_info.get("duration", 0),
+                title=clean_info.get("title", "audio"),
+                cover=Path(thumbnail_path)
+            )]
         except BotError as ebot:
             ebot.service = Services.YOUTUBE
             raise ebot
-        except yt_dlp.utils.DownloadError as e:
-            logger.error(f"yt-dlp download failed for format {format}: {e}")
-            raise BotError(
-                code=ErrorCode.DOWNLOAD_FAILED,
-                message=str(e),
-                url=url,
-                service=Services.YOUTUBE,
-                is_logged=True,
-                critical=True
-            )

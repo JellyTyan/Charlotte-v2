@@ -5,13 +5,14 @@ from aiogram import F
 from aiogram.types import CallbackQuery, FSInputFile, Message
 from fluentogram import TranslatorRunner
 
-from models.errors import ErrorCode
+from models.errors import BotError, ErrorCode
 from modules.router import service_router as router
 from tasks.task_manager import task_manager
 from utils import format_duration, truncate_string
 from utils.file_utils import delete_files
 from models.service_list import Services
-
+from utils.arq_pool import get_arq_pool
+from .service import YouTubeService
 from .models import YoutubeCallback
 
 logger = logging.getLogger(__name__)
@@ -34,11 +35,9 @@ async def process_youtube_url(message: Message, i18n: TranslatorRunner):
     await message.bot.send_chat_action(message.chat.id, "find_location")
     process_message = await message.reply(i18n.get('processing'))
 
-    from models.errors import BotError
+    arq = await get_arq_pool('light')
 
-    from .service import YouTubeService
-
-    media_metadata = await YouTubeService().get_info(message.text)
+    media_metadata = await YouTubeService(arq=arq).get_info(message.text)
     if media_metadata is None:
         raise BotError(
             code=ErrorCode.METADATA_ERROR,
@@ -138,15 +137,14 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
 async def download_youtube_media(message: Message, url: str, format_choice: str, user_id: int, payment_charge_id: str = ""):
     from senders.media_sender import MediaSender
     from utils.statistics_helper import log_download_event
-    from models.errors import BotError, ErrorCode
 
-    from .service import YouTubeService
+    arq = await get_arq_pool('light')
 
     if message.bot:
         await message.bot.send_chat_action(message.chat.id, "record_video")
 
     try:
-        media_content = await YouTubeService().download(url, format_choice)
+        media_content = await YouTubeService(arq=arq).download(url, format_choice)
 
         send_manager = MediaSender()
         await send_manager.send(message, media_content, user_id)
@@ -164,4 +162,4 @@ async def download_youtube_media(message: Message, url: str, format_choice: str,
                     await update_payment_status(payment_charge_id, "refunded")
                 except Exception as refund_error:
                     logger.error(f"Failed to refund payment: {refund_error}")
-        raise
+        raise e
