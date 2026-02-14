@@ -1,22 +1,19 @@
-import asyncio
 import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import List
 
-import yt_dlp
 from aiofiles import os as aios
 from ytmusicapi import YTMusic
+from yt_dlp.utils import sanitize_filename
 
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from modules.base_service import BaseService
-from utils import download_file, async_update_metadata
 from models.service_list import Services
-
-from utils.service_utils import get_audio_options
+from utils import random_cookie_file, get_extra_audio_options
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +21,19 @@ class YTMusicService(BaseService):
     name = "YTMusic"
     _download_executor = ThreadPoolExecutor(max_workers=10)
 
-    def __init__(self, output_path: str = "storage/temp/") -> None:
+    def __init__(self, output_path: str = "storage/temp/", arq=None) -> None:
         super().__init__()
         self.output_path = output_path
+        self.arq = arq
 
     async def get_info(self, url: str, *args, **kwargs) -> MediaMetadata|None:
+        if not self.arq:
+            raise BotError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message="ARQ pool is required",
+                critical=True,
+                is_logged=True
+            )
         ytmsc = YTMusic()
         match_track = re.search(r"watch\?v=([^&]+)", url)
         match_playlist = re.search(r"playlist\?list=([^&]+)", url)
@@ -65,8 +70,11 @@ class YTMusicService(BaseService):
                 else:
                     cover_url = square_thumb["url"]
 
-                cover_path = await download_file(cover_url, f"storage/temp/ytmusic_playlist_{playlist_id}.jpg")
-                cover = str(cover_path) if cover_path else None
+                job = await self.arq.enqueue_job('universal_download', url=cover_url, destination=f"{self.output_path}ytmusic_playlist_{playlist_id}.jpg", _queue_name='light')
+
+                cover_result = await job.result()
+
+                cover = str(cover_result) if cover_result else None
 
             items = []
             for track in result.get("tracks", []):
@@ -97,90 +105,102 @@ class YTMusicService(BaseService):
 
     async def download(self, url: str) -> List[MediaContent]:
         logger.debug(f"Starting download for: {url}")
-        options = get_audio_options()
+        if not self.arq:
+            raise BotError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message="ARQ pool is required",
+                critical=True,
+                is_logged=True
+            )
+
         try:
-            with yt_dlp.YoutubeDL(options) as ydl:
-                loop = asyncio.get_event_loop()
+            job = await self.arq.enqueue_job(
+                "universal_ytdlp_extract",
+                url=url,
+                extract_only = False,
+                extract_audio=True,
+                cookies_file=random_cookie_file("youtube"),
+                output_template=f"{self.output_path}%(id)s_{sanitize_filename('%(title)s')}.%(ext)s",
+                extra_opts=get_extra_audio_options(),
+                _queue_name='heavy'
+            )
+            result = await job.result()
+            clean_info = result["info"]
+            filepath = result["filepath"]
 
-                logger.debug("Extracting audio info")
-                info_dict = await loop.run_in_executor(
-                    self._download_executor,
-                    lambda: ydl.extract_info(url, download=False)
-                )
-                if not info_dict:
-                    raise BotError(
-                        code=ErrorCode.DOWNLOAD_FAILED,
-                        message="Failed to get audio info",
-                        url=url,
-                        service=Services.YTMUSIC,
-                        is_logged=True
-                    )
-
-                title = info_dict.get("title", "Unknown")
-                performer = info_dict.get("uploader", "Unknown")
-
-                logger.debug("Downloading audio")
-                await loop.run_in_executor(
-                    self._download_executor,
-                    lambda: ydl.download([url])
+            if not clean_info:
+                raise BotError(
+                    code=ErrorCode.DOWNLOAD_FAILED,
+                    message="Failed to get audio info",
+                    url=url,
+                    service=Services.YTMUSIC,
+                    is_logged=True
                 )
 
-                audio_path = ydl.prepare_filename(info_dict).rsplit('.', 1)[0] + '.mp3'
-                base_path = audio_path.rsplit('.', 1)[0]
-                logger.debug(f"Audio path: {audio_path}")
+            title = clean_info.get("title", "Unknown")
+            performer = clean_info.get("uploader", "Unknown")
 
-                cover_path = None
-                thumbnail_url = info_dict.get("thumbnail", None)
+            base_path = filepath.rsplit('.', 1)[0]
+            logger.debug(f"Audio path: {filepath}")
 
-                # Try to find square thumbnail from thumbnails list
-                thumbnails = info_dict.get("thumbnails", [])
-                square_thumb = None
-                for thumb in thumbnails:
-                    if thumb.get("width") == thumb.get("height") and thumb.get("width", 0) >= 300:
-                        square_thumb = thumb
-                        break
+            cover_path = None
+            thumbnail_url = clean_info.get("thumbnail", None)
 
-                if square_thumb:
-                    thumbnail_url = square_thumb["url"]
+            # Try to find square thumbnail from thumbnails list
+            thumbnails = clean_info.get("thumbnails", [])
+            square_thumb = None
+            for thumb in thumbnails:
+                if thumb.get("width") == thumb.get("height") and thumb.get("width", 0) >= 300:
+                    square_thumb = thumb
+                    break
 
-                if thumbnail_url:
-                    try:
-                        cover_path = f"{base_path}.jpg"
-                        logger.debug(f"Downloading cover: {thumbnail_url}")
-                        await download_file(thumbnail_url, cover_path)
-                    except Exception as e:
-                        logger.warning(f"Failed to download cover: {e}")
-                        cover_path = None
+            if square_thumb:
+                thumbnail_url = square_thumb["url"]
 
-                logger.debug("Updating metadata")
-                await async_update_metadata(
-                    audio_path,
+            if thumbnail_url:
+                try:
+                    cover_path = f"{base_path}.jpg"
+                    logger.debug(f"Downloading cover: {thumbnail_url}")
+                    job = await self.arq.enqueue_job('universal_download', url=thumbnail_url, destination=cover_path, _queue_name='light')
+
+                    await job.result()
+                except Exception as e:
+                    logger.warning(f"Failed to download cover: {e}")
+                    cover_path = None
+
+            logger.debug("Updating metadata")
+            job = await self.arq.enqueue_job(
+                "universal_metadata_update",
+                filepath,
+                title=title,
+                artist=performer,
+                cover_file=cover_path,
+                _queue_name='heavy'
+            )
+
+            await job.result()
+
+            if await aios.path.exists(filepath):
+                logger.debug(f"Download completed: {filepath}")
+                cover_file = None
+                if cover_path and await aios.path.exists(cover_path):
+                    cover_file = Path(cover_path)
+                return [MediaContent(
+                    type=MediaType.AUDIO,
+                    path=Path(filepath),
+                    duration=clean_info.get("duration", None),
                     title=title,
-                    artist=performer,
-                    cover_file=cover_path
+                    performer=performer,
+                    cover=cover_file
+                )]
+            else:
+                raise BotError(
+                    code=ErrorCode.DOWNLOAD_FAILED,
+                    message="Audio file not found after download",
+                    url=url,
+                    service=Services.YTMUSIC,
+                    is_logged=True,
                 )
-
-                if await aios.path.exists(audio_path):
-                    logger.debug(f"Download completed: {audio_path}")
-                    cover_file = None
-                    if cover_path and await aios.path.exists(cover_path):
-                        cover_file = Path(cover_path)
-                    return [MediaContent(
-                        type=MediaType.AUDIO,
-                        path=Path(audio_path),
-                        duration=info_dict.get("duration", None),
-                        title=title,
-                        performer=performer,
-                        cover=cover_file
-                    )]
-                else:
-                    raise BotError(
-                        code=ErrorCode.DOWNLOAD_FAILED,
-                        message="Audio file not found after download",
-                        url=url,
-                        service=Services.YTMUSIC,
-                        is_logged=True,
-                    )
 
         except BotError as ebot:
             ebot.service = Services.YTMUSIC
