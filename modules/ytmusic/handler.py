@@ -43,6 +43,9 @@ async def process_ytmusic_url(message: Message, config: Config, i18n: Translator
 
     service = YTMusicService(arq=arq)
 
+    if message.bot:
+        await message.bot.send_chat_action(message.chat.id, "choose_sticker")
+
     media_metadata = await service.get_info(message.text, config=config)
     if not media_metadata:
         raise BotError(
