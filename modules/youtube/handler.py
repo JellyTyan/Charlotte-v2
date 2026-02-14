@@ -37,6 +37,9 @@ async def process_youtube_url(message: Message, i18n: TranslatorRunner):
 
     arq = await get_arq_pool('light')
 
+    if message.bot:
+        await message.bot.send_chat_action(message.chat.id, "choose_sticker")
+
     media_metadata = await YouTubeService(arq=arq).get_info(message.text)
     if media_metadata is None:
         raise BotError(
