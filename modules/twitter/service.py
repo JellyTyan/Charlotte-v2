@@ -5,14 +5,14 @@ import re
 from pathlib import Path
 from typing import List, Optional
 
-import httpx
+from curl_cffi.requests import AsyncSession
 
 from core.config import Config
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
 from modules.base_service import BaseService
-from utils import download_file, truncate_string, get_user_agent
+from utils import truncate_string
 from .utils import get_guest_token, get_tweet_info, sanitize_filename
 from models.service_list import Services
 
@@ -22,10 +22,11 @@ logger = logging.getLogger(__name__)
 class TwitterService(BaseService):
     name = "Twitter"
 
-    def __init__(self, output_path: str = "storage/temp") -> None:
+    def __init__(self, output_path: str = "storage/temp", arq = None) -> None:
         super().__init__()
         self.output_path = output_path
         self.auth = "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
+        self.arq = arq
 
     async def download(self, url: str, premium: bool = False, config: Optional[Config] = None) -> List[MediaContent]:
         match = re.search(r"status/(\d+)", url)
@@ -39,15 +40,21 @@ class TwitterService(BaseService):
                 critical=False
             )
 
+        if not self.arq:
+            raise BotError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message="ARQ pool is required",
+                critical=True,
+                is_logged=True
+            )
+
         tweet_id = int(match.group(1))
 
-        user_agent = get_user_agent()
         headers = {
             'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-            'user-agent': user_agent,
         }
 
-        async with httpx.AsyncClient(follow_redirects=True, headers=headers) as client:
+        async with AsyncSession(headers=headers, impersonate="chrome136") as client:
             csrf_token: Optional[str] = None
             auth_token: Optional[str] = None
 
@@ -73,7 +80,6 @@ class TwitterService(BaseService):
                 tweet_dict = await get_tweet_info(
                     tweet_id,
                     self.auth,
-                    user_agent,
                     guest_token,
                     client,
                     csrf_token=csrf_token,
@@ -101,7 +107,7 @@ class TwitterService(BaseService):
                     )
 
                 result_data = tweet_dict.get("data", {}).get("tweetResult", {}).get("result", {})
-                
+
                 # Check if media is blurred
                 is_blurred = bool(result_data.get("mediaVisibilityResults"))
 
@@ -144,7 +150,7 @@ class TwitterService(BaseService):
                         if not match_photo:
                             continue
                         filename = os.path.join(self.output_path, sanitize_filename(os.path.basename(photo_url)))
-                        tasks.append(download_file(photo_url, filename, client=client))
+                        tasks.append(await self.arq.enqueue_job('universal_download', url=photo_url, destination=filename, _queue_name='light'))
                         result.append(MediaContent(
                             type=MediaType.PHOTO,
                             path=Path(filename),
@@ -167,8 +173,7 @@ class TwitterService(BaseService):
                         if not match_video:
                             continue
                         filename = os.path.join(self.output_path, match_video.group(1))
-
-                        tasks.append(download_file(video_url, filename, client=client))
+                        tasks.append(await self.arq.enqueue_job('universal_download', url=video_url, destination=filename, _queue_name='light'))
                         result.append(MediaContent(
                             type=MediaType.VIDEO,
                             path=Path(filename),
@@ -185,8 +190,7 @@ class TwitterService(BaseService):
                         if not match_gif:
                             continue
                         filename = os.path.join(self.output_path, match_gif.group(1))
-
-                        tasks.append(download_file(video_url, filename, client=client))
+                        tasks.append(await self.arq.enqueue_job('universal_download', url=video_url, destination=filename, _queue_name='light'))
                         result.append(MediaContent(
                             type=MediaType.GIF,
                             path=Path(filename),
@@ -195,7 +199,7 @@ class TwitterService(BaseService):
                             is_blured=sensitive
                         ))
 
-                await asyncio.gather(*tasks)
+                await asyncio.gather(*[job.result() for job in tasks], return_exceptions=True)
 
                 return result
 

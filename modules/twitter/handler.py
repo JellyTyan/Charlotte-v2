@@ -11,6 +11,7 @@ from .service import TwitterService
 from models.service_list import Services
 from core.config import Config
 from fluentogram import TranslatorRunner
+from utils.arq_pool import get_arq_pool
 
 logger = logging.getLogger(__name__)
 
@@ -32,16 +33,18 @@ async def process_twitter_url(message: Message, config: Config, i18n: Translator
     user_id = message.from_user.id if message.from_user else message.chat.id
     url = message.text.strip()
 
+    arq = await get_arq_pool('light')
+
     try:
         # Download content
         from storage.db.crud import get_user
         user = await get_user(user_id)
         is_premium = user.is_premium if user else False
-        
+
         if is_premium:
-            media_content = await TwitterService().download(url, premium=True, config=config)
+            media_content = await TwitterService(arq=arq).download(url, premium=True, config=config)
         else:
-            media_content = await TwitterService().download(url)
+            media_content = await TwitterService(arq=arq).download(url)
 
         # Send content
         send_manager = MediaSender()
