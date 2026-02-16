@@ -129,3 +129,25 @@ def get_audio_options(title: str | None = None):
         opts["cookiefile"] = cookie_file
 
     return opts
+
+def get_extra_audio_options():
+    opts = get_ytdlp_options()
+    opts["format"] = "bestaudio"
+    opts["postprocessors"] = [
+        # {
+        #     'key': 'SponsorBlock',
+        #     'api': 'https://sponsor.ajay.app',
+        #     'categories': ['sponsor', 'intro', 'outro', 'selfpromo', 'preview', 'interaction', 'filler'],
+        # },
+        # {
+        #     'key': 'ModifyChapters',
+        #     'remove_sponsor_segments': ['sponsor', 'intro', 'outro', 'selfpromo', 'preview', 'interaction', 'filler']
+        # },
+        {
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "mp3",
+            "preferredquality": "192",
+        }
+    ]
+
+    return opts

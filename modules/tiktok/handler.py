@@ -10,6 +10,7 @@ from utils.statistics_helper import log_download_event
 from .service import TiktokService
 from models.service_list import Services
 from models.errors import BotError, ErrorCode
+from utils.arq_pool import get_arq_pool
 
 logger = logging.getLogger(__name__)
 
@@ -21,40 +22,61 @@ async def tiktok_handler(message: Message):
     if not message.text or not message.from_user:
         return
 
-    await task_manager.add_task(message.from_user.id, process_tiktok_url(message), message)
+    user_id = message.from_user.id
+
+    # Start download task
+    download_task = await task_manager.add_task(
+        user_id,
+        download_coro=process_tiktok_url(message),
+        message=message
+    )
+
+    # When download completes, queue send task
+    if download_task:
+        async def send_when_ready():
+            try:
+                media_content = await download_task
+                if media_content:
+                    send_manager = MediaSender()
+                    await send_manager.send(message, media_content, user_id)
+            except Exception as e:
+                # Error already logged in download task
+                pass
+
+        await task_manager.add_send_task(user_id, send_when_ready())
 
 
 async def process_tiktok_url(message: Message):
+    """Download TikTok media and return content"""
     if not message.bot or not message.text:
-        return
+        return None
 
     user_id = message.from_user.id if message.from_user else message.chat.id
 
-    try:
-        service = TiktokService()
+    arq = await get_arq_pool('light')
 
-        # Get metadata
-        metadata = await service.get_info(message.text)
-        if not metadata:
-             raise BotError(
-                code=ErrorCode.METADATA_ERROR,
-                message="Failed to fetch metadata",
-                url=message.text,
-                service=Services.TIKTOK,
-                is_logged=True,
-                critical=True
-            )
+    service = TiktokService(arq=arq)
 
-        # Download content using metadata
-        media_content = await service.download(metadata)
+    # Send chat action for user feedback
+    if message.bot:
+        await message.bot.send_chat_action(message.chat.id, "choose_sticker")
 
-        # Send content
-        send_manager = MediaSender()
-        await send_manager.send(message, media_content, user_id)
+    # Get metadata
+    metadata = await service.get_info(message.text)
+    if not metadata:
+            raise BotError(
+            code=ErrorCode.METADATA_ERROR,
+            message="Failed to fetch metadata",
+            url=message.text,
+            service=Services.TIKTOK,
+            is_logged=True,
+            critical=True
+        )
 
-        # Log success
-        await log_download_event(user_id, Services.TIKTOK, 'success')
+    # Download content using metadata
+    media_content = await service.download(metadata)
 
-    except Exception as e:
-        # Error handling is usually done by task wrapper or specific exception catches if needed
-        raise e
+    # Log success
+    await log_download_event(user_id, Services.TIKTOK, 'success')
+
+    return media_content

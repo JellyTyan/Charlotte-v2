@@ -9,5 +9,10 @@ echo "Running database migrations..."
 gosu charlotte alembic upgrade head
 
 # Start application (as user charlotte)
-echo "Starting application..."
-exec gosu charlotte python main.py
+if [ "$#" -eq 0 ]; then
+    echo "Starting application (default)..."
+    exec gosu charlotte python main.py
+else
+    echo "Executing command: $@"
+    exec gosu charlotte "$@"
+fi

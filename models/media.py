@@ -13,7 +13,9 @@ class MediaType(Enum):
 @dataclass
 class MediaContent:
     type: MediaType
-    path: Path
+    path: Optional[Path] = None
+    content: Optional[bytes] = None
+    filename: Optional[str] = None
     width: Optional[int] = None
     height: Optional[int] = None
     duration: Optional[int] = None

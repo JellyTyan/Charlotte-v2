@@ -1,7 +1,7 @@
 import logging
 import re
 
-import httpx
+from curl_cffi.requests import AsyncSession
 
 from core.config import Config
 from models.errors import BotError, ErrorCode
@@ -18,10 +18,10 @@ async def get_track_info(track_id: str, token: str):
     url = f"https://api.spotify.com/v1/tracks/{track_id}"
     logger.debug(f"Fetching track info from Spotify API: {track_id}")
 
-    async with httpx.AsyncClient() as client:
+    async with AsyncSession(impersonate="chrome136") as session:
         headers = {"Authorization": f"Bearer {token}"}
 
-        response = await client.get(url, headers=headers)
+        response = await session.get(url, headers=headers)
         response.raise_for_status()
         logger.debug(f"Track info received for: {track_id}")
         return response.json()
@@ -74,8 +74,8 @@ async def get_set_list(set_id: str, type: str, token: str) -> MediaMetadata:
         if type == "album":
             url = f"https://api.spotify.com/v1/albums/{set_id}"
 
-            async with httpx.AsyncClient() as client:
-                response = await client.get(url, headers=headers)
+            async with AsyncSession(impersonate="chrome136") as session:
+                response = await session.get(url, headers=headers)
                 if response.status_code != 200:
                     raise BotError(
                         code=ErrorCode.PLAYLIST_INFO_ERROR,
@@ -126,8 +126,8 @@ async def get_set_list(set_id: str, type: str, token: str) -> MediaMetadata:
         elif type == "playlist":
             url = f"https://api.spotify.com/v1/playlists/{set_id}"
 
-            async with httpx.AsyncClient() as client:
-                response = await client.get(url, headers=headers)
+            async with AsyncSession(impersonate="chrome136") as session:
+                response = await session.get(url, headers=headers)
                 if response.status_code != 200:
                     raise BotError(
                         code=ErrorCode.PLAYLIST_INFO_ERROR,
@@ -165,8 +165,8 @@ async def get_set_list(set_id: str, type: str, token: str) -> MediaMetadata:
 
                 # Fetch next page if available
                 if tracks_data.get("next"):
-                    async with httpx.AsyncClient() as client:
-                        response = await client.get(tracks_data["next"], headers=headers)
+                    async with AsyncSession(impersonate="chrome136") as session:
+                        response = await session.get(tracks_data["next"], headers=headers)
                         if response.status_code == 200:
                             tracks_data = response.json()
                         else:
@@ -216,8 +216,8 @@ async def get_set_list(set_id: str, type: str, token: str) -> MediaMetadata:
 async def fetch_spotify_token(config: Config):
     logger.debug("Fetching new Spotify access token")
     try:
-        async with httpx.AsyncClient() as client:
-            token = await get_access_token(client, config.SPOTIFY_CLIENT_ID, config.SPOTIFY_SECRET)
+        async with AsyncSession(impersonate="chrome136") as session:
+            token = await get_access_token(session, config.SPOTIFY_CLIENT_ID, config.SPOTIFY_SECRET)
         logger.debug("Spotify token fetched successfully")
         return {"token": token}
     except Exception as e:

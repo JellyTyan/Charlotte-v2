@@ -19,7 +19,8 @@ services:
       - charlotte-net
     depends_on:
       - redis
-      # - postgres # Uncomment if using postgres
+      - postgres
+      - nginx
 
   redis:
     image: redis:7-alpine
@@ -29,6 +30,46 @@ services:
       - redis-data:/data
     networks:
       - charlotte-net
+
+  light-worker:
+    build:
+      context: .
+      dockerfile: workers/Dockerfile
+    restart: unless-stopped
+    command: arq workers.light_worker.WorkerSettings
+    env_file: .env
+    volumes:
+      - ./storage:/app/storage
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - charlotte-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+
+  heavy-worker:
+    build:
+      context: .
+      dockerfile: workers/Dockerfile
+    restart: unless-stopped
+    command: arq workers.heavy_worker.WorkerSettings
+    env_file: .env
+    volumes:
+      - ./storage:/app/storage
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - charlotte-net
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
 
   bgutil:
     image: brainicism/bgutil-ytdlp-pot-provider

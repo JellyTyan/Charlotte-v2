@@ -5,11 +5,10 @@ import os
 import random
 import shutil
 import time
-from typing import List, Optional
+from typing import Optional
 
-import httpx
+from curl_cffi.requests import AsyncSession
 
-from models.errors import BotError, ErrorCode
 from utils.user_agents import get_user_agent
 from yt_dlp.utils import sanitize_filename
 from yt_dlp.networking.impersonate import ImpersonateTarget
@@ -59,9 +58,9 @@ async def get_gallery_dl_info(url: str) -> Optional[dict]:
 
     gallery_dl_exe = shutil.which("gallery-dl")
     if not gallery_dl_exe:
-         venv_path = os.path.join(os.getcwd(), "venv", "bin", "gallery-dl")
-         if os.path.exists(venv_path):
-             gallery_dl_exe = venv_path
+        venv_path = os.path.join(os.getcwd(), "venv", "bin", "gallery-dl")
+        if os.path.exists(venv_path):
+            gallery_dl_exe = venv_path
 
     if not gallery_dl_exe:
         logger.error("gallery-dl not found")
@@ -122,7 +121,6 @@ async def get_tikwm_info(url: str):
         'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
         'origin': 'https://www.tikwm.com',
         'referer': 'https://www.tikwm.com/ru/',
-        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36',
     }
 
     data = {
@@ -141,8 +139,8 @@ async def get_tikwm_info(url: str):
 
         _last_tikwm_request_time = time.time()
 
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
+        async with AsyncSession(impersonate="chrome136") as session:
+            response = await session.post(
                 "https://www.tikwm.com/api/",
                 headers=headers,
                 data=data

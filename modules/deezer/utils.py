@@ -1,6 +1,6 @@
 import logging
 
-import httpx
+from curl_cffi.requests import AsyncSession
 
 from models.errors import BotError, ErrorCode
 from models.metadata import MediaMetadata, MetadataType
@@ -9,8 +9,8 @@ from utils.download_utils import download_file
 logger = logging.getLogger(__name__)
 
 async def get_track_info(track_id: int) -> MediaMetadata:
-    async with httpx.AsyncClient() as client:
-        response = await client.get(f"https://api.deezer.com/track/{track_id}")
+    async with AsyncSession(impersonate="chrome136") as session:
+        response = await session.get(f"https://api.deezer.com/track/{track_id}")
 
         if response.status_code != 200:
             raise BotError(
@@ -46,8 +46,8 @@ async def get_track_info(track_id: int) -> MediaMetadata:
         )
 
 async def get_album_info(album_id: int) -> MediaMetadata:
-    async with httpx.AsyncClient() as client:
-        response = await client.get(f"https://api.deezer.com/album/{album_id}")
+    async with AsyncSession(impersonate="chrome136") as session:
+        response = await session.get(f"https://api.deezer.com/album/{album_id}")
 
         if response.status_code != 200:
             raise BotError(
@@ -108,8 +108,8 @@ async def get_album_info(album_id: int) -> MediaMetadata:
         )
 
 async def get_playlist_info(playlist_id: int) -> MediaMetadata:
-    async with httpx.AsyncClient() as client:
-        response = await client.get(f"https://api.deezer.com/playlist/{playlist_id}")
+    async with AsyncSession(impersonate="chrome136") as session:
+        response = await session.get(f"https://api.deezer.com/playlist/{playlist_id}")
 
         if response.status_code != 200:
             raise BotError(

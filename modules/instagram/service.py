@@ -7,14 +7,13 @@ from pathlib import Path
 from typing import List, Tuple, Optional
 
 import instaloader
-import yt_dlp
-from yt_dlp.utils import sanitize_filename
 
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
 from modules.base_service import BaseService
-from utils import download_file, truncate_string, random_cookie_file, get_ytdlp_options
+from utils import truncate_string, random_cookie_file
+from models.service_list import Services
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +26,10 @@ class InstagramService(BaseService):
     # Created via command: instaloader -l username
     SESSION_FILE_PATH = "session-charlottelopster"
 
-    def __init__(self, output_path: str = "storage/temp") -> None:
+    def __init__(self, output_path: str = "storage/temp", arq = None) -> None:
         super().__init__()
         self.output_path = output_path
+        self.arq = arq
 
         self.L = instaloader.Instaloader(
             download_pictures=False,
@@ -59,6 +59,13 @@ class InstagramService(BaseService):
             logger.warning(f"Instagram session file not found at {self.SESSION_FILE_PATH}")
 
     async def download(self, url: str) -> List[MediaContent]:
+        if not self.arq:
+            raise BotError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message="ARQ pool is required",
+                critical=True,
+                is_logged=True
+            )
         try:
             # 1. Get direct links via Instaloader
             try:
@@ -71,9 +78,9 @@ class InstagramService(BaseService):
             download_tasks = []
             for link, name in zip(media_items, filenames):
                 filepath = os.path.join(self.output_path, name)
-                download_tasks.append(download_file(link, filepath))
+                download_tasks.append(await self.arq.enqueue_job('universal_download', url=link, destination=filepath, _queue_name='light'))
 
-            results = await asyncio.gather(*download_tasks, return_exceptions=True)
+            results = await asyncio.gather(*[job.result() for job in download_tasks], return_exceptions=True)
 
             media_contents = []
             for i, res in enumerate(results):
@@ -96,6 +103,7 @@ class InstagramService(BaseService):
             if not media_contents:
                  raise BotError(
                     code=ErrorCode.DOWNLOAD_FAILED,
+                    service=Services.INSTAGRAM,
                     message="Failed to download any media files",
                     url=url
                 )
@@ -119,7 +127,7 @@ class InstagramService(BaseService):
             shortcode = match.group(1)
         else:
             # Try to handle stories if needed, or just throw error for now as regex above is strictly posts
-            raise BotError(ErrorCode.INVALID_URL, "Invalid Instagram URL", url)
+            raise BotError(ErrorCode.INVALID_URL, message="Invalid Instagram URL", service=Services.INSTAGRAM, url=url, is_logged=False)
 
         loop = asyncio.get_running_loop()
 
@@ -129,7 +137,7 @@ class InstagramService(BaseService):
                 lambda: instaloader.Post.from_shortcode(self.L.context, shortcode)
             )
         except Exception as e:
-            raise BotError(ErrorCode.INVALID_URL, f"Post not found or private: {e}", url)
+            raise BotError(ErrorCode.INVALID_URL, message=f"Post not found or private: {e}", service=Services.INSTAGRAM, url=url, is_logged=True)
 
         images_urls = []
         filenames = []
@@ -162,46 +170,49 @@ class InstagramService(BaseService):
 
     async def _process_fallback_ytdlp(self, url: str) -> List[MediaContent]:
         logger.info(f"Fallback processing with yt-dlp: {url}")
+        if not self.arq:
+            raise BotError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message="ARQ pool is required",
+                critical=True,
+                is_logged=True
+            )
 
-        cookie_file = random_cookie_file("instagram")
-        options = get_ytdlp_options()
-        options["outtmpl"] = f"{self.output_path}/%(id)s_%(title)s.%(ext)s"
+        try:
+            job = await self.arq.enqueue_job(
+                "universal_ytdlp_extract",
+                url,
+                extract_only = False,
+                format_selector = None,
+                output_template = f"{self.output_path}/%(id)s_%(title)s.%(ext)s",
+                cookies_file = random_cookie_file("instagram"),
+                _queue_name='heavy'
+            )
 
-        if cookie_file:
-            logger.info(f"Using cookie file: {cookie_file}")
-            options["cookiefile"] = cookie_file
+            result = await job.result()
+            path = Path(result['path'])
+            info = result['info']
 
-        with yt_dlp.YoutubeDL(options) as ydl:
-            loop = asyncio.get_running_loop()
+            author = info.get("uploader", "Unknown")
+            description = info.get("description", "") or ""
+            final_caption = truncate_string(f"{author} - {description}", 1024)
 
-            try:
-                info = await loop.run_in_executor(
-                    self._download_executor,
-                    lambda: ydl.extract_info(url, download=True)
+            return [
+                MediaContent(
+                    type=MediaType.VIDEO if info.get('ext') == 'mp4' else MediaType.PHOTO,
+                    path=path,
+                    title=final_caption,
+                    performer=author
                 )
-
-                if not info:
-                    raise BotError(ErrorCode.DOWNLOAD_FAILED, "yt-dlp failed to download", url)
-
-                # TODO: improved handling for carousels if yt-dlp returns entries
-
-                path = Path(ydl.prepare_filename(info))
-
-                author = info.get("uploader", "Unknown")
-                description = info.get("description", "") or ""
-                final_caption = truncate_string(f"{author} - {description}", 1024)
-
-                return [
-                    MediaContent(
-                        type=MediaType.VIDEO if info.get('ext') == 'mp4' else MediaType.PHOTO,
-                        path=path,
-                        title=final_caption,
-                        performer=author
-                    )
-                ]
-            except Exception as e:
-                logger.error(f"yt-dlp fallback failed: {e}")
-                raise BotError(ErrorCode.DOWNLOAD_FAILED, f"All methods failed. yt-dlp error: {e}", url)
+            ]
+        except Exception as e:
+            raise BotError(
+                ErrorCode.DOWNLOAD_FAILED,
+                service=Services.INSTAGRAM,
+                message=f"All methods failed. yt-dlp error: {e}",
+                critical=True,
+                is_logged=True
+                )
 
     async def get_info(self, url: str) -> Optional[MediaMetadata]:
         return None
