@@ -25,12 +25,20 @@ async def youtube_handler(message: Message, i18n: TranslatorRunner):
     if not message.text or not message.from_user:
         return
 
-    await task_manager.add_task(message.from_user.id, process_youtube_url(message, i18n), message)
+    user_id = message.from_user.id
+
+    # Start download task (for YouTube this is just getting metadata and showing UI)
+    download_task = await task_manager.add_task(
+        user_id,
+        download_coro=process_youtube_url(message, i18n),
+        message=message
+    )
 
 
 async def process_youtube_url(message: Message, i18n: TranslatorRunner):
+    """Get YouTube metadata and display format selection UI"""
     if not message.bot or not message.text:
-        return
+        return None
 
     await message.bot.send_chat_action(message.chat.id, "find_location")
     process_message = await message.reply(i18n.get('processing'))
@@ -69,6 +77,9 @@ async def process_youtube_url(message: Message, i18n: TranslatorRunner):
             truncate_string(caption, 1024),
             reply_markup=media_metadata.keyboard
         )
+
+    # YouTube handler doesn't need send queue, it just shows UI
+    return None
 
 
 @router.callback_query(YoutubeCallback.filter())
@@ -134,11 +145,31 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
 
     await message.delete()
 
-    await task_manager.add_task(user_id, download_youtube_media(original_message, url, format_choice, user_id, ""), original_message)
+    # Start download task
+    download_task = await task_manager.add_task(
+        user_id,
+        download_coro=download_youtube_media(original_message, url, format_choice, user_id, ""),
+        message=original_message
+    )
+
+    # When download completes, queue send task
+    if download_task:
+        async def send_when_ready():
+            try:
+                media_content = await download_task
+                if media_content:
+                    from senders.media_sender import MediaSender
+                    send_manager = MediaSender()
+                    await send_manager.send(original_message, media_content, user_id)
+            except Exception as e:
+                # Error already logged in download task
+                pass
+
+        await task_manager.add_send_task(user_id, send_when_ready())
 
 
 async def download_youtube_media(message: Message, url: str, format_choice: str, user_id: int, payment_charge_id: str = ""):
-    from senders.media_sender import MediaSender
+    """Download YouTube media and return content"""
     from utils.statistics_helper import log_download_event
 
     arq = await get_arq_pool('light')
@@ -149,9 +180,8 @@ async def download_youtube_media(message: Message, url: str, format_choice: str,
     try:
         media_content = await YouTubeService(arq=arq).download(url, format_choice)
 
-        send_manager = MediaSender()
-        await send_manager.send(message, media_content, user_id)
         await log_download_event(user_id, Services.YOUTUBE, 'success')
+        return media_content
     except BotError as e:
         # Refund if download failed and user paid
         if payment_charge_id and e.code == ErrorCode.DOWNLOAD_FAILED:

@@ -44,7 +44,7 @@ class MediaSender:
              raise BotError(code=ErrorCode.INTERNAL_ERROR, message="Failed to load settings")
         return settings
 
-    async def send(self, message: types.Message, content: List[MediaContent], user_id: Optional[int] = None) -> None:
+    async def send(self, message: types.Message, content: List[MediaContent], user_id: Optional[int] = None, skip_reaction: bool = False) -> None:
         if not message.bot:
             raise BotError(code=ErrorCode.INTERNAL_ERROR, message="Bot instance not available", is_logged=True)
 
@@ -73,7 +73,7 @@ class MediaSender:
 
             logger.info(f"Successfully sent all media to chat {message.chat.id}")
 
-            if settings.send_reactions:
+            if settings.send_reactions and not skip_reaction:
                 try:
                     from aiogram.types import ReactionTypeEmoji
                     emoji = random.choice(REACTION_EMOJIS)

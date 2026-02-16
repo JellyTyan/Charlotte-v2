@@ -21,15 +21,32 @@ async def deezer_handler(message: Message, config: Config, i18n: TranslatorRunne
     if not message.text or not message.from_user:
         return
 
-    await task_manager.add_task(message.from_user.id, process_deezer_url(message, config, i18n), message)
+    user_id = message.from_user.id
+    download_task = await task_manager.add_task(
+        user_id,
+        download_coro=process_deezer_url(message, config, i18n),
+        message=message
+    )
+
+    if download_task:
+        async def send_when_ready():
+            try:
+                media_content = await download_task
+                if media_content:
+                    from senders.media_sender import MediaSender
+                    send_manager = MediaSender()
+                    await send_manager.send(message, media_content, user_id)
+            except Exception:
+                pass
+        await task_manager.add_send_task(user_id, send_when_ready())
 
 
 async def process_deezer_url(message: Message, config: Config, i18n: TranslatorRunner):
     if not message.text:
-        return
+        return None
     user = message.from_user
     if not user:
-        return
+        return None
 
     from models.errors import BotError, ErrorCode
     from senders.media_sender import MediaSender
@@ -73,9 +90,8 @@ async def process_deezer_url(message: Message, config: Config, i18n: TranslatorR
             lossless_mode=lossless_mode
         )
 
-        send_manager = MediaSender()
-        await send_manager.send(message, track, user.id)
         await log_download_event(user.id, Services.DEEZER, 'success')
+        return track
 
     elif media_metadata.media_type == "album" or media_metadata.media_type == "playlist":
         text = f"{media_metadata.title} by <a href=\"{media_metadata.performer_url}\">{media_metadata.performer}</a>\n"
@@ -84,42 +100,45 @@ async def process_deezer_url(message: Message, config: Config, i18n: TranslatorR
         text += i18n.get('total-tracks', count=media_metadata.extra.get('track_count', 'Unknown')) + "\n"
         if media_metadata.media_type == "album":
             text += i18n.get('release-date', date=media_metadata.extra.get('release_date', 'Unknown')) + "\n"
-        await message.answer_photo(
-            photo=FSInputFile(media_metadata.cover),
-            caption = text,
-            parse_mode=ParseMode.HTML
-        )
-        await delete_files([media_metadata.cover])
+        if media_metadata.cover:
+            await message.answer_photo(
+                photo=FSInputFile(media_metadata.cover),
+                caption = text,
+                parse_mode=ParseMode.HTML
+            )
+            await delete_files([media_metadata.cover])
         await message.reply(i18n.get('downloading-tracks'))
         send_manager = MediaSender()
-        success_count = 0
-        failed_count = 0
 
-        for track in media_metadata.items:
-            if track.performer is None or track.title is None:
+        for track_meta in media_metadata.items:
+            if track_meta.performer is None or track_meta.title is None:
                 logger.warning(f"Skipping track with missing metadata")
                 continue
+            async def download_track(performer=track_meta.performer, title=track_meta.title, cover=track_meta.cover, full_cover=track_meta.full_size_cover):
+                try:
+                    return await service.download(performer, title, cover, full_cover)
+                except Exception as e:
+                    logger.error(f"Failed to download track {title}: {e}")
+                    raise e
 
-            try:
-                track = await service.download(
-                    track.performer,
-                    track.title,
-                    track.cover,
-                    track.full_size_cover
-                )
-                await send_manager.send(message, track, user.id)
-                success_count += 1
-            except Exception as e:
-                logger.error(f"Failed to download track {track.title}: {e}")
-                failed_count += 1
+            track_download_task = await task_manager.add_task(
+                user.id,
+                download_coro=download_track(),
+                message=None
+            )
 
-        total = success_count + failed_count
-        logger.info(f"Completed {media_metadata.media_type} download: {success_count}/{total} tracks for user {user.id}")
+            if track_download_task:
+                async def send_track(task=track_download_task):
+                    try:
+                        track_content = await task
+                        if track_content:
+                            await send_manager.send(message, track_content, user.id, skip_reaction=True)
+                            return True
+                        return False
+                    except Exception:
+                        return False
 
-        if success_count > 0:
-            await log_download_event(user.id, Services.DEEZER, 'success')
+                await task_manager.add_send_task(user.id, send_track())
 
-        if failed_count > 0:
-            await message.answer(i18n.get('download-stats', success=success_count, failed=failed_count))
-        else:
-            await message.answer(i18n.get('all-tracks-success'))
+        await log_download_event(user.id, Services.DEEZER, 'success')
+        return None

@@ -19,12 +19,34 @@ async def pinterest_handler(message: Message):
     if not message.text or not message.from_user:
         return
 
-    await task_manager.add_task(message.from_user.id, process_pinterest_url(message), message)
+    user_id = message.from_user.id
+
+    # Start download task
+    download_task = await task_manager.add_task(
+        user_id,
+        download_coro=process_pinterest_url(message),
+        message=message
+    )
+
+    # When download completes, queue send task
+    if download_task:
+        async def send_when_ready():
+            try:
+                media_content = await download_task
+                if media_content:
+                    send_manager = MediaSender()
+                    await send_manager.send(message, media_content, user_id)
+            except Exception as e:
+                # Error already logged in download task
+                pass
+
+        await task_manager.add_send_task(user_id, send_when_ready())
 
 
 async def process_pinterest_url(message: Message):
+    """Download Pinterest media and return content"""
     if not message.bot or not message.text:
-        return
+        return None
 
     user_id = message.from_user.id if message.from_user else message.chat.id
 
@@ -43,12 +65,10 @@ async def process_pinterest_url(message: Message):
         service = PinterestService(arq=arq)
         media_content = await service.download(message.text)
 
-        # Send content
-        send_manager = MediaSender()
-        await send_manager.send(message, media_content, user_id)
-
         # Log success
         await log_download_event(user_id, Services.PINTEREST, 'success')
+
+        return media_content
 
     except Exception as e:
         logger.error(f"Error processing Pinterest URL: {e}")

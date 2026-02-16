@@ -21,12 +21,29 @@ async def soundcloud_handler(message: Message, config: Config, i18n: TranslatorR
     if not message.text or not message.from_user:
         return
 
-    await task_manager.add_task(message.from_user.id, process_soundcloud_url(message, config, i18n), message)
+    user_id = message.from_user.id
+    download_task = await task_manager.add_task(
+        user_id,
+        download_coro=process_soundcloud_url(message, config, i18n),
+        message=message
+    )
+
+    if download_task:
+        async def send_when_ready():
+            try:
+                media_content = await download_task
+                if media_content:
+                    from senders.media_sender import MediaSender
+                    send_manager = MediaSender()
+                    await send_manager.send(message, media_content, user_id)
+            except Exception:
+                pass
+        await task_manager.add_send_task(user_id, send_when_ready())
 
 
 async def process_soundcloud_url(message: Message, config: Config, i18n: TranslatorRunner):
     if not message.text:
-        return
+        return None
 
     user_id = message.from_user.id if message.from_user else message.chat.id
 
@@ -67,9 +84,8 @@ async def process_soundcloud_url(message: Message, config: Config, i18n: Transla
             media_metadata
         )
 
-        send_manager = MediaSender()
-        await send_manager.send(message, track, user_id)
         await log_download_event(user_id, Services.SOUNDCLOUD, 'success')
+        return track
 
     elif media_metadata.media_type == "album" or media_metadata.media_type == "playlist":
         text = f"{media_metadata.title} by <a href=\"{media_metadata.performer_url}\">{media_metadata.performer}</a>\n"
@@ -83,33 +99,42 @@ async def process_soundcloud_url(message: Message, config: Config, i18n: Transla
             _queue_name='light'
         )
         album_cover = await job.result()
-        await message.answer_photo(
-            photo=FSInputFile(album_cover),
-            caption = text,
-            parse_mode=ParseMode.HTML
-        )
-        await delete_files([album_cover])
+        if album_cover:
+            await message.answer_photo(
+                photo=FSInputFile(albumcover),
+                caption = text,
+                parse_mode=ParseMode.HTML
+            )
+            await delete_files([album_cover])
         await message.reply(i18n.get('downloading-tracks'))
         send_manager = MediaSender()
-        success_count = 0
-        failed_count = 0
 
         for track_meta in media_metadata.items:
-            try:
-                track = await service.download(track_meta)
-                await send_manager.send(message, track, user_id)
-                success_count += 1
-            except Exception as e:
-                logger.error(f"Failed to download track: {e}")
-                failed_count += 1
+            async def download_track(metadata=track_meta):
+                try:
+                    return await service.download(metadata)
+                except Exception as e:
+                    logger.error(f"Failed to download track: {e}")
+                    raise e
 
-        total = success_count + failed_count
-        logger.info(f"Completed {media_metadata.media_type} download: {success_count}/{total} tracks for user {user_id}")
+            track_download_task = await task_manager.add_task(
+                user_id,
+                download_coro=download_track(),
+                message=None
+            )
 
-        if success_count > 0:
-            await log_download_event(user_id, Services.SOUNDCLOUD, 'success')
+            if track_download_task:
+                async def send_track(task=track_download_task):
+                    try:
+                        track_content = await task
+                        if track_content:
+                            await send_manager.send(message, track_content, user_id, skip_reaction=True)
+                            return True
+                        return False
+                    except Exception:
+                        return False
 
-        if failed_count > 0:
-            await message.answer(i18n.get('download-stats', success=success_count, failed=failed_count))
-        else:
-            await message.answer(i18n.get('all-tracks-success'))
+                await task_manager.add_send_task(user_id, send_track())
+
+        await log_download_event(user_id, Services.SOUNDCLOUD, 'success')
+        return None
