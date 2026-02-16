@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:3.11-slim
 
 # Create user with consistent UID/GID
 RUN useradd -m -u 1000 charlotte && \
@@ -25,10 +25,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir gallery-dl
 RUN pip install -U --no-cache-dir --pre yt-dlp[default,curl-cffi]
 
+# Copy project files
 COPY --chown=charlotte:charlotte . .
-RUN chmod +x /app/entrypoint.sh
+
+# Copy and setup worker entrypoint
+COPY --chown=charlotte:charlotte workers/entrypoint.sh /app/worker_entrypoint.sh
+RUN chmod +x /app/worker_entrypoint.sh
 
 # Volumes for persistence
 VOLUME ["/app/storage", "/app/logs"]
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["/app/worker_entrypoint.sh"]

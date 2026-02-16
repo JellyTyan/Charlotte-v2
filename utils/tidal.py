@@ -7,7 +7,7 @@ import re
 import xml.etree.ElementTree as ET
 from typing import List, Optional, Tuple
 
-import httpx
+from curl_cffi.requests import AsyncSession
 import aiofiles
 from aiofiles import os as aios
 
@@ -31,8 +31,8 @@ class TidalUtil:
         Search for tracks on Tidal.
         """
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
+            async with AsyncSession(impersonate="chrome136") as session:
+                response = await session.get(
                     self.SEARCH_URL,
                     params={'s': query, 'limit': limit},
                     headers=self.HEADERS,
@@ -57,11 +57,11 @@ class TidalUtil:
         """
         qualities = ['HI_RES_LOSSLESS', 'LOSSLESS']
 
-        async with httpx.AsyncClient() as client:
+        async with AsyncSession(impersonate="chrome136") as session:
             for quality in qualities:
                 try:
                     logger.debug(f"Trying Tidal download with quality: {quality}")
-                    response = await client.get(
+                    response = await session.get(
                         self.TRACK_URL,
                         params={'id': track_id, 'quality': quality},
                         headers=self.HEADERS,
@@ -123,14 +123,14 @@ class TidalUtil:
     async def _download_direct(self, url: str, filename: str) -> Optional[str]:
         """Download directly from URL"""
         try:
-            async with httpx.AsyncClient() as client:
-                async with client.stream("GET", url, headers=self.HEADERS, timeout=None) as response:
+            async with AsyncSession(impersonate="chrome136") as session:
+                async with session.stream("GET", url, headers=self.HEADERS, timeout=None) as response:
                     if response.status_code != 200:
                         logger.error(f"Failed to download stream: {response.status_code}")
                         return None
 
                     async with aiofiles.open(filename, 'wb') as f:
-                        async for chunk in response.aiter_bytes(chunk_size=8192):
+                        async for chunk in response.aiter_content(chunk_size=8192):
                             await f.write(chunk)
             return filename
         except Exception as e:
@@ -192,7 +192,7 @@ class TidalUtil:
 
             # Download media segments
             segment_files = [init_path]
-            async with httpx.AsyncClient() as client:
+            async with AsyncSession(impersonate="chrome136") as session:
                 for i, _ in enumerate(segments):
                     # Tidal uses $Number$ template, usually 1-indexed
                     seg_url = media_url_template.replace("$Number$", str(i + 1))
@@ -201,10 +201,10 @@ class TidalUtil:
                     logger.debug(f"Downloading segment {i+1}...")
                     # await self._download_direct(seg_url, seg_path) - Reusing client is better
                     try:
-                        async with client.stream("GET", seg_url, headers=self.HEADERS, timeout=None) as response:
+                        async with session.stream("GET", seg_url, headers=self.HEADERS, timeout=None) as response:
                              if response.status_code == 200:
                                 async with aiofiles.open(seg_path, 'wb') as f:
-                                    async for chunk in response.aiter_bytes(chunk_size=8192):
+                                    async for chunk in response.aiter_content(chunk_size=8192):
                                         await f.write(chunk)
                                 segment_files.append(seg_path)
                              else:

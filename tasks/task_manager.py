@@ -8,12 +8,24 @@ logger = logging.getLogger(__name__)
 
 class TaskManager:
     def __init__(self):
-        self._user_semaphores: Dict[int, asyncio.Semaphore] = defaultdict(lambda: asyncio.Semaphore(1))
+        # Separate semaphores for download and send operations
+        self._download_semaphores: Dict[int, asyncio.Semaphore] = defaultdict(lambda: asyncio.Semaphore(1))
+        self._send_semaphores: Dict[int, asyncio.Semaphore] = defaultdict(lambda: asyncio.Semaphore(1))
         self._user_tasks: Dict[int, list] = defaultdict(list)
         self._pending_urls = defaultdict(set)
 
-    async def add_task(self, user_id: int, coro, message=None, url=None):
-        """Add task to user's queue using semaphore"""
+    async def add_task(self, user_id: int, download_coro, message=None, url=None):
+        """Add download task to user's download queue
+
+        Args:
+            user_id: User ID
+            download_coro: Coroutine that downloads media and returns content
+            message: Optional message for reaction
+            url: Optional URL for duplicate detection
+
+        Returns:
+            Task object
+        """
         if url and url in self._pending_urls[user_id]:
             logger.warning(f"Duplicate request ignored for user {user_id}")
             return None
@@ -29,14 +41,15 @@ class TaskManager:
             except Exception as e:
                 logger.warning(f"Failed to set initial reaction: {e}")
 
-        async def wrapper():
-            async with self._user_semaphores[user_id]:
-                logger.debug(f"Processing task for user {user_id}")
+        async def download_wrapper():
+            async with self._download_semaphores[user_id]:
+                logger.debug(f"[DOWNLOAD] User {user_id} - Download semaphore acquired")
                 try:
-                    return await coro
+                    result = await download_coro
+                    logger.debug(f"[DOWNLOAD] User {user_id} - Download complete, semaphore released")
+                    return result
                 except Exception as e:
-                    logger.error(f"Task failed for user {user_id}: {e}", exc_info=True)
-
+                    logger.error(f"Download task failed for user {user_id}: {e}", exc_info=True)
                     # Handle error manually if message provided
                     if message:
                         from models.errors import BotError
@@ -44,15 +57,39 @@ class TaskManager:
                             await self._handle_bot_error(e, message, user_id)
                     raise
                 finally:
-                    # Remove URL from pending after task completes
+                    # Remove URL from pending after download completes
                     if url:
                         self._pending_urls[user_id].discard(url)
 
-        task = asyncio.create_task(wrapper())
+        task = asyncio.create_task(download_wrapper())
         self._user_tasks[user_id].append(task)
-
         self._user_tasks[user_id] = [t for t in self._user_tasks[user_id] if not t.done()]
+        return task
 
+    async def add_send_task(self, user_id: int, send_coro):
+        """Add send task to user's send queue
+
+        Args:
+            user_id: User ID
+            send_coro: Coroutine that sends media to Telegram
+
+        Returns:
+            Task object
+        """
+        async def send_wrapper():
+            async with self._send_semaphores[user_id]:
+                logger.debug(f"[SEND] User {user_id} - Send semaphore acquired")
+                try:
+                    result = await send_coro
+                    logger.debug(f"[SEND] User {user_id} - Send complete, semaphore released")
+                    return result
+                except Exception as e:
+                    logger.error(f"Send task failed for user {user_id}: {e}", exc_info=True)
+                    raise
+
+        task = asyncio.create_task(send_wrapper())
+        self._user_tasks[user_id].append(task)
+        self._user_tasks[user_id] = [t for t in self._user_tasks[user_id] if not t.done()]
         return task
 
     async def _handle_bot_error(self, exception, message, user_id: int):

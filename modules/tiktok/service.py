@@ -5,8 +5,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import List, Optional, Union
 import time
+from urllib.parse import urlparse, urlunparse
 
-import httpx
+from curl_cffi.requests import AsyncSession
 from yt_dlp.utils import sanitize_filename
 
 from models.errors import BotError, ErrorCode
@@ -14,9 +15,9 @@ from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from models.service_list import Services
 from modules.base_service import BaseService
-from utils import download_file, truncate_string, async_update_metadata, escape_html
+from utils import truncate_string, escape_html
 
-from .utils import get_ytdlp_options, get_gallery_dl_info, get_tikwm_info, convert_video
+from .utils import get_tikwm_info
 
 logger = logging.getLogger(__name__)
 
@@ -25,23 +26,24 @@ class TiktokService(BaseService):
     name = "TikTok"
     _download_executor = ThreadPoolExecutor(max_workers=10)
 
-    def __init__(self, output_path: str = "storage/temp/") -> None:
+    def __init__(self, output_path: str = "storage/temp/", arq=None) -> None:
         super().__init__()
         self.output_path = output_path
+        self.arq = arq
 
     async def download(self, item: Union[str, MediaMetadata]) -> List[MediaContent]:
         metadata: MediaMetadata
         if isinstance(item, str):
             fetched_metadata = await self.get_info(item)
             if not fetched_metadata:
-                 raise BotError(
-                    code=ErrorCode.METADATA_ERROR,
-                    message="Failed to fetch metadata",
-                    url=item,
-                    service=Services.TIKTOK,
-                    is_logged=True,
-                    critical=True
-                )
+                raise BotError(
+                code=ErrorCode.METADATA_ERROR,
+                message="Failed to fetch metadata",
+                url=item,
+                service=Services.TIKTOK,
+                is_logged=True,
+                critical=True
+            )
             metadata = fetched_metadata
         else:
             metadata = item
@@ -51,45 +53,57 @@ class TiktokService(BaseService):
         elif metadata.media_type == "gallery":
             return await self._process_photos(metadata)
         else:
-             raise BotError(
-                code=ErrorCode.INVALID_URL,
-                message="Unsupported media type",
-                url=metadata.url,
-                service=Services.TIKTOK,
-                is_logged=True,
-                critical=True
-            )
+            raise BotError(
+            code=ErrorCode.INVALID_URL,
+            message="Unsupported media type",
+            url=metadata.url,
+            service=Services.TIKTOK,
+            is_logged=True,
+            critical=True
+        )
 
     async def get_info(self, url: str) -> Optional[MediaMetadata]:
         logger.info(f"Getting info for: {url}")
+        if not self.arq:
+            raise BotError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message="ARQ pool is required",
+                critical=True,
+                is_logged=True
+            )
         resolved_url = await self._resolve_url(url)
+        parsed = urlparse(resolved_url)
+        resolved_url = urlunparse(parsed._replace(query=""))
         logger.debug(f"Resolved URL: {resolved_url}")
 
         # 1. Fetch data from both sources
         tikwm_info = await get_tikwm_info(resolved_url)
         tikwm_data = tikwm_info.get("data", {}) if tikwm_info and tikwm_info.get("msg") == "success" else {}
 
-        gallery_data = await get_gallery_dl_info(resolved_url)
+        job = await self.arq.enqueue_job(
+            "universal_gallery_dl",
+            url=resolved_url,
+            extract_only=True,
+            _queue_name='heavy'
+        )
+        result = await job.result()
+
+        gallery_data = result.get("items", None)[0]
         if not gallery_data:
-             logger.warning(f"Gallery-dl failed for {resolved_url}")
-             # We could fallback to tikwm only, but user requested gallery-dl for metadata.
-             # We will try to proceed with what we have if tikwm is present
-             pass
+            logger.warning(f"Gallery-dl failed for {resolved_url}")
+            pass
 
         # 2. Extract General Metadata (Priority: Gallery-DL)
-        # Author
         author_data = gallery_data.get("author", {}) if gallery_data else tikwm_data.get("author", {})
         author_name = author_data.get("nickname") or author_data.get("uniqueId") or author_data.get("unique_id") or "Unknown"
 
-        # Description
         description = ""
         if gallery_data:
-             description = gallery_data.get("desc") or gallery_data.get("description") or ""
+            description = gallery_data.get("desc") or gallery_data.get("description") or ""
         if not description:
-             description = tikwm_data.get("title") or ""
+            description = tikwm_data.get("title") or ""
         escaped_description = escape_html(description)
 
-        # Music Info
         music_title = "Unknown Title"
         music_author = "Unknown Artist"
         music_cover_url = None
@@ -104,52 +118,43 @@ class TiktokService(BaseService):
 
         # Fallback music info from tikwm if missing
         if music_title == "Unknown Title" and tikwm_data:
-             music_info = tikwm_data.get("music_info", {})
-             music_title = music_info.get("title") or music_title
-             music_author = music_info.get("author") or music_author
-             if not music_cover_url:
-                 music_cover_url = music_info.get("cover")
-             if not music_play_url:
-                 music_play_url = music_info.get("play") # TikWM often has good music links
+            music_info = tikwm_data.get("music_info", {})
+            music_title = music_info.get("title") or music_title
+            music_author = music_info.get("author") or music_author
+            if not music_cover_url:
+                music_cover_url = music_info.get("cover")
+            if not music_play_url:
+                music_play_url = music_info.get("play")
 
         # 3. Determine Media Type & Content Sources
-        # Check for images in gallery_dl
-        # logic: gallery_dl usually puts images in 'imagePost' -> 'images' or just 'images'
         is_gallery = False
         image_urls = []
 
         if gallery_data and ("imagePost" in gallery_data or "images" in gallery_data):
-             # It likely is a gallery, but let's check content
-             img_post = gallery_data.get("imagePost", {})
-             imgs = img_post.get("images", []) if img_post else gallery_data.get("images", [])
+            img_post = gallery_data.get("imagePost", {})
+            imgs = img_post.get("images", []) if img_post else gallery_data.get("images", [])
 
-             if imgs:
-                  is_gallery = True
-                  # Extract URLs
-                  for img in imgs:
-                      if isinstance(img, dict) and "imageURL" in img:
-                           url_list = img["imageURL"].get("urlList", [])
-                           if url_list:
-                               image_urls.append(url_list[-1]) # Best quality
+            if imgs:
+                is_gallery = True
+                for img in imgs:
+                    if isinstance(img, dict) and "imageURL" in img:
+                        url_list = img["imageURL"].get("urlList", [])
+                        if url_list:
+                            image_urls.append(url_list[-1])
 
-        # Fallback check tikwm for images if gallery detection failed or to verify
         if not is_gallery and tikwm_data.get("images"):
-             is_gallery = True
-             image_urls = tikwm_data.get("images") # TikWM returns simple list of strings
+            is_gallery = True
+            image_urls = tikwm_data.get("images")
 
         media_type = "gallery" if is_gallery else "video"
 
-        # 4. Content Specifics
         video_url = None
         if media_type == "video":
-             # Video: Use TikWM
-             video_url = tikwm_data.get("play") or tikwm_data.get("wmplay") or tikwm_data.get("hdplay")
-             # Fallback to gallery-dl if tikwm empty
-             if not video_url and gallery_data:
-                 video_info = gallery_data.get("video", {})
-                 video_url = video_info.get("playAddr") or video_info.get("downloadAddr")
+            video_url = tikwm_data.get("play") or tikwm_data.get("wmplay") or tikwm_data.get("hdplay")
+            if not video_url and gallery_data:
+                video_info = gallery_data.get("video", {})
+                video_url = video_info.get("playAddr") or video_info.get("downloadAddr")
 
-        # Construct MediaMetadata
         metadata = MediaMetadata(
             type=MetadataType.METADATA,
             url=resolved_url,
@@ -164,7 +169,7 @@ class TiktokService(BaseService):
                 "music_author": music_author,
                 "music_cover_url": music_cover_url,
                 "music_url": music_play_url,
-                "tikwm_data": tikwm_data, # Keep just in case
+                "tikwm_data": tikwm_data,
                 "gallery_data": gallery_data
             }
         )
@@ -175,10 +180,10 @@ class TiktokService(BaseService):
         Follows redirects to get the full URL and cleans it.
         """
         try:
-            async with httpx.AsyncClient(follow_redirects=True) as client:
-                response = await client.head(url)
+            async with AsyncSession(impersonate="chrome136") as session:
+                response = await session.head(url, allow_redirects=True)
                 if response.status_code >= 400:
-                    response = await client.get(url)
+                    response = await session.get(url, allow_redirects=True)
 
                 final_url = str(response.url)
 
@@ -189,10 +194,17 @@ class TiktokService(BaseService):
 
     async def _process_video(self, metadata: MediaMetadata) -> List[MediaContent]:
         logger.info(f"Processing as Video: {metadata.url}")
+        if not self.arq:
+            raise BotError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message="ARQ pool is required",
+                critical=True,
+                is_logged=True
+            )
 
         download_url = metadata.extra.get("video_url")
         if not download_url:
-             raise BotError(
+            raise BotError(
                 code=ErrorCode.DOWNLOAD_FAILED,
                 message="No video URL found",
                 url=metadata.url,
@@ -207,11 +219,11 @@ class TiktokService(BaseService):
         # Download
         download_url = await self._resolve_url(f"https://www.tikwm.com{download_url}")
 
-        video_path = await download_file(download_url, filepath)
-
+        job = await self.arq.enqueue_job("universal_download", download_url, filepath)
+        video_path = await job.result()
 
         if not video_path:
-             raise BotError(
+            raise BotError(
                 code=ErrorCode.DOWNLOAD_FAILED,
                 message="Failed to download video file",
                 url=metadata.url,
@@ -234,7 +246,13 @@ class TiktokService(BaseService):
 
     async def _process_photos(self, metadata: MediaMetadata) -> List[MediaContent]:
         logger.info(f"Processing as Photos: {metadata.url}")
-
+        if not self.arq:
+            raise BotError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message="ARQ pool is required",
+                critical=True,
+                is_logged=True
+            )
         image_urls = metadata.extra.get("image_urls", [])
 
         if not image_urls:
@@ -252,7 +270,7 @@ class TiktokService(BaseService):
         for idx, img_url in enumerate(image_urls):
             filename = f"{base_filename}_{idx}.jpg"
             filepath = os.path.join(self.output_path, sanitize_filename(filename))
-            image_tasks.append(download_file(img_url, filepath))
+            image_tasks.append(await self.arq.enqueue_job('universal_download', url=img_url, destination=filepath, _queue_name='light'))
 
         # Music download
         music_url = metadata.extra.get("music_url")
@@ -262,12 +280,12 @@ class TiktokService(BaseService):
         if music_url:
             music_filename = f"{base_filename}_music.mp3"
             music_filepath = os.path.join(self.output_path, sanitize_filename(music_filename))
-            music_task = download_file(music_url, music_filepath)
+            music_task = await self.arq.enqueue_job('universal_download', url=music_url, destination=music_filepath, _queue_name='light')
 
             music_cover_url = metadata.extra.get("music_cover_url")
             if music_cover_url:
                 music_cover_path = os.path.join(self.output_path, sanitize_filename(f"{base_filename}_music_cover.jpg"))
-                music_cover_task = download_file(music_cover_url, music_cover_path)
+                music_cover_task = await self.arq.enqueue_job('universal_download', url=music_cover_url, destination=music_cover_path, _queue_name='light')
 
         # Run downloads
         tasks = list(image_tasks)
@@ -276,7 +294,7 @@ class TiktokService(BaseService):
         if music_cover_task:
             tasks.append(music_cover_task)
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(*[job.result() for job in tasks], return_exceptions=True)
 
         media_contents = []
         num_images = len(image_tasks)
@@ -314,12 +332,15 @@ class TiktokService(BaseService):
                 music_title = metadata.extra.get("music_title", "Unknown Title")
                 music_author = metadata.extra.get("music_author", "Unknown Artist")
 
-                await async_update_metadata(
+                job = await self.arq.enqueue_job(
+                    "universal_metadata_update",
                     str(music_res),
                     title=music_title,
                     artist=music_author,
-                    cover_file=str(final_cover_file) if final_cover_file else None
+                    cover_file=str(final_cover_file) if final_cover_file else None,
+                    _queue_name='heavy'
                 )
+                await job.result()
 
                 media_contents.append(
                     MediaContent(

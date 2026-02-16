@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
-from aiogram import types
+from aiogram import Bot, types
 from aiogram.utils.media_group import MediaGroupBuilder
 from aiogram.exceptions import TelegramEntityTooLarge
 
@@ -44,7 +44,7 @@ class MediaSender:
              raise BotError(code=ErrorCode.INTERNAL_ERROR, message="Failed to load settings")
         return settings
 
-    async def send(self, message: types.Message, content: List[MediaContent], user_id: Optional[int] = None) -> None:
+    async def send(self, message: types.Message, content: List[MediaContent], user_id: Optional[int] = None, skip_reaction: bool = False) -> None:
         if not message.bot:
             raise BotError(code=ErrorCode.INTERNAL_ERROR, message="Bot instance not available", is_logged=True)
 
@@ -73,7 +73,7 @@ class MediaSender:
 
             logger.info(f"Successfully sent all media to chat {message.chat.id}")
 
-            if settings.send_reactions:
+            if settings.send_reactions and not skip_reaction:
                 try:
                     from aiogram.types import ReactionTypeEmoji
                     emoji = random.choice(REACTION_EMOJIS)
@@ -117,10 +117,16 @@ class MediaSender:
                         is_logged=True
                     )
 
+                if not item.path or item.content and item.filename:
+                    raise BotError(code=ErrorCode.SEND_ERROR, message="Missing file source", is_logged=True)
+
                 if settings.send_raw and item.original_size:
                     media_group.add_document(media=types.FSInputFile(item.path))
                 elif item.type == MediaType.PHOTO:
-                    media_group.add_photo(media=types.FSInputFile(item.path), has_spoiler=item.is_blured)
+                    if item.content and item.filename:
+                        media_group.add_photo(media=types.BufferedInputFile(item.content, item.filename), has_spoiler=item.is_blured)
+                    else:
+                        media_group.add_photo(media=types.FSInputFile(item.path), has_spoiler=item.is_blured)
                 elif item.type == MediaType.VIDEO:
                     media_group.add_video(
                         media=types.FSInputFile(item.path),
