@@ -356,6 +356,140 @@ async def universal_ffmpeg_process(
                 "-y", output_file
             ]
 
+        elif operation == "fix_video":
+            # Check if video has rotation metadata
+            probe_cmd = [
+                "ffprobe", "-v", "quiet",
+                "-print_format", "json",
+                "-show_streams", "-show_format",
+                input_file
+            ]
+            probe_result = subprocess.run(probe_cmd, capture_output=True, text=True)
+            
+            rotation = 0
+            width = 0
+            height = 0
+            duration = 0.0
+            
+            if probe_result.returncode == 0:
+                import json
+                probe_data = json.loads(probe_result.stdout)
+                video_stream = next((s for s in probe_data.get('streams', []) if s.get('codec_type') == 'video'), {})
+                format_info = probe_data.get('format', {})
+                
+                width = video_stream.get('width', 0)
+                height = video_stream.get('height', 0)
+                duration = float(format_info.get('duration', 0.0))
+                
+                if 'tags' in video_stream and 'rotate' in video_stream['tags']:
+                    rotation = int(video_stream['tags']['rotate'])
+                elif 'side_data_list' in video_stream:
+                    for side_data in video_stream['side_data_list']:
+                        if side_data.get('rotation'):
+                            rotation = int(side_data['rotation'])
+                            break
+            
+            # Build ffmpeg command with rotation fix
+            if rotation != 0:
+                # Swap dimensions for 90/270 rotation
+                if abs(rotation) in [90, 270]:
+                    width, height = height, width
+                    
+                transpose_map = {
+                    90: '1',
+                    180: '2,transpose=2',
+                    270: '2',
+                    -90: '2',
+                    -180: '2,transpose=2',
+                    -270: '1',
+                }
+                transpose = transpose_map.get(rotation, '1')
+                cmd = [
+                    "ffmpeg", "-i", input_file,
+                    "-vf", f"transpose={transpose}",
+                    "-c:a", "aac", "-b:a", "128k",
+                    "-movflags", "+faststart",
+                    "-metadata:s:v:0", "rotate=0",
+                    "-y", output_file
+                ]
+            else:
+                cmd = [
+                    "ffmpeg", "-i", input_file, "-c:v",
+                    "copy", "-c:a", "aac", "-b:a", "128k",
+                    "-movflags", "+faststart",
+                    "-y", output_file
+                ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                raise Exception(f"FFmpeg failed: {result.stderr}")
+            
+            # Create thumbnail if requested
+            thumb_path = None
+            if options and options.get('create_thumbnail'):
+                thumb_path = options.get('thumbnail_path')
+                if thumb_path:
+                    thumb_cmd = [
+                        "ffmpeg", "-i", output_file,
+                        "-ss", "00:00:01", "-vframes", "1",
+                        "-s", f"{width}x{height}",
+                        "-y", thumb_path
+                    ]
+                    thumb_result = subprocess.run(thumb_cmd, capture_output=True, text=True)
+                    if thumb_result.returncode != 0:
+                        logger.warning(f"Thumbnail creation failed: {thumb_result.stderr}")
+                        thumb_path = None
+            
+            return {
+                'path': output_file,
+                'width': width,
+                'height': height,
+                'duration': duration,
+                'thumbnail': thumb_path
+            }
+
+        elif operation == "get_info":
+            # Get video info using ffprobe
+            cmd = [
+                "ffprobe", "-v", "quiet",
+                "-print_format", "json",
+                "-show_format", "-show_streams",
+                input_file
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                raise Exception(f"ffprobe failed: {result.stderr}")
+            
+            import json
+            data = json.loads(result.stdout)
+            
+            # Extract video stream info
+            video_stream = next((s for s in data.get('streams', []) if s.get('codec_type') == 'video'), {})
+            format_info = data.get('format', {})
+            
+            width = video_stream.get('width', 0)
+            height = video_stream.get('height', 0)
+            
+            # Check rotation metadata
+            rotation = 0
+            if 'tags' in video_stream and 'rotate' in video_stream['tags']:
+                rotation = abs(int(video_stream['tags']['rotate']))
+            elif 'side_data_list' in video_stream:
+                for side_data in video_stream['side_data_list']:
+                    if side_data.get('rotation'):
+                        rotation = abs(int(side_data['rotation']))
+                        break
+            
+            # Swap width and height if rotated 90 or 270 degrees
+            if rotation in [90, 270]:
+                width, height = height, width
+            
+            return {
+                'width': width,
+                'height': height,
+                'duration': float(format_info.get('duration', 0.0))
+            }
+
         else:
             raise ValueError(f"Unknown operation: {operation}")
 

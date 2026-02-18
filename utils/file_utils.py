@@ -4,7 +4,7 @@ import aiofiles.os as aios
 import asyncio
 import logging
 import mimetypes
-from typing import Optional
+from typing import Optional, Tuple, Dict, Any
 
 from mutagen.mp3 import HeaderNotFoundError
 from mutagen.id3 import ID3
@@ -184,3 +184,43 @@ def sync_update_metadata(
 
     except Exception as e:
         logger.error(f"Error updating metadata for {audio_file}: {e}", exc_info=True)
+
+
+async def process_video_for_telegram(arq, video_path: str) -> Tuple[str, str, int, int, float]:
+    """
+    Process video for Telegram: fix encoding, create thumbnail, get metadata.
+
+    Args:
+        arq: ARQ pool object
+        video_path: Path to input video file
+
+    Returns:
+        Tuple of (fixed_video_path, thumbnail_path, width, height, duration)
+    """
+    from pathlib import Path
+
+    video_path = str(video_path)
+    path_obj = Path(video_path)
+    fixed_path = str(path_obj.with_stem(f"{path_obj.stem}_fixed"))
+    thumb_path = str(path_obj.with_suffix('.jpg'))
+
+    # Fix video and create thumbnail in one call
+    fix_job = await arq.enqueue_job(
+        'universal_ffmpeg_process',
+        input_file=video_path,
+        output_file=fixed_path,
+        operation='fix_video',
+        options={'create_thumbnail': True, 'thumbnail_path': thumb_path},
+        _queue_name='heavy'
+    )
+    result = await fix_job.result()
+    
+    width = result.get('width', 0)
+    height = result.get('height', 0)
+    duration = result.get('duration', 0.0)
+
+    # Delete original video
+    if await aios.path.exists(video_path):
+        await aios.remove(video_path)
+
+    return fixed_path, thumb_path, width, height, duration

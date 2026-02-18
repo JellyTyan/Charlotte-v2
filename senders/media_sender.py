@@ -134,7 +134,8 @@ class MediaSender:
                         width=item.width,
                         height=item.height,
                         duration=item.duration,
-                        has_spoiler=item.is_blured
+                        has_spoiler=item.is_blured,
+                        thumbnail=types.FSInputFile(item.cover) if item.cover else None
                     )
                 self._files_to_cleanup.append(item.path)
 
