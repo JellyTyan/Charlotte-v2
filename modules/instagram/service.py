@@ -5,14 +5,13 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import List, Tuple, Optional
-
 import instaloader
 
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
 from modules.base_service import BaseService
-from utils import truncate_string, random_cookie_file
+from utils import truncate_string, random_cookie_file, process_video_for_telegram
 from models.service_list import Services
 
 logger = logging.getLogger(__name__)
@@ -89,16 +88,29 @@ class InstagramService(BaseService):
                     continue
 
                 if res and os.path.exists(str(res)):
+                    thumbnail = None
                     path_obj = Path(res)
                     ext = path_obj.suffix.lower()
-                    m_type = MediaType.VIDEO if ext == '.mp4' else MediaType.PHOTO
-
-                    media_contents.append(MediaContent(
-                        type=m_type,
-                        path=path_obj,
-                        title=truncate_string(caption, 1024),
-                        performer=author
-                    ))
+                    if ext == '.mp4':
+                        fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(self.arq, res)
+                        path_obj = Path(fixed_video)
+                        media_contents.append(MediaContent(
+                            type=MediaType.VIDEO,
+                            path=path_obj,
+                            title=truncate_string(caption, 1024),
+                            performer=author,
+                            cover=Path(thumbnail),
+                            width=width,
+                            height=height,
+                            duration=int(duration)
+                        ))
+                    else:
+                        media_contents.append(MediaContent(
+                            type=MediaType.PHOTO,
+                            path=path_obj,
+                            title=truncate_string(caption, 1024),
+                            performer=author
+                        ))
 
             if not media_contents:
                  raise BotError(

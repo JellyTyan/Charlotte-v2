@@ -1,4 +1,4 @@
-from .file_utils import delete_files, sync_update_metadata, async_update_metadata
+from .file_utils import delete_files, sync_update_metadata, async_update_metadata, process_video_for_telegram
 from .download_utils import download_file
 from .hash_utils import url_hash
 from .url_cache import store_url, get_url
@@ -11,6 +11,7 @@ __all__ = [
     "delete_files",
     "sync_update_metadata",
     "async_update_metadata",
+    "process_video_for_telegram",
     "download_file",
     "url_hash",
     "store_url",
