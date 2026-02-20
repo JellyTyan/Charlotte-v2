@@ -202,7 +202,7 @@ class InstagramService(BaseService):
             )
 
             result = await job.result()
-            path = Path(result['path'])
+            path = Path(result['filepath'])
             info = result['info']
 
             author = info.get("uploader", "Unknown")
