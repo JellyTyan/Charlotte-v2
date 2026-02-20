@@ -13,20 +13,15 @@ def sanitize_filename(filename: str) -> str:
 
 async def get_post_info(url: str):
     """Get post information from URL."""
-    async with AsyncSession(impersonate="chrome136") as session:
-        # Extract post ID from URL
-        match = re.search(r'/comments/([a-z0-9]+)', url)
-        if not match:
-            raise BotError(ErrorCode.INTERNAL_ERROR, message="Invalid URL format", service=Services.REDDIT, url=url, is_logged=True)
-        
-        post_id = match.group(1)
-        
-        # Construct clean API URL using just the post ID
-        api_url = f"https://www.reddit.com/comments/{post_id}.json?limit=1"
+    async with AsyncSession(impersonate="safari18_0") as session:
+        # Remove query params, trailing slash, and any existing .json, then add .json?limit=1
+        clean_url = url.split('?')[0].rstrip('/')
+        if clean_url.endswith('.json'):
+            clean_url = clean_url[:-5]
+        api_url = clean_url + '.json?limit=1'
 
         headers = {
-            "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
-            "Referer": "https://www.reddit.com/",
+            "Accept": "application/json, text/plain, */*",
         }
 
         response = await session.get(api_url, headers=headers)
@@ -38,5 +33,5 @@ async def get_post_info(url: str):
         if not data or not isinstance(data, list) or len(data) == 0:
             logger.error(f"Invalid Reddit response structure: {data}")
             raise BotError(ErrorCode.INTERNAL_ERROR, message="Invalid response", service=Services.REDDIT, url=url, is_logged=True)
-        
+
         return data[0]["data"]["children"][0]["data"]

@@ -11,7 +11,7 @@ from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from modules.base_service import BaseService
-from utils import store_url, url_hash
+from utils import store_url, url_hash, process_video_for_telegram
 from models.service_list import Services
 
 from .models import YoutubeCallback
@@ -230,14 +230,17 @@ class YouTubeService(BaseService):
                     is_logged=True
                 )
 
+            fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(self.arq, filepath)
+
             return [
                 MediaContent(
                     type=MediaType.VIDEO,
-                    path=Path(filepath),
-                    width=clean_info.get("width", None),
-                    height=clean_info.get("height", None),
-                    duration=clean_info.get("duration", None),
+                    path=Path(fixed_video),
+                    width=width,
+                    height=height,
+                    duration=int(duration),
                     title=clean_info.get("title", "video"),
+                    cover=Path(thumbnail)
                 )
             ]
         except BotError as ebot:
