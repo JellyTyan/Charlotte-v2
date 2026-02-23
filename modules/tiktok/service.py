@@ -15,7 +15,7 @@ from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from models.service_list import Services
 from modules.base_service import BaseService
-from utils import truncate_string, escape_html
+from utils import truncate_string, escape_html, process_video_for_telegram
 
 from .utils import get_tikwm_info
 
@@ -222,6 +222,8 @@ class TiktokService(BaseService):
         job = await self.arq.enqueue_job("universal_download", download_url, filepath)
         video_path = await job.result()
 
+        fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(self.arq, video_path)
+
         if not video_path:
             raise BotError(
                 code=ErrorCode.DOWNLOAD_FAILED,
@@ -235,12 +237,13 @@ class TiktokService(BaseService):
         return [
             MediaContent(
                 type=MediaType.VIDEO,
-                path=Path(video_path),
+                path=Path(fixed_video),
                 title=metadata.title,
                 performer=metadata.performer,
-                width=None,
-                height=None,
-                duration=None
+                width=width,
+                height=height,
+                duration=int(duration),
+                cover=Path(thumbnail)
             )
         ]
 
