@@ -218,7 +218,6 @@ class RedditService(BaseService):
                     _queue_name='heavy'
                 )
                 result_data = await job.result()
-                info = result_data.get("info", {})
                 downloaded_path = result_data.get("filepath")
                 fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(self.arq, downloaded_path)
 
