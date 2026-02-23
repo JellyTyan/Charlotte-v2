@@ -217,7 +217,9 @@ class TiktokService(BaseService):
         filepath = os.path.join(self.output_path, sanitize_filename(video_filename))
 
         # Download
-        download_url = await self._resolve_url(f"https://www.tikwm.com{download_url}")
+        if not download_url.startswith("http"):
+            download_url = f"https://www.tikwm.com{download_url}"
+        download_url = await self._resolve_url(download_url)
 
         job = await self.arq.enqueue_job("universal_download", download_url, filepath)
         video_path = await job.result()
