@@ -13,12 +13,14 @@ def sanitize_filename(filename: str) -> str:
 
 async def get_post_info(url: str):
     """Get post information from URL."""
-    async with AsyncSession(impersonate="safari18_0") as session:
+    async with AsyncSession(impersonate="chrome136") as session:
         # Remove query params, trailing slash, and any existing .json, then add .json?limit=1
         clean_url = url.split('?')[0].rstrip('/')
         if clean_url.endswith('.json'):
             clean_url = clean_url[:-5]
         api_url = clean_url + '.json?limit=1'
+
+        response = await session.get("https://www.reddit.com/")
 
         headers = {
             "Accept": "application/json, text/plain, */*",

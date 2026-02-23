@@ -13,7 +13,7 @@ from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType, MediaAttachment
 from modules.base_service import BaseService
-from utils import truncate_string
+from utils import truncate_string, process_video_for_telegram
 from .utils import get_post_info
 
 logger = logging.getLogger(__name__)
@@ -220,14 +220,17 @@ class RedditService(BaseService):
                 result_data = await job.result()
                 info = result_data.get("info", {})
                 downloaded_path = result_data.get("filepath")
+                fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(self.arq, downloaded_path)
 
                 return [MediaContent(
                     type=MediaType.VIDEO,
-                    path=Path(downloaded_path),
+                    path=Path(fixed_video),
                     title=meta.title,
-                    width=info.get("width"),
-                    height=info.get("height"),
-                    is_blured=meta.extra.get('spoiler', False)
+                    width=width,
+                    height=height,
+                    is_blured=meta.extra.get('spoiler', False),
+                    cover=Path(thumbnail),
+                    duration=int(duration)
                 )]
 
             elif meta.media_type == "photo" or meta.media_type == "gif":
