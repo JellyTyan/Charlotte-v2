@@ -20,7 +20,7 @@ from models.metadata import MediaMetadata
 from modules.base_service import BaseService
 
 from .utils import get_pin_info
-from utils import escape_html
+from utils import escape_html, process_video_for_telegram
 
 logger = logging.getLogger(__name__)
 
@@ -127,12 +127,17 @@ class PinterestService(BaseService):
                     downloaded_path = await job.result()
 
                 if downloaded_path and await aios.path.exists(downloaded_path):
+                    fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(self.arq, downloaded_path)
                     logger.debug(f"Video downloaded successfully: {downloaded_path}")
                     result.append(MediaContent(
                         type=MediaType.VIDEO,
-                        path=Path(downloaded_path),
+                        path=Path(fixed_video),
                         title=escape_html(title),
-                        original_size=True
+                        original_size=True,
+                        cover=Path(thumbnail),
+                        width=width,
+                        height=height,
+                        duration=int(duration)
                     ))
                 else:
                     raise BotError(
