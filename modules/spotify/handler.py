@@ -39,7 +39,7 @@ async def spotify_handler(message: Message, config: Config, i18n: TranslatorRunn
                 if media_content:
                     from senders.media_sender import MediaSender
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, user_id)
+                    await send_manager.send(message, media_content, user_id, service="spotify")
             except Exception as e:
                 # Error already logged in download task
                 pass
@@ -71,7 +71,7 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
 
     # Get user settings for lossless mode
     user_settings = await get_user_settings(user_id)
-    lossless_mode = user_settings.lossless_mode if user_settings else False
+    lossless_mode = user_settings.services.spotify.lossless if user_settings else False
 
     media_metadata = await service.get_info(message.text, config=config)
     if not media_metadata:
@@ -152,7 +152,7 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
                     try:
                         track_content = await task
                         if track_content:
-                            await send_manager.send(message, track_content, user_id, skip_reaction=True)
+                            await send_manager.send(message, track_content, user_id, skip_reaction=True, service="spotify")
                             return True
                         return False
                     except Exception as e:

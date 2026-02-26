@@ -27,8 +27,8 @@ btn-auto-translate = { $is_enabled ->
     *[false] ❌ Автоперевод названий
 }
 btn-auto-caption = { $is_enabled ->
-    [true] ✅ Авто-описание
-    *[false] ❌ Авто-описание
+    [true] ✅ Описание
+    *[false] ❌ Описание
 }
 btn-notifications = { $is_enabled ->
     [true] ✅ Уведомления
@@ -75,3 +75,15 @@ settings-not-found = Хм, не могу найти настройки!
 no-permission-service = Тебе нельзя трогать эти настройки!
 error-service-status = Не получилось обновить статус сервиса. :(
 current-status = Текущий статус: { $status }
+
+btn-configure-services = ⚙️ Настройка сервисов
+settings-select-service = Выберите сервис для настройки:
+settings-service-title = ⚙️ **Настройки { $name }**
+btn-lossless = { $is_enabled ->
+    [true] ✅ LOSSLESS
+    *[false] ❌ LOSSLESS
+}
+btn-service-enabled = { $is_enabled ->
+    [true] 🎧 Включен: ✅
+    *[false] 🎧 Включен: ❌
+}

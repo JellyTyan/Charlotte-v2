@@ -27,8 +27,8 @@ btn-auto-translate = { $is_enabled ->
     *[false] ❌ Traducir títulos
 }
 btn-auto-caption = { $is_enabled ->
-    [true] ✅ Auto-descripciones
-    *[false] ❌ Auto-descripciones
+    [true] ✅ Descripciones
+    *[false] ❌ Descripciones
 }
 btn-notifications = { $is_enabled ->
     [true] ✅ Notificaciones
@@ -75,3 +75,15 @@ settings-not-found = ¡Hmm, no encuentro esos ajustes!
 no-permission-service = ¡No puedes tocar estos ajustes!
 error-service-status = No pude actualizar el estado del servicio. :(
 current-status = Estado actual: { $status }
+
+btn-configure-services = ⚙️ Configure Services
+settings-select-service = Select a service to configure:
+settings-service-title = ⚙️ **{ $name } Settings**
+btn-lossless = { $is_enabled ->
+    [true] ✅ LOSSLESS
+    *[false] ❌ LOSSLESS
+}
+btn-service-enabled = { $is_enabled ->
+    [true] 🎧 Enabled: ✅
+    *[false] 🎧 Enabled: ❌
+}

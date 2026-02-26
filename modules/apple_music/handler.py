@@ -36,7 +36,7 @@ async def apple_handler(message:Message, config: Config, i18n: TranslatorRunner)
                 if media_content:
                     from senders.media_sender import MediaSender
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, user_id)
+                    await send_manager.send(message, media_content, user_id, service="apple_music")
             except Exception:
                 pass
         await task_manager.add_send_task(user_id, send_when_ready())
@@ -62,7 +62,7 @@ async def process_apple_url(message: Message, config: Config, i18n: TranslatorRu
 
     # Get user settings for lossless mode
     user_settings = await get_user_settings(user.id)
-    lossless_mode = user_settings.lossless_mode if user_settings else False
+    lossless_mode = user_settings.services.apple_music.lossless if user_settings else False
 
     media_metadata = await service.get_info(message.text, config=config)
     if not media_metadata:
@@ -131,7 +131,7 @@ async def process_apple_url(message: Message, config: Config, i18n: TranslatorRu
                     try:
                         track_content = await task
                         if track_content:
-                            await send_manager.send(message, track_content, user.id, skip_reaction=True)
+                            await send_manager.send(message, track_content, user.id, skip_reaction=True, service="apple_music")
                             return True
                         return False
                     except Exception:

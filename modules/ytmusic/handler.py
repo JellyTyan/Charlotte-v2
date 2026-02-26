@@ -35,7 +35,7 @@ async def ytmusic_handler(message: Message, config: Config, i18n: TranslatorRunn
                 if media_content:
                     from senders.media_sender import MediaSender
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, user_id)
+                    await send_manager.send(message, media_content, user_id, service="youtube_music")
             except Exception:
                 pass
         await task_manager.add_send_task(user_id, send_when_ready())
@@ -132,7 +132,7 @@ async def process_ytmusic_url(message: Message, config: Config, i18n: Translator
                     try:
                         track_content = await task
                         if track_content:
-                            await send_manager.send(message, track_content, user.id, skip_reaction=True)
+                            await send_manager.send(message, track_content, user.id, skip_reaction=True, service="youtube_music")
                             return True
                         return False
                     except Exception:

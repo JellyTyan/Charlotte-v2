@@ -27,8 +27,8 @@ btn-auto-translate = { $is_enabled ->
     *[false] ❌ Překládat názvy
 }
 btn-auto-caption = { $is_enabled ->
-    [true] ✅ Auto-popisky
-    *[false] ❌ Auto-popisky
+    [true] ✅ Popisky
+    *[false] ❌ Popisky
 }
 btn-notifications = { $is_enabled ->
     [true] ✅ Oznámení
@@ -75,3 +75,15 @@ settings-not-found = Hmm, nemůžu ta nastavení najít!
 no-permission-service = Na tato nastavení nesmíš sahat!
 error-service-status = Nepovedlo se aktualizovat stav služby. :(
 current-status = Aktuální stav: { $status }
+
+btn-configure-services = ⚙️ Configure Services
+settings-select-service = Select a service to configure:
+settings-service-title = ⚙️ **{ $name } Settings**
+btn-lossless = { $is_enabled ->
+    [true] ✅ LOSSLESS
+    *[false] ❌ LOSSLESS
+}
+btn-service-enabled = { $is_enabled ->
+    [true] 🎧 Enabled: ✅
+    *[false] 🎧 Enabled: ❌
+}

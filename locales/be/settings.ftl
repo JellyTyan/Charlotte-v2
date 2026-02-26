@@ -27,8 +27,8 @@ btn-auto-translate = { $is_enabled ->
     *[false] ❌ Аўтапераклад назваў
 }
 btn-auto-caption = { $is_enabled ->
-    [true] ✅ Аўта-апісанне
-    *[false] ❌ Аўта-апісанне
+    [true] ✅ Апісанне
+    *[false] ❌ Апісанне
 }
 btn-notifications = { $is_enabled ->
     [true] ✅ Апавяшчэнні
@@ -75,3 +75,15 @@ settings-not-found = Хм, не магу знайсці налады!
 no-permission-service = Табе нельга чапаць гэтыя налады!
 error-service-status = Не атрымалася абнавіць статус сэрвісу. :(
 current-status = Бягучы статус: { $status }
+
+btn-configure-services = ⚙️ Configure Services
+settings-select-service = Select a service to configure:
+settings-service-title = ⚙️ **{ $name } Settings**
+btn-lossless = { $is_enabled ->
+    [true] ✅ LOSSLESS
+    *[false] ❌ LOSSLESS
+}
+btn-service-enabled = { $is_enabled ->
+    [true] 🎧 Enabled: ✅
+    *[false] 🎧 Enabled: ❌
+}
