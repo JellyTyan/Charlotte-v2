@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 @dp.message(CommandStart())
 async def start_command(message: Message, state: FSMContext, i18n: TranslatorRunner):
+    if not message.from_user:
+        return
     if message.chat.type == "private":
         await create_user(user_id=message.from_user.id)
     else:

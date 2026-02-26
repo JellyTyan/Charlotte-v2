@@ -4,8 +4,9 @@ import json
 from datetime import date
 
 from sqlalchemy import select, update, func, desc, or_
-from .models import Users, UserSettings, Chats, ChatSettings, Statistics, BotSetting, Payment
+from .models import Users, Chats, Statistics, BotSetting, Payment
 from storage.cache.redis_client import cache_get, cache_set, cache_delete, orm_to_dict, dict_to_orm
+from models.settings import UserSettingsJson, ChatSettingsJson
 
 
 def _get_db():
@@ -22,8 +23,6 @@ async def get_user(user_id: int) -> Users | None:
     Returns:
         Users | None: User object
     """
-    from . import database_manager
-
     cache_key = f"user:{user_id}"
     cached = await cache_get(cache_key)
     if cached:
@@ -52,18 +51,16 @@ async def create_user(user_id: int) -> Users | None:
                 return existing_user
 
             user = Users(user_id=user_id)
-            settings = UserSettings(user_id=user_id)
-            session.add_all([user, settings])
+            session.add_all([user])
             await session.commit()
 
             await cache_set(f"user:{user_id}", orm_to_dict(user), ttl=3600)
-            await cache_set(f"user_settings:{user_id}", orm_to_dict(settings), ttl=3600)
             return user
     except Exception as e:
         logging.error(e)
         return None
 
-async def get_user_settings(user_id: int) -> UserSettings | None:
+async def get_user_settings(user_id: int) -> UserSettingsJson:
     """Get user settings from database
 
     Args:
@@ -75,14 +72,16 @@ async def get_user_settings(user_id: int) -> UserSettings | None:
     cache_key = f"user_settings:{user_id}"
     cached = await cache_get(cache_key)
     if cached:
-        return dict_to_orm(UserSettings, cached)
+        return UserSettingsJson.model_validate(cached)
 
     async with _get_db().async_session() as session:
-        result = await session.execute(select(UserSettings).where(UserSettings.user_id == user_id))
+        result = await session.execute(select(Users.settings_json).where(Users.user_id == user_id))
         settings = result.scalar_one_or_none()
         if settings:
-            await cache_set(cache_key, orm_to_dict(settings), ttl=3600)
-        return settings
+            await cache_set(cache_key, settings, ttl=3600)
+            return UserSettingsJson.model_validate(settings)
+        else:
+            return UserSettingsJson.model_validate({})
 
 async def update_user_premium(user_id: int, is_premium: bool, premium_ends: date):
     async with _get_db().async_session() as session:
@@ -94,23 +93,12 @@ async def update_user_premium(user_id: int, is_premium: bool, premium_ends: date
         await session.commit()
     await cache_delete(f"user:{user_id}")
 
-async def update_user_settings(user_id: int, **kwargs):
-    ALLOWED_KEYS = {"lang", "send_notifications", "send_raw", "send_music_covers",
-                    "send_reactions", "ping_reaction", "auto_caption", "auto_translate_titles",
-                    "title_language", "lossless_mode"
-                    }
-    safe_kwargs = {k: v for k, v in kwargs.items() if k in ALLOWED_KEYS}
-
-    # Don't execute update if no valid fields to update
-    if not safe_kwargs:
-        logging.warning(f"No valid fields to update for user {user_id}. Received kwargs: {kwargs}")
-        return
-
+async def update_user_settings(user_id: int, settings: UserSettingsJson):
     async with _get_db().async_session() as session:
         await session.execute(
-            update(UserSettings)
-            .where(UserSettings.user_id == user_id)
-            .values(safe_kwargs)
+            update(Users)
+            .where(Users.user_id == user_id)
+            .values(settings_json=settings.model_dump(mode="json"))
         )
         await session.commit()
     await cache_delete(f"user_settings:{user_id}")
@@ -146,56 +134,52 @@ async def create_chat(chat_id: int, owner_id: int) -> Chats | None:
     """
     try:
         async with _get_db().async_session() as session:
+            stmt = select(Chats).where(Chats.chat_id == chat_id)
+            result = await session.execute(stmt)
+            existing_chat = result.scalar_one_or_none()
+
+            if existing_chat:
+                return existing_chat
+
             chat = Chats(chat_id=chat_id, owner_id=owner_id)
-            settings = ChatSettings(chat_id=chat_id)
-            session.add_all([chat, settings])
+            session.add_all([chat])
             await session.commit()
 
             await cache_set(f"chat:{chat_id}", orm_to_dict(chat), ttl=3600)
-            await cache_set(f"chat_settings:{chat_id}", orm_to_dict(settings), ttl=3600)
             return chat
     except Exception as e:
         logging.error(e)
         return None
 
-async def get_chat_settings(chat_id: int) -> ChatSettings | None:
+async def get_chat_settings(chat_id: int) -> ChatSettingsJson:
     """Get chat settings from database
 
     Args:
         chat_id (int): Chat ID
 
     Returns:
-        ChatSettings | None: Chat settings object
+        ChatSettingsJson | None: Chat settings object
     """
     cache_key = f"chat_settings:{chat_id}"
     cached = await cache_get(cache_key)
     if cached:
-        return dict_to_orm(ChatSettings, cached)
+        return ChatSettingsJson.model_validate(cached)
 
     async with _get_db().async_session() as session:
-        result = await session.execute(select(ChatSettings).where(ChatSettings.chat_id == chat_id))
+        result = await session.execute(select(Chats.settings_json).where(Chats.chat_id == chat_id))
         settings = result.scalar_one_or_none()
-        if settings:
-            await cache_set(cache_key, orm_to_dict(settings), ttl=3600)
-        return settings
+        if settings is not None:
+            await cache_set(cache_key, settings, ttl=3600)
+            return ChatSettingsJson.model_validate(settings)
+        else:
+            return ChatSettingsJson.model_validate({})
 
-async def update_chat_settings(chat_id: int, **kwargs):
-    ALLOWED_KEYS = {"lang", "send_notifications", "send_raw", "send_music_covers",
-                    "send_reactions", "ping_reaction", "auto_caption", "auto_translate_titles",
-                    "title_language", "preferred_services", "blocked_services", "allow_playlists"
-                    }
-    safe_kwargs = {k: v for k, v in kwargs.items() if k in ALLOWED_KEYS}
-
-    # Don't execute update if no valid fields to update
-    if not safe_kwargs:
-        logging.warning(f"No valid fields to update for chat {chat_id}. Received kwargs: {kwargs}")
-        return
-
+async def update_chat_settings(chat_id: int, settings: ChatSettingsJson):
     async with _get_db().async_session() as session:
         await session.execute(
-            update(ChatSettings)
-            .where(ChatSettings.chat_id == chat_id)
-            .values(safe_kwargs)
+            update(Chats)
+            .where(Chats.chat_id == chat_id)
+            .values(settings_json=settings.model_dump(mode="json"))
         )
         await session.commit()
     await cache_delete(f"chat_settings:{chat_id}")

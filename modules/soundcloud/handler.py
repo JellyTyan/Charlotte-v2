@@ -35,7 +35,7 @@ async def soundcloud_handler(message: Message, config: Config, i18n: TranslatorR
                 if media_content:
                     from senders.media_sender import MediaSender
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, user_id)
+                    await send_manager.send(message, media_content, user_id, service="soundcloud")
             except Exception:
                 pass
         await task_manager.add_send_task(user_id, send_when_ready())
@@ -101,7 +101,7 @@ async def process_soundcloud_url(message: Message, config: Config, i18n: Transla
         album_cover = await job.result()
         if album_cover:
             await message.answer_photo(
-                photo=FSInputFile(albumcover),
+                photo=FSInputFile(album_cover),
                 caption = text,
                 parse_mode=ParseMode.HTML
             )
@@ -128,7 +128,7 @@ async def process_soundcloud_url(message: Message, config: Config, i18n: Transla
                     try:
                         track_content = await task
                         if track_content:
-                            await send_manager.send(message, track_content, user_id, skip_reaction=True)
+                            await send_manager.send(message, track_content, user_id, skip_reaction=True, service="soundcloud")
                             return True
                         return False
                     except Exception:

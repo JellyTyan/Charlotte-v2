@@ -160,7 +160,7 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
                 if media_content:
                     from senders.media_sender import MediaSender
                     send_manager = MediaSender()
-                    await send_manager.send(original_message, media_content, user_id)
+                    await send_manager.send(original_message, media_content, user_id, service="youtube")
             except Exception as e:
                 # Error already logged in download task
                 pass

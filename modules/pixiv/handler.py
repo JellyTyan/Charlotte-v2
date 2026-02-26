@@ -37,7 +37,7 @@ async def pixiv_handler(message: Message):
                 media_content = await download_task
                 if media_content:
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, user_id)
+                    await send_manager.send(message, media_content, user_id, service="pixiv")
             except Exception as e:
                 # Error already logged in download task
                 pass

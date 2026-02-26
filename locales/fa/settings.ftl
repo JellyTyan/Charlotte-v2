@@ -27,8 +27,8 @@ btn-auto-translate = { $is_enabled ->
     *[false] ❌ ترجمه عنوان‌ها
 }
 btn-auto-caption = { $is_enabled ->
-    [true] ✅ توضیحات خودکار
-    *[false] ❌ توضیحات خودکار
+    [true] ✅ توضیحات
+    *[false] ❌ توضیحات
 }
 btn-notifications = { $is_enabled ->
     [true] ✅ تبلیغات
@@ -75,3 +75,15 @@ settings-not-found = همم، تنظیمات رو پیدا نمی‌کنم!
 no-permission-service = اجازه دستکاری این تنظیمات رو نداری!
 error-service-status = نشد وضعیت سرویس رو تغییر بدم. :(
 current-status = وضعیت فعلی: { $status }
+
+btn-configure-services = ⚙️ Configure Services
+settings-select-service = Select a service to configure:
+settings-service-title = ⚙️ **{ $name } Settings**
+btn-lossless = { $is_enabled ->
+    [true] ✅ LOSSLESS
+    *[false] ❌ LOSSLESS
+}
+btn-service-enabled = { $is_enabled ->
+    [true] 🎧 Enabled: ✅
+    *[false] 🎧 Enabled: ❌
+}

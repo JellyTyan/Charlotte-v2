@@ -351,7 +351,7 @@ async def process_user_id(message: types.Message, state: FSMContext):
         try:
             from storage.db.crud import get_user_settings
             settings = await get_user_settings(user_id)
-            lang = settings.lang if settings else "en"
+            lang = settings.profile.language if settings else "en"
 
             hub = dp.workflow_data.get("_translator_hub")
             if hub:

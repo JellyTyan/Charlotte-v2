@@ -40,7 +40,7 @@ async def twitter_handler(message: Message, config: Config, i18n: TranslatorRunn
                 media_content = await download_task
                 if media_content:
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, user_id)
+                    await send_manager.send(message, media_content, user_id, service="twitter")
             except Exception as e:
                 # Error already logged in download task
                 pass
