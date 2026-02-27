@@ -7,7 +7,7 @@ settings-no-allowed-groups = Diese Einstellung gibt's nicht für Gruppen, sorry!
 settings-no-allowed-dm = Diese Einstellung ist nicht für Privatchats, sorry!
 
 btn-language = Sprache
-btn-title-language = Titelsprache
+btn-title-language = Beschreibungssprache
 btn-blocked-services = Blockierte Dienste
 
 btn-send-raw = { $is_enabled ->
@@ -23,8 +23,8 @@ btn-send-reactions = { $is_enabled ->
     *[false] ❌ Lustige Reaktionen
 }
 btn-auto-translate = { $is_enabled ->
-    [true] ✅ Titel übersetzen
-    *[false] ❌ Titel übersetzen
+    [true] ✅ Beschreibungen übersetzen
+    *[false] ❌ Beschreibungen übersetzen
 }
 btn-auto-caption = { $is_enabled ->
     [true] ✅ Captions
@@ -44,7 +44,7 @@ desc-send-music-covers = Ich hänge das Album-Cover an jeden Song an. 🎵
 desc-send-reactions = Ich reagiere mit Emojis, damit du siehst, dass ich arbeite! ⚡
 desc-send-notifications = Deaktivieren, um Medien ohne Benachrichtigungston zu empfangen. 🔕
 desc-auto-caption = Ich überprüfe und füge automatisch Beschreibungen hinzu. 📝
-desc-auto-translate-titles = Ich übersetze Videotitel automatisch in deine Sprache! 🌍
+desc-auto-translate-titles = Ich übersetze Videobeschreibungen automatisch in deine Sprache! 🌍
 desc-allow-playlists = Ich lade ganze Playlists herunter (vorsichtig nutzen!). 📂
 desc-lossless-mode = Ich werde versuchen, Hi-Res-Songs für dich zu finden! Aber ich verspreche nicht, dass ich sie finde oder ob es die richtigen sind. 🎧
 
@@ -54,11 +54,11 @@ setting-status-changed = { $is_enabled ->
 }
 
 pick-language = Wähle deine Sprache! 🌍
-pick-title-language = Wähle die Sprache für Titel!
+pick-title-language = Wähle die Sprache für Beschreibungen!
 language-changed = Klasse! Ich spreche jetzt *{ $language }*!
 language-updated = Sprache aktualisiert!
-title-language-changed = Titel sind jetzt auf *{ $language }*!
-title-language-updated = Titelsprache aktualisiert!
+title-language-changed = Beschreibungen sind jetzt auf *{ $language }*!
+title-language-updated = Beschreibungssprache aktualisiert!
 setting-updated = Erledigt! Aktualisiert.
 invalid-setting = Hoppla, das sieht komisch aus!
 error-updating = Oh nein, konnte das nicht aktualisieren. Noch mal versuchen?
@@ -84,6 +84,6 @@ btn-lossless = { $is_enabled ->
     *[false] ❌ LOSSLESS
 }
 btn-service-enabled = { $is_enabled ->
-    [true] 🎧 Enabled: ✅
-    *[false] 🎧 Enabled: ❌
+    [true] ✅ Enabled
+    *[false] ❌ Enabled
 }

@@ -7,7 +7,7 @@ settings-no-allowed-groups = To ustawienie nie jest dostępne dla grup, sorki!
 settings-no-allowed-dm = To ustawienie nie jest dla czatów prywatnych, sorki!
 
 btn-language = Język
-btn-title-language = Język tytułów
+btn-title-language = Język opisów
 btn-blocked-services = Zablokowane serwisy
 
 btn-send-raw = { $is_enabled ->
@@ -23,8 +23,8 @@ btn-send-reactions = { $is_enabled ->
     *[false] ❌ Zabawne reakcje
 }
 btn-auto-translate = { $is_enabled ->
-    [true] ✅ Tłumacz tytuły
-    *[false] ❌ Tłumacz tytuły
+    [true] ✅ Tłumacz opisy
+    *[false] ❌ Tłumacz opisy
 }
 btn-auto-caption = { $is_enabled ->
     [true] ✅ Opisy
@@ -44,7 +44,7 @@ desc-send-music-covers = Dołączę okładkę albumu do każdego utworu. 🎵
 desc-send-reactions = Będę reagować emotkami, żebyś widział(a) postęp! ⚡
 desc-send-notifications = Wyłącz, jeśli chcesz otrzymywać media bez dźwięku powiadomienia. 🔕
 desc-auto-caption = Sama sprawdzę i dodam opisy do mediów. 📝
-desc-auto-translate-titles = Przetłumaczę tytuły wideo na Twój język! 🌍
+desc-auto-translate-titles = Przetłumaczę opisy wideo na Twój język! 🌍
 desc-allow-playlists = Pobiorę całe playlisty (ostrożnie z tym!). 📂
 desc-lossless-mode = Spróbuję znaleźć dla Ciebie utwory w Hi-Res! Ale nie obiecuję, że znajdę, ani że będą to właściwe wersje. 🎧
 
@@ -54,11 +54,11 @@ setting-status-changed = { $is_enabled ->
 }
 
 pick-language = Wybierz język! 🌍
-pick-title-language = Wybierz język tytułów!
+pick-title-language = Wybierz język opisów!
 language-changed = Ekstra! Teraz mówię po *{ $language }*!
 language-updated = Język zaktualizowany!
-title-language-changed = Tytuły będą teraz po *{ $language }*!
-title-language-updated = Język tytułów zaktualizowany!
+title-language-changed = Opisy będą teraz po *{ $language }*!
+title-language-updated = Język opisów zaktualizowany!
 setting-updated = Gotowe! Zaktualizowano.
 invalid-setting = Ups, to ustawienie wygląda dziwnie!
 error-updating = O nie, nie udało się zaktualizować. Spróbuj ponownie?
@@ -84,6 +84,6 @@ btn-lossless = { $is_enabled ->
     *[false] ❌ LOSSLESS
 }
 btn-service-enabled = { $is_enabled ->
-    [true] 🎧 Enabled: ✅
-    *[false] 🎧 Enabled: ❌
+    [true] ✅ Enabled
+    *[false] ❌ Enabled
 }

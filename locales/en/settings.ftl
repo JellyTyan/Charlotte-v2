@@ -7,7 +7,7 @@ settings-no-allowed-groups = This setting isn't available for groups, sorry!
 settings-no-allowed-dm = This setting isn't for private chats, sorry!
 
 btn-language = Language
-btn-title-language = Title language
+btn-title-language = Caption language
 btn-blocked-services = Blocked services
 
 btn-send-raw = { $is_enabled ->
@@ -23,8 +23,8 @@ btn-send-reactions = { $is_enabled ->
     *[false] ❌ Send Fun Reactions
 }
 btn-auto-translate = { $is_enabled ->
-    [true] ✅ Auto-translate titles
-    *[false] ❌ Auto-translate titles
+    [true] ✅ Auto-translate captions
+    *[false] ❌ Auto-translate captions
 }
 btn-auto-caption = { $is_enabled ->
     [true] ✅ Captions
@@ -44,7 +44,7 @@ desc-send-music-covers = I'll attach the album art to every song I download for 
 desc-send-reactions = I'll react with emojis to show you I'm working! ⚡
 desc-send-notifications = Disable this to receive media without notification sound. 🔕
 desc-auto-caption = I'll automatically verify and add captions to media. 📝
-desc-auto-translate-titles = I'll translate video titles to your language automatically! 🌍
+desc-auto-translate-titles = I'll translate video captions to your language automatically! 🌍
 desc-allow-playlists = I'll handle full playlists for you (use carefully!). 📂
 desc-lossless-mode = I'll try to find Hi-Res songs for you! But I don't promise I'll find it or if it's the right one. 🎧
 
@@ -54,11 +54,11 @@ setting-status-changed = { $is_enabled ->
 }
 
 pick-language = Choose your language! 🌍
-pick-title-language = Choose language for titles!
+pick-title-language = Choose language for captions!
 language-changed = Awesome! I'll speak *{ $language }* now!
 language-updated = Language updated!
-title-language-changed = Titles will be in *{ $language }* now!
-title-language-updated = Title language updated!
+title-language-changed = Captions will be in *{ $language }* now!
+title-language-updated = Caption language updated!
 setting-updated = All set! Updated.
 invalid-setting = Oops, that setting looks weird!
 error-updating = Oh no, couldn't update that. Try again?
@@ -84,6 +84,6 @@ btn-lossless = { $is_enabled ->
     *[false] ❌ LOSSLESS
 }
 btn-service-enabled = { $is_enabled ->
-    [true] 🎧 Enabled: ✅
-    *[false] 🎧 Enabled: ❌
+    [true] ✅ Enabled
+    *[false] ❌ Enabled
 }

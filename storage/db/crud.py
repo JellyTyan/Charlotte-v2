@@ -148,7 +148,7 @@ async def create_chat(chat_id: int, owner_id: int) -> Chats | None:
             await cache_set(f"chat:{chat_id}", orm_to_dict(chat), ttl=3600)
             return chat
     except Exception as e:
-        logging.error(e)
+        logging.error(f"Error creating chat {chat_id}: {e}")
         return None
 
 async def get_chat_settings(chat_id: int) -> ChatSettingsJson:
@@ -175,11 +175,12 @@ async def get_chat_settings(chat_id: int) -> ChatSettingsJson:
             return ChatSettingsJson.model_validate({})
 
 async def update_chat_settings(chat_id: int, settings: ChatSettingsJson):
+    settings_dict = settings.model_dump(mode="json")
     async with _get_db().async_session() as session:
-        await session.execute(
+        result = await session.execute(
             update(Chats)
             .where(Chats.chat_id == chat_id)
-            .values(settings_json=settings.model_dump(mode="json"))
+            .values(settings_json=settings_dict)
         )
         await session.commit()
     await cache_delete(f"chat_settings:{chat_id}")
@@ -194,7 +195,7 @@ async def create_usage_log(user_id: int, service_name: str, event_type: str, sta
 
 
 async def create_payment_log(user_id: int, amount: int, currency: str, payload: str,
-                             telegram_payment_charge_id: str, provider_payment_charge_id: str = None):
+                            telegram_payment_charge_id: str, provider_payment_charge_id: str = None):
     from .models import Payment
     async with _get_db().async_session() as session:
         payment = Payment(

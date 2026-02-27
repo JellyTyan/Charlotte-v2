@@ -15,6 +15,7 @@ from aiogram.enums import ParseMode
 from fluentogram import TranslatorRunner
 
 from models.settings import ChatSettingsJson, UserSettingsJson
+from models.service_list import Services
 from storage.db.crud import update_user_settings, update_chat_settings, get_user_settings, get_chat_settings, create_user, create_chat
 from core.loader import dp
 
@@ -111,14 +112,9 @@ def build_main_keyboard(settings, i18n: TranslatorRunner, is_group: bool = False
     return InlineKeyboardMarkup(inline_keyboard=keyboards)
 
 def build_services_keyboard(i18n: TranslatorRunner) -> InlineKeyboardMarkup:
-    services_list = ["youtube", "tiktok", "instagram", "twitter", "pinterest", "pixiv", "reddit",
-                     "spotify", "deezer", "apple_music", "youtube_music", "soundcloud"]
     buttons = []
-    for s in services_list:
-        name = s.replace("_", " ").title()
-        if name == "Youtube Music": name = "YouTube Music"
-        if name == "Apple Music": name = "Apple Music"
-        buttons.append(InlineKeyboardButton(text=name, callback_data=f"settings_svc_{s}"))
+    for s in Services:
+        buttons.append(InlineKeyboardButton(text=s.value, callback_data=f"settings_svc_{s.value.lower()}"))
 
     rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
     rows.append([InlineKeyboardButton(text=f"{i18n.settings.back()}", callback_data="settings_main")])
@@ -159,11 +155,11 @@ def build_service_settings_keyboard(settings, service: str, i18n: TranslatorRunn
                 callback_data=f"menu_service_{service}_lossless"
             )
         ])
-    if hasattr(settings.services, 'blocked_services'):
+    if isinstance(settings, ChatSettingsJson) and hasattr(settings.profile, 'blocked_services'):
         keyboards.append([
             InlineKeyboardButton(
-                text=i18n.btn.service.enabled(is_enabled='false' if service in settings.blocked_services else 'true'),
-                callback_data=f"menu_service_block_{service}"
+                text=i18n.btn.service.enabled(is_enabled='false' if service in settings.profile.blocked_services else 'true'),
+                callback_data=f"block_svc_{service}"
             )
         ])
 
@@ -211,6 +207,11 @@ async def settings_command(message: Message, i18n: TranslatorRunner) -> None:
         if not is_admin:
             await message.answer(i18n.settings.no.permission())
             return
+        admins = await message.bot.get_chat_administrators(chat.id)
+        owner_id = next((admin.user.id for admin in admins if admin.status == "creator"), message.from_user.id)
+        await create_chat(chat.id, owner_id)
+    else:
+        await create_user(message.from_user.id)
 
     settings, is_group = await get_settings_obj(chat.id, message.from_user.id)
     await message.answer(
@@ -277,12 +278,13 @@ async def menu_profile_setting(callback: CallbackQuery, i18n: TranslatorRunner):
 async def menu_service_setting(callback: CallbackQuery, i18n: TranslatorRunner):
     if callback.message is None or callback.data is None: return
     parts = callback.data.replace("menu_service_", "").split("_")
-    # "menu_service_{service}_{key}"
-    # e.g. "menu_service_apple_music_send_covers" -> parts = ['apple', 'music', 'send', 'covers']
-    # better to find which service it is
-    services_list = ["youtube_music", "apple_music", "youtube", "tiktok", "instagram", "twitter", "pinterest", "pixiv", "reddit",
-                     "spotify", "deezer", "soundcloud"]
-    target_service = next((s for s in services_list if callback.data.startswith(f"menu_service_{s}_")), None)
+
+    service_map = {s.value.lower(): s.value.lower() for s in Services}
+    target_service = None
+    for svc_name in service_map:
+        if callback.data.startswith(f"menu_service_{svc_name}_"):
+            target_service = svc_name
+            break
     if not target_service: return
 
     key = callback.data.replace(f"menu_service_{target_service}_", "")
@@ -311,28 +313,30 @@ async def menu_service_setting(callback: CallbackQuery, i18n: TranslatorRunner):
     await safe_edit_text(callback, text, kb)
     await callback.answer()
 
-@dp.callback_query(lambda c: c.data.startswith("menu_service_block_"))
+@dp.callback_query(lambda c: c.data.startswith("block_svc_"))
 async def menu_service_block(callback: CallbackQuery, i18n: TranslatorRunner):
     if callback.message is None or callback.data is None: return
-    parts = callback.data.replace("menu_service_block_", "").split("_")
-    # "menu_service_{service}_{key}"
-    # e.g. "menu_service_apple_music_send_covers" -> parts = ['apple', 'music', 'send', 'covers']
-    # better to find which service it is
-    services_list = ["youtube_music", "apple_music", "youtube", "tiktok", "instagram", "twitter", "pinterest", "pixiv", "reddit",
-                     "spotify", "deezer", "soundcloud"]
-    target_service = next((s for s in services_list if callback.data.startswith(f"menu_service_block_{s}")), None)
-    if not target_service: return
 
+    service = callback.data.replace("block_svc_", "")
+    
     settings, is_group = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
-    if not isinstance(settings, ChatSettingsJson): return
+    if not isinstance(settings, ChatSettingsJson): 
+        logger.error(f"Not a chat settings: {type(settings)}")
+        return
 
-    settings.services.blocked_services.append(target_service)
+    logger.info(f"Before toggle - blocked_services: {settings.profile.blocked_services}, target: {service}")
+    if service in settings.profile.blocked_services:
+        settings.profile.blocked_services.remove(service)
+    else:
+        settings.profile.blocked_services.add(service)
+    logger.info(f"After toggle - blocked_services: {settings.profile.blocked_services}")
+    
     await save_settings_obj(callback.message.chat.id, callback.from_user.id, settings)
 
-    name = target_service.replace("_", " ").title()
+    name = service.replace("_", " ").title()
     text = i18n.settings.service.title(name=name)
 
-    await safe_edit_text(callback, text, build_service_settings_keyboard(settings, target_service, i18n))
+    await safe_edit_text(callback, text, build_service_settings_keyboard(settings, service, i18n))
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data.startswith("toggle_profile_"))
@@ -343,9 +347,10 @@ async def apply_profile_setting(callback: CallbackQuery, i18n: TranslatorRunner)
     key = data[:last_uscores]
     new_value = data[last_uscores+1:] == "True"
 
-    settings, is_group = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
+    chat_id = callback.message.chat.id
+    settings, is_group = await get_settings_obj(chat_id, callback.from_user.id)
     setattr(settings.profile, key, new_value)
-    await save_settings_obj(callback.message.chat.id, callback.from_user.id, settings)
+    await save_settings_obj(chat_id, callback.from_user.id, settings)
 
     status_text = i18n.get('enabled') if new_value else i18n.get('disabled')
     text = i18n.get('setting-changed', setting=key.replace('_', ' '), status=status_text)
@@ -355,9 +360,13 @@ async def apply_profile_setting(callback: CallbackQuery, i18n: TranslatorRunner)
 @dp.callback_query(lambda c: c.data.startswith("toggle_service_"))
 async def apply_service_setting(callback: CallbackQuery, i18n: TranslatorRunner):
     if callback.message is None or callback.data is None: return
-    services_list = ["youtube_music", "apple_music", "youtube", "tiktok", "instagram", "twitter", "pinterest", "pixiv", "reddit",
-                     "spotify", "deezer", "soundcloud"]
-    target_service = next((s for s in services_list if callback.data.startswith(f"toggle_service_{s}_")), None)
+
+    service_map = {s.value.lower(): s.value.lower() for s in Services}
+    target_service = None
+    for svc_name in service_map:
+        if callback.data.startswith(f"toggle_service_{svc_name}_"):
+            target_service = svc_name
+            break
     if not target_service: return
 
     data = callback.data.replace(f"toggle_service_{target_service}_", "")
@@ -365,72 +374,17 @@ async def apply_service_setting(callback: CallbackQuery, i18n: TranslatorRunner)
     key = data[:last_uscores]
     new_value = data[last_uscores+1:] == "True"
 
-    settings, is_group = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
+    chat_id = callback.message.chat.id
+    settings, is_group = await get_settings_obj(chat_id, callback.from_user.id)
     svc_settings = getattr(settings.services, target_service)
     setattr(svc_settings, key, new_value)
-    await save_settings_obj(callback.message.chat.id, callback.from_user.id, settings)
+    await save_settings_obj(chat_id, callback.from_user.id, settings)
 
     status_text = i18n.get('enabled') if new_value else i18n.get('disabled')
     text = i18n.get('setting-changed', setting=key.replace('_', ' '), status=status_text)
     await safe_edit_text(callback, text, build_back_keyboard(i18n, f"settings_svc_{target_service}"))
     await callback.answer(i18n.get('setting-updated'))
 
-# @dp.callback_query(lambda c: c.data == "settings_blocked_services")
-# async def settings_blocked_services_menu(callback: CallbackQuery, i18n: TranslatorRunner):
-#     if callback.message is None: return
-#     settings, is_group = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
-#     blocked = settings.services.blocked_services if is_group and hasattr(settings.services, "blocked_services") else []
-
-#     services_list = ["youtube", "tiktok", "instagram", "twitter", "pinterest", "pixiv", "reddit",
-#                      "spotify", "deezer", "apple_music", "youtube_music", "soundcloud"]
-#     keyboards = []
-#     for s in services_list:
-#         name = s.replace("_", " ").title()
-#         is_blocked = s in blocked
-#         icon = "🚫" if is_blocked else "✅"
-#         keyboards.append([InlineKeyboardButton(text=f"{icon} {name}", callback_data=f"toggle_block_{s}")])
-
-#     keyboards.append([InlineKeyboardButton(text=f"{i18n.settings.back()}", callback_data="settings_main")])
-#     kb = InlineKeyboardMarkup(inline_keyboard=keyboards)
-#     text = f"**Blocked Services**\n\nBlocked: {len(blocked)}\nTap to toggle."
-#     await safe_edit_text(callback, text, kb)
-#     await callback.answer()
-
-# @dp.callback_query(lambda c: c.data.startswith("toggle_block_"))
-# async def toggle_service_block(callback: CallbackQuery, i18n: TranslatorRunner):
-#     if callback.message is None or callback.data is None: return
-#     s = callback.data.replace("toggle_block_", "")
-#     settings, is_group = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
-
-#     if not is_group:
-#         await callback.answer(i18n.settings.no.allowed.dm())
-#         return
-
-#     if s in settings.services.blocked_services:
-#         settings.services.blocked_services.remove(s)
-#         status_text = i18n.get('unblocked')
-#     else:
-#         settings.services.blocked_services.append(s)
-#         status_text = i18n.get('blocked')
-
-#     await save_settings_obj(callback.message.chat.id, callback.from_user.id, settings)
-#     await callback.answer(i18n.get('service-status-changed', service=s, status=status_text))
-
-#     # re-render menu
-#     blocked = settings.services.blocked_services
-#     services_list = ["youtube", "tiktok", "instagram", "twitter", "pinterest", "pixiv", "reddit",
-#                      "spotify", "deezer", "apple_music", "youtube_music", "soundcloud"]
-#     keyboards = []
-#     for svc in services_list:
-#         name = svc.replace("_", " ").title()
-#         is_blocked = svc in blocked
-#         icon = "🚫" if is_blocked else "✅"
-#         keyboards.append([InlineKeyboardButton(text=f"{icon} {name}", callback_data=f"toggle_block_{svc}")])
-#     keyboards.append([InlineKeyboardButton(text=f"{i18n.settings.back()}", callback_data="settings_main")])
-
-#     kb = InlineKeyboardMarkup(inline_keyboard=keyboards)
-#     text = f"**Blocked Services**\n\nBlocked: {len(blocked)}\nTap to toggle."
-#     await safe_edit_text(callback, text, kb)
 
 @dp.callback_query(lambda c: c.data == "settings_lang")
 async def settings_lang_menu(callback: CallbackQuery, i18n: TranslatorRunner):
@@ -503,10 +457,7 @@ async def settings_title_language_set(callback: CallbackQuery, i18n: TranslatorR
     lang = callback.data.replace("settings_title_lang_set_", "")
 
     settings, is_group = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
-    # The title_language isn't part of ProfileSettings yet...
-    # Let me actually just set it to the model. Oh wait, we need to add it to ProfileSettings model!
 
-    # For now let me assume we will add title_language to ProfileSettings in models.py right after this
     if hasattr(settings.profile, 'title_language'):
         settings.profile.title_language = lang
 
