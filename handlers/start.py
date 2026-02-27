@@ -21,8 +21,7 @@ async def start_command(message: Message, state: FSMContext, i18n: TranslatorRun
         await create_user(user_id=message.from_user.id)
     else:
         admins = await message.chat.get_administrators()
-        for admin in admins:
-            if isinstance(admin, ChatMemberOwner):
-                await create_chat(chat_id=message.chat.id, owner_id=admin.user.id)
+        owner_id = next((admin.user.id for admin in admins if admin.status == "creator"), message.from_user.id)
+        await create_chat(chat_id=message.chat.id, owner_id=owner_id)
 
     await message.answer(i18n.msg.hello(name=message.from_user.first_name),parse_mode=ParseMode.MARKDOWN)
