@@ -1,9 +1,8 @@
 import logging
 import os
-import re
-from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 import pathlib
+import re
+from pathlib import Path
 from typing import List, Optional
 
 from aiofiles import os as aios
@@ -15,21 +14,18 @@ from models.metadata import MediaMetadata, MetadataType
 from modules.base_service import BaseService
 from storage.cache.redis_client import get_or_cache
 from utils import search_music, transliterate, random_cookie_file, get_extra_audio_options
-
 from utils.service_utils import get_audio_options
+from utils.tidal import TidalUtil
 from .utils import (
     fetch_spotify_token,
     get_spotify_author,
     get_set_list
 )
 
-from utils.tidal import TidalUtil
-
 logger = logging.getLogger(__name__)
 
 class SpotifyService(BaseService):
     name = "Spotify"
-    _download_executor = ThreadPoolExecutor(max_workers=10)
 
     def __init__(self, output_path: str = "storage/temp/", arq = None) -> None:
         super().__init__()

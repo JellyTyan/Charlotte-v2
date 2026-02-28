@@ -6,10 +6,15 @@ from aiogram.types import FSInputFile, Message
 from fluentogram import TranslatorRunner
 
 from core.config import Config
-from modules.router import service_router as router
-from tasks.task_manager import task_manager
-from utils.file_utils import delete_files
+from models.errors import BotError, ErrorCode
 from models.service_list import Services
+from modules.router import service_router as router
+from senders.media_sender import MediaSender
+from storage.db.crud import get_user_settings
+from tasks.task_manager import task_manager
+from utils.arq_pool import get_arq_pool
+from utils.file_utils import delete_files
+from utils.statistics_helper import log_download_event
 
 logger = logging.getLogger(__name__)
 
@@ -54,11 +59,6 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
 
     user_id = message.from_user.id if message.from_user else message.chat.id
 
-    from models.errors import BotError, ErrorCode
-    from senders.media_sender import MediaSender
-    from utils.statistics_helper import log_download_event
-    from storage.db.crud import get_user_settings
-    from utils.arq_pool import get_arq_pool
     from .service import SpotifyService
 
     arq = await get_arq_pool('light')
