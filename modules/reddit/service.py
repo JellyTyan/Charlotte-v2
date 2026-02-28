@@ -1,17 +1,15 @@
 import asyncio
+import html
 import logging
 import os
-import html
+import uuid
 from pathlib import Path
 from typing import List, Optional
-import uuid
-from concurrent.futures import ThreadPoolExecutor
-
-from models.service_list import Services
 
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType, MediaAttachment
+from models.service_list import Services
 from modules.base_service import BaseService
 from utils import truncate_string, process_video_for_telegram
 from .utils import get_post_info
@@ -21,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 class RedditService(BaseService):
     name = "Reddit"
-    _download_executor = ThreadPoolExecutor(max_workers=5)
 
     def __init__(self, output_path: str = "storage/temp", arq = None) -> None:
         super().__init__()

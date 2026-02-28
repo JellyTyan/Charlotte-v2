@@ -3,6 +3,8 @@ import logging
 from collections import defaultdict
 from typing import Dict
 
+from aiogram.types import ReactionTypeEmoji
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,7 +38,6 @@ class TaskManager:
         # Initial reaction if enabled (before queue)
         if message:
             try:
-                from aiogram.types import ReactionTypeEmoji
                 await message.react([ReactionTypeEmoji(emoji="👍")])
             except Exception as e:
                 logger.warning(f"Failed to set initial reaction: {e}")

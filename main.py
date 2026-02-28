@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
 load_dotenv()
+import os
 
 from core.config import Config
 from core.logger import setup_logger
@@ -13,7 +14,6 @@ async def main():
     logger.info("🚀 Charlotte-v2 Bot starting...")
 
     logger.info("📁 Creating storage directories...")
-    import os
     os.makedirs("storage/temp", exist_ok=True)
     os.makedirs("logs", exist_ok=True)
     logger.info("✅ Storage directories created")
@@ -44,8 +44,6 @@ async def main():
 
     dp["_translator_hub"] = translator_hub
 
-    dp["_translator_hub"] = translator_hub
-
     dp.update.middleware(TranslatorRunnerMiddleware())
 
     from middlewares.ban_check import BanCheckMiddleware
@@ -56,18 +54,14 @@ async def main():
     dp.message.middleware(RateLimiter(rate=10, per=60))
     logger.info("✅ All middlewares registered")
 
-    import core.error_handler
     logger.info("✅ Error handler registered")
 
-
-    import modules
     from modules.router import service_router
     from modules.payment.handler import payment_router
 
     dp.include_router(payment_router)
     dp.include_router(service_router)
 
-    import handlers
     logger.info("✅ All handlers registered")
 
     logger.info("⏰ Starting scheduled tasks...")

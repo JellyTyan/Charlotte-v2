@@ -1,21 +1,21 @@
 import asyncio
 import json
 import logging
+import mimetypes
 import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Optional, Dict, Any, List
-import mimetypes
+from typing import Optional, Dict, Any
 
 import yt_dlp
 from arq.connections import RedisSettings
+from mutagen.flac import FLAC, Picture
 from mutagen.id3 import ID3
 from mutagen.id3._frames import TIT2, TPE1, TALB, TPE2, TRCK, TCON, APIC
 from mutagen.id3._util import ID3NoHeaderError
-from mutagen.flac import FLAC, Picture
-from mutagen.mp4 import MP4, MP4Cover, MP4Tags
 from mutagen.mp3 import HeaderNotFoundError
+from mutagen.mp4 import MP4, MP4Cover
 
 logger = logging.getLogger(__name__)
 
@@ -365,22 +365,22 @@ async def universal_ffmpeg_process(
                 input_file
             ]
             probe_result = subprocess.run(probe_cmd, capture_output=True, text=True)
-            
+
             rotation = 0
             width = 0
             height = 0
             duration = 0.0
-            
+
             if probe_result.returncode == 0:
                 import json
                 probe_data = json.loads(probe_result.stdout)
                 video_stream = next((s for s in probe_data.get('streams', []) if s.get('codec_type') == 'video'), {})
                 format_info = probe_data.get('format', {})
-                
+
                 width = video_stream.get('width', 0)
                 height = video_stream.get('height', 0)
                 duration = float(format_info.get('duration', 0.0))
-                
+
                 if 'tags' in video_stream and 'rotate' in video_stream['tags']:
                     rotation = int(video_stream['tags']['rotate'])
                 elif 'side_data_list' in video_stream:
@@ -388,13 +388,13 @@ async def universal_ffmpeg_process(
                         if side_data.get('rotation'):
                             rotation = int(side_data['rotation'])
                             break
-            
+
             # Build ffmpeg command with rotation fix
             if rotation != 0:
                 # Swap dimensions for 90/270 rotation
                 if abs(rotation) in [90, 270]:
                     width, height = height, width
-                    
+
                 transpose_map = {
                     90: '1',
                     180: '2,transpose=2',
@@ -419,11 +419,11 @@ async def universal_ffmpeg_process(
                     "-movflags", "+faststart",
                     "-y", output_file
                 ]
-            
+
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode != 0:
                 raise Exception(f"FFmpeg failed: {result.stderr}")
-            
+
             # Create thumbnail if requested
             thumb_path = None
             if options and options.get('create_thumbnail'):
@@ -439,7 +439,7 @@ async def universal_ffmpeg_process(
                     if thumb_result.returncode != 0:
                         logger.warning(f"Thumbnail creation failed: {thumb_result.stderr}")
                         thumb_path = None
-            
+
             return {
                 'path': output_file,
                 'width': width,
@@ -459,17 +459,17 @@ async def universal_ffmpeg_process(
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode != 0:
                 raise Exception(f"ffprobe failed: {result.stderr}")
-            
+
             import json
             data = json.loads(result.stdout)
-            
+
             # Extract video stream info
             video_stream = next((s for s in data.get('streams', []) if s.get('codec_type') == 'video'), {})
             format_info = data.get('format', {})
-            
+
             width = video_stream.get('width', 0)
             height = video_stream.get('height', 0)
-            
+
             # Check rotation metadata
             rotation = 0
             if 'tags' in video_stream and 'rotate' in video_stream['tags']:
@@ -479,11 +479,11 @@ async def universal_ffmpeg_process(
                     if side_data.get('rotation'):
                         rotation = abs(int(side_data['rotation']))
                         break
-            
+
             # Swap width and height if rotated 90 or 270 degrees
             if rotation in [90, 270]:
                 width, height = height, width
-            
+
             return {
                 'width': width,
                 'height': height,
@@ -507,64 +507,6 @@ async def universal_ffmpeg_process(
         return output_file
 
     return await loop.run_in_executor(None, process)
-
-
-# async def universal_thumbnail_generate(
-#     ctx,
-#     input_file: str,
-#     output_file: str,
-#     size: tuple = (320, 180),
-#     timestamp: Optional[str] = None,
-#     quality: int = 85,
-# ) -> str:
-#     """
-#     Generate thumbnail from video or resize image.
-
-#     Args:
-#         ctx: ARQ context
-#         input_file: Input file (video or image)
-#         output_file: Output thumbnail path
-#         size: Thumbnail size (width, height)
-#         timestamp: Timestamp for video (e.g., '00:00:01')
-#         quality: JPEG quality (1-100)
-
-#     Returns:
-#         str: Thumbnail file path
-#     """
-#     logger.info(f"Generating thumbnail: {input_file}")
-
-#     loop = asyncio.get_running_loop()
-#     Path(output_file).parent.mkdir(parents=True, exist_ok=True)
-
-#     def process():
-#         # Check if input is video or image
-#         input_ext = os.path.splitext(input_file)[1].lower()
-#         video_exts = {'.mp4', '.avi', '.mkv', '.mov', '.webm', '.flv'}
-
-#         if input_ext in video_exts:
-#             # Use FFmpeg for video
-#             ts = timestamp or "00:00:01"
-#             size_str = f"{size[0]}x{size[1]}"
-
-#             cmd = [
-#                 "ffmpeg", "-i", input_file,
-#                 "-ss", ts, "-vframes", "1",
-#                 "-s", size_str,
-#                 "-y", output_file
-#             ]
-
-#             result = subprocess.run(cmd, capture_output=True, text=True)
-#             if result.returncode != 0:
-#                 raise Exception(f"FFmpeg thumbnail generation failed: {result.stderr}")
-#         else:
-#             # Use PIL for images
-#             with Image.open(input_file) as img:
-#                 img.thumbnail(size, Image.Resampling.LANCZOS)
-#                 img.save(output_file, quality=quality, optimize=True)
-
-#         return output_file
-
-#     return await loop.run_in_executor(None, process)
 
 
 # ============================================================================
@@ -702,124 +644,6 @@ async def universal_metadata_update(
     return await loop.run_in_executor(None, process)
 
 
-# async def universal_metadata_extract(
-#     ctx,
-#     file_path: str,
-# ) -> Dict[str, Any]:
-#     """
-#     Extract metadata from media files.
-
-#     Args:
-#         ctx: ARQ context
-#         file_path: Media file path
-
-#     Returns:
-#         dict: Extracted metadata
-#     """
-#     logger.info(f"Extracting metadata: {file_path}")
-
-#     loop = asyncio.get_running_loop()
-
-#     def process():
-#         try:
-#             file_ext = os.path.splitext(file_path)[1].lower()
-#             metadata = {}
-
-#             if file_ext == ".mp3":
-#                 audio = MP3(file_path, ID3=ID3)
-#                 easy = EasyID3(file_path)
-
-#                 for key in ["title", "artist", "album", "date", "genre"]:
-#                     metadata[key] = easy.get(key, [""])[0]
-
-#                 metadata["duration"] = audio.info.length
-#                 metadata["bitrate"] = audio.info.bitrate
-#                 metadata["sample_rate"] = audio.info.sample_rate
-
-#             elif file_ext == ".flac":
-#                 audio = FLAC(file_path)
-
-#                 for key in ["title", "artist", "album", "date", "genre"]:
-#                     metadata[key] = audio.get(key, [""])[0]
-
-#                 metadata["duration"] = audio.info.length
-#                 metadata["sample_rate"] = audio.info.sample_rate
-
-#             else:
-#                 logger.warning(f"Unsupported file type: {file_ext}")
-
-#             return metadata
-
-#         except Exception as e:
-#             logger.error(f"Metadata extraction failed: {e}")
-#             return {}
-
-#     return await loop.run_in_executor(None, process)
-
-
-# ============================================================================
-# IMAGE PROCESSING FUNCTIONS
-# ============================================================================
-
-# async def universal_image_process(
-#     ctx,
-#     input_file: str,
-#     output_file: str,
-#     operation: str,
-#     options: Optional[Dict[str, Any]] = None,
-# ) -> str:
-#     """
-#     Universal image processing function.
-
-#     Args:
-#         ctx: ARQ context
-#         input_file: Input image path
-#         output_file: Output image path
-#         operation: Operation (resize, convert, crop, rotate)
-#         options: Operation-specific options
-
-#     Returns:
-#         str: Output file path
-#     """
-#     logger.info(f"Image processing {operation}: {input_file}")
-
-#     loop = asyncio.get_running_loop()
-#     options = options or {}
-#     Path(output_file).parent.mkdir(parents=True, exist_ok=True)
-
-#     def process():
-#         with Image.open(input_file) as img:
-#             if operation == "resize":
-#                 size = options.get("size", (800, 600))
-#                 method = options.get("method", "thumbnail")  # thumbnail or resize
-
-#                 if method == "thumbnail":
-#                     img.thumbnail(size, Image.Resampling.LANCZOS)
-#                 else:
-#                     img = img.resize(size, Image.Resampling.LANCZOS)
-
-#             elif operation == "convert":
-#                 # Format conversion handled by save
-#                 pass
-
-#             elif operation == "crop":
-#                 box = options.get("box")  # (left, top, right, bottom)
-#                 if box:
-#                     img = img.crop(box)
-
-#             elif operation == "rotate":
-#                 angle = options.get("angle", 0)
-#                 expand = options.get("expand", True)
-#                 img = img.rotate(angle, expand=expand)
-
-#             quality = options.get("quality", 85)
-#             img.save(output_file, quality=quality, optimize=True)
-
-#         return output_file
-
-#     return await loop.run_in_executor(None, process)
-
-
 # ============================================================================
 # WORKER SETTINGS
 # ============================================================================
@@ -832,12 +656,8 @@ class WorkerSettings:
         universal_gallery_dl,
         # Media processing
         universal_ffmpeg_process,
-        # universal_thumbnail_generate,
         # Metadata
         universal_metadata_update,
-        # universal_metadata_extract,
-        # Image processing
-        # universal_image_process,
     ]
     redis_settings = RedisSettings(host='redis', port=6379)
     queue_name = 'heavy'
