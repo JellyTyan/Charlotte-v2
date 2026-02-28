@@ -62,7 +62,7 @@ async def process_apple_url(message: Message, config: Config, i18n: TranslatorRu
 
     # Get user settings for lossless mode
     user_settings = await get_user_settings(user.id)
-    lossless_mode = user_settings.services.apple_music.lossless if user_settings else False
+    lossless_mode = user_settings.services.applemusic.lossless if user_settings else False
 
     media_metadata = await service.get_info(message.text, config=config)
     if not media_metadata:
@@ -113,9 +113,9 @@ async def process_apple_url(message: Message, config: Config, i18n: TranslatorRu
             if track_meta.performer is None or track_meta.title is None:
                 logger.warning(f"Skipping track with missing metadata")
                 continue
-            async def download_track(performer=track_meta.performer, title=track_meta.title, cover=track_meta.cover, full_cover=track_meta.full_size_cover):
+            async def download_track(performer=track_meta.performer, title=track_meta.title, cover=track_meta.cover, full_cover=track_meta.full_size_cover, lossless_mode=lossless_mode):
                 try:
-                    return await service.download(performer, title, cover, full_cover)
+                    return await service.download(performer, title, cover, full_cover, lossless_mode=lossless_mode)
                 except Exception as e:
                     logger.error(f"Failed to download track {title}: {e}")
                     raise e
