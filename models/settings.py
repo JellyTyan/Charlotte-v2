@@ -1,5 +1,6 @@
-from pydantic import BaseModel, Field
 from typing import List
+
+from pydantic import BaseModel, Field
 
 
 class ProfileSettings(BaseModel):
@@ -7,6 +8,7 @@ class ProfileSettings(BaseModel):
     title_language: str = "en"
     notifications: bool = True
     reactions: bool = False
+    news_spam: bool = False # todo implement function
 
 
 class MediaSettings(BaseModel):
@@ -47,9 +49,10 @@ class ChatProfileSettings(BaseModel):
     title_language: str = "en"
     notifications: bool = True
     reactions: bool = True
-    allow_playlists: bool = True
-    allow_nsfw: bool = False
+    allow_playlists: bool = True # todo implement
+    allow_nsfw: bool = False # todo implement
     blocked_services: set[str] = Field(default_factory=set)
+    banned_users: set[int] = Field(default_factory=set) # todo implement
 
 
 class ChatServicesSettings(BaseModel):

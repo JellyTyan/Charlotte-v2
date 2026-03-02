@@ -20,11 +20,11 @@ async def instagram_handler(message: Message):
     if not message.text or not message.from_user:
         return
 
-    user_id = message.from_user.id
+    chat_id = message.chat.id
 
     # Start download task
     download_task = await task_manager.add_task(
-        user_id,
+        chat_id,
         download_coro=process_instagram_url(message),
         message=message
     )
@@ -36,12 +36,12 @@ async def instagram_handler(message: Message):
                 media_content = await download_task
                 if media_content:
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, user_id, service="instagram")
+                    await send_manager.send(message, media_content, service="instagram")
             except Exception as e:
                 # Error already logged in download task
                 pass
 
-        await task_manager.add_send_task(user_id, send_when_ready())
+        await task_manager.add_send_task(chat_id, send_when_ready())
 
 
 async def process_instagram_url(message: Message):

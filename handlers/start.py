@@ -3,8 +3,7 @@ import logging
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, ChatMemberOwner
-from aiogram.utils.i18n import gettext as _
+from aiogram.types import Message
 from fluentogram import TranslatorRunner
 from storage.db.crud import create_user, create_chat
 

@@ -23,11 +23,11 @@ async def twitter_handler(message: Message, config: Config, i18n: TranslatorRunn
     if not message.text or not message.from_user:
         return
 
-    user_id = message.from_user.id
+    chat_id = message.chat.id
 
     # Start download task
     download_task = await task_manager.add_task(
-        user_id,
+        chat_id,
         download_coro=process_twitter_url(message, config, i18n),
         message=message,
         url=message.text
@@ -40,12 +40,12 @@ async def twitter_handler(message: Message, config: Config, i18n: TranslatorRunn
                 media_content = await download_task
                 if media_content:
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, user_id, service="twitter")
+                    await send_manager.send(message, media_content, service="twitter")
             except Exception as e:
                 # Error already logged in download task
                 pass
 
-        await task_manager.add_send_task(user_id, send_when_ready())
+        await task_manager.add_send_task(chat_id, send_when_ready())
 
 
 async def process_twitter_url(message: Message, config: Config, i18n: TranslatorRunner):

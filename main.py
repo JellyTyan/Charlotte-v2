@@ -54,14 +54,17 @@ async def main():
     dp.message.middleware(RateLimiter(rate=10, per=60))
     logger.info("✅ All middlewares registered")
 
+    import core.error_handler
     logger.info("✅ Error handler registered")
 
+    import modules
     from modules.router import service_router
     from modules.payment.handler import payment_router
 
     dp.include_router(payment_router)
     dp.include_router(service_router)
 
+    import handlers
     logger.info("✅ All handlers registered")
 
     logger.info("⏰ Starting scheduled tasks...")

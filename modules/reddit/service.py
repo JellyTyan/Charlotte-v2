@@ -201,7 +201,7 @@ class RedditService(BaseService):
                             type=m_type,
                             path=path_obj,
                             title=meta.title,
-                            is_blured=meta.extra.get('spoiler', False)
+                            is_blurred=meta.extra.get('spoiler', False)
                         ))
 
                 return media_contents
@@ -224,7 +224,7 @@ class RedditService(BaseService):
                     title=meta.title,
                     width=width,
                     height=height,
-                    is_blured=meta.extra.get('spoiler', False),
+                    is_blurred=meta.extra.get('spoiler', False),
                     cover=Path(thumbnail),
                     duration=int(duration)
                 )]
@@ -252,7 +252,7 @@ class RedditService(BaseService):
                     title=meta.title,
                     width=meta.width,
                     height=meta.height,
-                    is_blured=meta.extra.get('spoiler', False)
+                    is_blurred=meta.extra.get('spoiler', False)
                 )]
             else:
                 raise BotError(ErrorCode.NOT_FOUND, message="Unsupported media type", service=Services.REDDIT, url=meta.url, is_logged=True)

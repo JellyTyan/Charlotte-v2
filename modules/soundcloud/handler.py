@@ -21,9 +21,9 @@ async def soundcloud_handler(message: Message, config: Config, i18n: TranslatorR
     if not message.text or not message.from_user:
         return
 
-    user_id = message.from_user.id
+    chat_id = message.chat.id
     download_task = await task_manager.add_task(
-        user_id,
+        chat_id,
         download_coro=process_soundcloud_url(message, config, i18n),
         message=message
     )
@@ -35,22 +35,26 @@ async def soundcloud_handler(message: Message, config: Config, i18n: TranslatorR
                 if media_content:
                     from senders.media_sender import MediaSender
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, user_id, service="soundcloud")
+                    await send_manager.send(message, media_content, service="soundcloud")
             except Exception:
                 pass
-        await task_manager.add_send_task(user_id, send_when_ready())
+        await task_manager.add_send_task(chat_id, send_when_ready())
 
 
 async def process_soundcloud_url(message: Message, config: Config, i18n: TranslatorRunner):
     if not message.text:
         return None
 
-    user_id = message.from_user.id if message.from_user else message.chat.id
+    chat_id = message.chat.id
+    user = message.from_user
+    if not chat_id or not user:
+        return None
 
     from models.errors import BotError, ErrorCode
     from senders.media_sender import MediaSender
     from utils.statistics_helper import log_download_event
     from utils.arq_pool import get_arq_pool
+    from storage.db.crud import get_user_settings, get_chat_settings
     from .service import SoundCloudService
 
     arq = await get_arq_pool('light')
@@ -70,6 +74,11 @@ async def process_soundcloud_url(message: Message, config: Config, i18n: Transla
             is_logged=True
         )
 
+    if chat_id < 0:
+        settings = await get_chat_settings(chat_id)
+    else:
+        settings = await get_user_settings(chat_id)
+
     if media_metadata.media_type == "track":
         if not media_metadata.performer or not media_metadata.title:
             raise BotError(
@@ -84,10 +93,15 @@ async def process_soundcloud_url(message: Message, config: Config, i18n: Transla
             media_metadata
         )
 
-        await log_download_event(user_id, Services.SOUNDCLOUD, 'success')
+        await log_download_event(user.id, Services.SOUNDCLOUD, 'success')
         return track
 
     elif media_metadata.media_type == "album" or media_metadata.media_type == "playlist":
+        if chat_id < 0 and settings.profile.allow_playlists == False:
+            raise BotError(
+                code=ErrorCode.NOT_ALLOWED,
+                message="Playlists are not allowed in this chat",
+            )
         text = f"{media_metadata.title} by <a href=\"{media_metadata.performer_url}\">{media_metadata.performer}</a>\n"
         if media_metadata.media_type == "playlist" and media_metadata.description:
             text += f"<i>{media_metadata.description}</i>\n"
@@ -118,7 +132,7 @@ async def process_soundcloud_url(message: Message, config: Config, i18n: Transla
                     raise e
 
             track_download_task = await task_manager.add_task(
-                user_id,
+                chat_id,
                 download_coro=download_track(),
                 message=None
             )
@@ -128,13 +142,13 @@ async def process_soundcloud_url(message: Message, config: Config, i18n: Transla
                     try:
                         track_content = await task
                         if track_content:
-                            await send_manager.send(message, track_content, user_id, skip_reaction=True, service="soundcloud")
+                            await send_manager.send(message, track_content, skip_reaction=True, service="soundcloud")
                             return True
                         return False
                     except Exception:
                         return False
 
-                await task_manager.add_send_task(user_id, send_track())
+                await task_manager.add_send_task(chat_id, send_track())
 
-        await log_download_event(user_id, Services.SOUNDCLOUD, 'success')
+        await log_download_event(user.id, Services.SOUNDCLOUD, 'success')
         return None

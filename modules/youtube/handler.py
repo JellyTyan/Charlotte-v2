@@ -25,11 +25,11 @@ async def youtube_handler(message: Message, i18n: TranslatorRunner):
     if not message.text or not message.from_user:
         return
 
-    user_id = message.from_user.id
+    chat_id = message.chat.id
 
     # Start download task (for YouTube this is just getting metadata and showing UI)
     download_task = await task_manager.add_task(
-        user_id,
+        chat_id,
         download_coro=process_youtube_url(message, i18n),
         message=message
     )
@@ -160,7 +160,7 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
                 if media_content:
                     from senders.media_sender import MediaSender
                     send_manager = MediaSender()
-                    await send_manager.send(original_message, media_content, user_id, service="youtube")
+                    await send_manager.send(original_message, media_content, service="youtube")
             except Exception as e:
                 # Error already logged in download task
                 pass

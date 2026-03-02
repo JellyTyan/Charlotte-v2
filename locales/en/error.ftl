@@ -8,3 +8,4 @@ error-metadata = Couldn't fetch the metadata. Spooky! 👻
 error-no-found = Sorry, I looked everywhere but found nothing. 🔍
 error-internal = Oh no, something broke inside me! Try again later? 🧡
 error-generic = ❌ Something went wrong. I'm sorry!
+error-no-allowed = Sorry, this function isn't allowed in this chat.
