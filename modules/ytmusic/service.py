@@ -39,18 +39,47 @@ class YTMusicService(BaseService):
         match_playlist = re.search(r"playlist\?list=([^&]+)", url)
 
         if match_track:
-            result = ytmsc.get_song(videoId=match_track.group(1))
-            return MediaMetadata(
-                type=MetadataType.METADATA,
+            video_id = match_track.group(1)
+            for attempt in range(3):
+                try:
+                    result = ytmsc.get_song(videoId=video_id)
+                    video_details = result.get("videoDetails")
+                    if video_details:
+                        return MediaMetadata(
+                            type=MetadataType.METADATA,
+                            url=url,
+                            title=video_details.get("title", "Unknown"),
+                            performer=video_details.get("author", "Unknown"),
+                            media_type="track",
+                        )
+                except Exception as e:
+                    if attempt == 2:
+                        raise
+                    logger.warning(f"Attempt {attempt + 1} failed for {video_id}: {e}")
+            raise BotError(
+                code=ErrorCode.METADATA_ERROR,
+                message="Failed to retrieve video details after 3 attempts",
                 url=url,
-                title=result["videoDetails"]["title"],
-                performer=result["videoDetails"]["author"],
-                media_type="track",
+                service=Services.YTMUSIC,
+                is_logged=True
             )
 
         elif match_playlist:
             playlist_id = match_playlist.group(1)
-            result = ytmsc.get_playlist(playlistId=playlist_id)
+            for attempt in range(3):
+                try:
+                    result = ytmsc.get_playlist(playlistId=playlist_id)
+                    break
+                except Exception as e:
+                    if attempt == 2:
+                        raise BotError(
+                            code=ErrorCode.PLAYLIST_INFO_ERROR,
+                            message=f"Failed to get playlist after 3 attempts: {e}",
+                            url=url,
+                            service=Services.YTMUSIC,
+                            is_logged=True
+                        )
+                    logger.warning(f"Attempt {attempt + 1} failed for playlist {playlist_id}: {e}")
 
             cover = None
             if result.get("thumbnails"):
