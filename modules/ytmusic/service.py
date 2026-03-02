@@ -59,6 +59,24 @@ class YTMusicService(BaseService):
                         )
                 except Exception as e:
                     if attempt == 2:
+                        logger.warning(f"ytmusicapi failed, using yt-dlp fallback: {e}")
+                        # Fallback to yt-dlp
+                        job = await self.arq.enqueue_job(
+                            "universal_ytdlp_extract",
+                            url=url,
+                            extract_only=True,
+                            cookies_file=random_cookie_file("youtube"),
+                            _queue_name='light'
+                        )
+                        info = await job.result()
+                        if info:
+                            return MediaMetadata(
+                                type=MetadataType.METADATA,
+                                url=url,
+                                title=info.get("title", "Unknown"),
+                                performer=info.get("uploader", "Unknown"),
+                                media_type="track",
+                            )
                         raise
                     logger.warning(f"Attempt {attempt + 1} failed for {video_id}: {e}")
             raise BotError(
