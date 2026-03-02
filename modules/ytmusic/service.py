@@ -34,6 +34,11 @@ class YTMusicService(BaseService):
                 critical=True,
                 is_logged=True
             )
+        
+        # Decode HTML entities in URL
+        import html
+        url = html.unescape(url)
+        
         ytmsc = YTMusic()
         match_track = re.search(r"watch\?v=([^&]+)", url)
         match_playlist = re.search(r"playlist\?list=([^&]+)", url)
