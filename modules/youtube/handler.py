@@ -6,12 +6,15 @@ from aiogram.types import CallbackQuery, FSInputFile, Message
 from fluentogram import TranslatorRunner
 
 from models.errors import BotError, ErrorCode
+from models.service_list import Services
 from modules.router import service_router as router
+from senders.media_sender import MediaSender
+from storage.db.crud import get_user
 from tasks.task_manager import task_manager
 from utils import format_duration, truncate_string
-from utils.file_utils import delete_files
-from models.service_list import Services
 from utils.arq_pool import get_arq_pool
+from utils.file_utils import delete_files
+from utils.statistics_helper import log_download_event
 from .service import YouTubeService
 from .models import YoutubeCallback
 
@@ -25,11 +28,11 @@ async def youtube_handler(message: Message, i18n: TranslatorRunner):
     if not message.text or not message.from_user:
         return
 
-    chat_id = message.chat.id
+    user_id = message.from_user.id
 
     # Start download task (for YouTube this is just getting metadata and showing UI)
     download_task = await task_manager.add_task(
-        chat_id,
+        user_id,
         download_coro=process_youtube_url(message, i18n),
         message=message
     )
@@ -119,7 +122,6 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
     original_message = message.reply_to_message if message.reply_to_message else message
 
     # Premium Logic
-    from storage.db.crud import get_user
     user = await get_user(user_id)
     is_premium = user.is_premium if user else False
 
@@ -158,10 +160,9 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
             try:
                 media_content = await download_task
                 if media_content:
-                    from senders.media_sender import MediaSender
                     send_manager = MediaSender()
                     await send_manager.send(original_message, media_content, service="youtube")
-            except Exception as e:
+            except Exception:
                 # Error already logged in download task
                 pass
 
@@ -170,7 +171,6 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
 
 async def download_youtube_media(message: Message, url: str, format_choice: str, user_id: int, payment_charge_id: str = ""):
     """Download YouTube media and return content"""
-    from utils.statistics_helper import log_download_event
 
     arq = await get_arq_pool('light')
 
@@ -195,4 +195,4 @@ async def download_youtube_media(message: Message, url: str, format_choice: str,
                     await update_payment_status(payment_charge_id, "refunded")
                 except Exception as refund_error:
                     logger.error(f"Failed to refund payment: {refund_error}")
-        raise e
+        raise
