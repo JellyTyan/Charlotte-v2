@@ -35,7 +35,7 @@ async def deezer_handler(message: Message, config: Config, i18n: TranslatorRunne
                 if media_content:
                     from senders.media_sender import MediaSender
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, user_id, service="deezer")
+                    await send_manager.send(message, media_content, service="deezer")
             except Exception:
                 pass
         await task_manager.add_send_task(user_id, send_when_ready())
@@ -44,14 +44,15 @@ async def deezer_handler(message: Message, config: Config, i18n: TranslatorRunne
 async def process_deezer_url(message: Message, config: Config, i18n: TranslatorRunner):
     if not message.text:
         return None
+    chat_id = message.chat.id
     user = message.from_user
-    if not user:
+    if not chat_id or not user:
         return None
 
     from models.errors import BotError, ErrorCode
     from senders.media_sender import MediaSender
     from utils.statistics_helper import log_download_event
-    from storage.db.crud import get_user_settings
+    from storage.db.crud import get_user_settings, get_chat_settings
     from utils.arq_pool import get_arq_pool
 
     from .service import DeezerService
@@ -60,8 +61,11 @@ async def process_deezer_url(message: Message, config: Config, i18n: TranslatorR
     service = DeezerService(arq=arq)
 
     # Get user settings for lossless mode
-    user_settings = await get_user_settings(user.id)
-    lossless_mode = user_settings.services.deezer.lossless if user_settings else False
+    if chat_id < 0:
+        settings = await get_chat_settings(chat_id)
+    else:
+        settings = await get_user_settings(chat_id)
+    lossless_mode = settings.services.deezer.lossless if settings else False
 
     media_metadata = await service.get_info(message.text, config=config)
     if not media_metadata:
@@ -94,6 +98,11 @@ async def process_deezer_url(message: Message, config: Config, i18n: TranslatorR
         return track
 
     elif media_metadata.media_type == "album" or media_metadata.media_type == "playlist":
+        if chat_id < 0 and settings.profile.allow_playlists == False:
+            raise BotError(
+                code=ErrorCode.NOT_ALLOWED,
+                message="Playlists are not allowed in this chat",
+            )
         text = f"{media_metadata.title} by <a href=\"{media_metadata.performer_url}\">{media_metadata.performer}</a>\n"
         if media_metadata.media_type == "playlist":
             text += f"<i>{media_metadata.description}</i>\n"

@@ -1,5 +1,4 @@
 import logging
-from typing import Union, Literal
 from aiogram import Bot
 from aiogram.enums.chat_member_status import ChatMemberStatus
 from aiogram.filters import Command

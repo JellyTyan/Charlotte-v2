@@ -156,7 +156,7 @@ class TwitterService(BaseService):
                             path=Path(filename),
                             title=truncate_string(f"{author} - {title}", 1024),
                             performer=author,
-                            is_blured=sensitive
+                            is_blurred=sensitive
                         ))
 
                     elif media["type"] == "video":
@@ -179,7 +179,7 @@ class TwitterService(BaseService):
                             path=Path(filename),
                             title=truncate_string(f"{author} - {title}", 1024),
                             performer=author,
-                            is_blured=sensitive
+                            is_blurred=sensitive
                         ))
 
                     elif media["type"] == "animated_gif":
@@ -196,7 +196,7 @@ class TwitterService(BaseService):
                             path=Path(filename),
                             title=truncate_string(f"{author} - {title}", 1024),
                             performer=author,
-                            is_blured=sensitive
+                            is_blurred=sensitive
                         ))
 
                 await asyncio.gather(*[job.result() for job in tasks], return_exceptions=True)

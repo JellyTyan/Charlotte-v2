@@ -131,6 +131,8 @@ class TaskManager:
                 error_message = i18n.error.metadata()
             case ErrorCode.NOT_FOUND:
                 error_message = i18n.error.no.found()
+            case ErrorCode.NOT_ALLOWED:
+                error_message = i18n.error.no.allowed()
             case ErrorCode.INTERNAL_ERROR:
                 error_message = i18n.error.internal()
 

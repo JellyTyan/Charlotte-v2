@@ -26,11 +26,11 @@ async def spotify_handler(message: Message, config: Config, i18n: TranslatorRunn
     if not message.text or not message.from_user:
         return
 
-    user_id = message.from_user.id
+    chat_id = message.chat.id
 
     # Start download task
     download_task = await task_manager.add_task(
-        user_id,
+        chat_id,
         download_coro=process_spotify_url(message, config, i18n),
         message=message
     )
@@ -44,12 +44,12 @@ async def spotify_handler(message: Message, config: Config, i18n: TranslatorRunn
                 if media_content:
                     from senders.media_sender import MediaSender
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, user_id, service="spotify")
+                    await send_manager.send(message, media_content, service="spotify")
             except Exception as e:
                 # Error already logged in download task
                 pass
 
-        await task_manager.add_send_task(user_id, send_when_ready())
+        await task_manager.add_send_task(chat_id, send_when_ready())
 
 
 async def process_spotify_url(message: Message, config: Config, i18n: TranslatorRunner):
@@ -57,9 +57,13 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
     if not message.text:
         return None
 
-    user_id = message.from_user.id if message.from_user else message.chat.id
+    chat_id = message.chat.id
+    user = message.from_user
+    if not chat_id or not user:
+        return None
 
     from .service import SpotifyService
+    from storage.db.crud import get_user_settings, get_chat_settings
 
     arq = await get_arq_pool('light')
 
@@ -70,8 +74,11 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
     service = SpotifyService(arq=arq)
 
     # Get user settings for lossless mode
-    user_settings = await get_user_settings(user_id)
-    lossless_mode = user_settings.services.spotify.lossless if user_settings else False
+    if chat_id < 0:
+        settings = await get_chat_settings(chat_id)
+    else:
+        settings = await get_user_settings(chat_id)
+    lossless_mode = settings.services.spotify.lossless if settings else False
 
     media_metadata = await service.get_info(message.text, config=config)
     if not media_metadata:
@@ -101,10 +108,15 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
             lossless_mode=lossless_mode
         )
 
-        await log_download_event(user_id, Services.SPOTIFY, 'success')
+        await log_download_event(user.id, Services.SPOTIFY, 'success')
         return track
 
     elif media_metadata.media_type == "album" or media_metadata.media_type == "playlist":
+        if chat_id < 0 and settings.profile.allow_playlists == False:
+            raise BotError(
+                code=ErrorCode.NOT_ALLOWED,
+                message="Playlists are not allowed in this chat",
+            )
         # Show playlist info
         text = f"{media_metadata.title} by <a href=\"{media_metadata.performer_url}\">{media_metadata.performer}</a>\n"
         if media_metadata.media_type == "playlist":
@@ -141,7 +153,7 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
 
             # Add to download queue
             track_download_task = await task_manager.add_task(
-                user_id,
+                chat_id,
                 download_coro=download_track(),
                 message=None  # No reaction for individual tracks
             )
@@ -152,19 +164,19 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
                     try:
                         track_content = await task
                         if track_content:
-                            await send_manager.send(message, track_content, user_id, skip_reaction=True, service="spotify")
+                            await send_manager.send(message, track_content, skip_reaction=True, service="spotify")
                             return True
                         return False
                     except Exception as e:
                         return False
 
                 # Queue send task
-                send_task = await task_manager.add_send_task(user_id, send_track())
+                send_task = await task_manager.add_send_task(chat_id, send_track())
 
         # Note: we can't track success/failed counts accurately here anymore
         # since tasks are async. This is a limitation of the new architecture.
         # We could use a shared counter with locks, but keep it simple for now.
-        await log_download_event(user_id, Services.SPOTIFY, 'success')
+        await log_download_event(user.id, Services.SPOTIFY, 'success')
 
         # Return None for playlists (no single content to send)
         return None

@@ -21,9 +21,9 @@ async def ytmusic_handler(message: Message, config: Config, i18n: TranslatorRunn
     if not message.text or not message.from_user:
         return
 
-    user_id = message.from_user.id
+    chat_id = message.chat.id
     download_task = await task_manager.add_task(
-        user_id,
+        chat_id,
         download_coro=process_ytmusic_url(message, config, i18n),
         message=message
     )
@@ -35,24 +35,26 @@ async def ytmusic_handler(message: Message, config: Config, i18n: TranslatorRunn
                 if media_content:
                     from senders.media_sender import MediaSender
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, user_id, service="youtube_music")
+                    await send_manager.send(message, media_content, service="youtube_music")
             except Exception:
                 pass
-        await task_manager.add_send_task(user_id, send_when_ready())
+        await task_manager.add_send_task(chat_id, send_when_ready())
 
 
 async def process_ytmusic_url(message: Message, config: Config, i18n: TranslatorRunner):
     if not message.text:
         return None
 
+    chat_id = message.chat.id
     user = message.from_user
-    if not user:
+    if not chat_id or not user:
         return None
 
     from models.errors import BotError, ErrorCode
     from senders.media_sender import MediaSender
     from utils.statistics_helper import log_download_event
     from utils.arq_pool import get_arq_pool
+    from storage.db.crud import get_user_settings, get_chat_settings
 
     from .service import YTMusicService
 
@@ -64,6 +66,10 @@ async def process_ytmusic_url(message: Message, config: Config, i18n: Translator
         await message.bot.send_chat_action(message.chat.id, "choose_sticker")
 
     media_metadata = await service.get_info(message.text, config=config)
+    if chat_id < 0:
+        settings = await get_chat_settings(chat_id)
+    else:
+        settings = await get_user_settings(chat_id)
     if not media_metadata:
         raise BotError(
             code=ErrorCode.METADATA_ERROR,
@@ -90,6 +96,11 @@ async def process_ytmusic_url(message: Message, config: Config, i18n: Translator
         return track
 
     elif media_metadata.media_type == "playlist":
+        if chat_id < 0 and settings.profile.allow_playlists == False:
+            raise BotError(
+                code=ErrorCode.NOT_ALLOWED,
+                message="Playlists are not allowed in this chat",
+            )
         text = f"{media_metadata.title} by {media_metadata.performer}\n"
         if media_metadata.description:
             text += f"<i>{media_metadata.description}</i>\n"
@@ -132,7 +143,7 @@ async def process_ytmusic_url(message: Message, config: Config, i18n: Translator
                     try:
                         track_content = await task
                         if track_content:
-                            await send_manager.send(message, track_content, user.id, skip_reaction=True, service="youtube_music")
+                            await send_manager.send(message, track_content, skip_reaction=True, service="youtube_music")
                             return True
                         return False
                     except Exception:
