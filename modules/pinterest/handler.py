@@ -3,11 +3,13 @@ import logging
 from aiogram import F
 from aiogram.types import Message
 
+from models.service_list import Services
 from modules.router import service_router as router
 from senders.media_sender import MediaSender
 from tasks.task_manager import task_manager
+from utils.arq_pool import get_arq_pool
 from utils.statistics_helper import log_download_event
-from models.service_list import Services
+from .service import PinterestService
 
 logger = logging.getLogger(__name__)
 
@@ -19,11 +21,11 @@ async def pinterest_handler(message: Message):
     if not message.text or not message.from_user:
         return
 
-    chat_id = message.chat.id
+    user_id = message.from_user.id
 
     # Start download task
     download_task = await task_manager.add_task(
-        chat_id,
+        user_id,
         download_coro=process_pinterest_url(message),
         message=message
     )
@@ -36,11 +38,11 @@ async def pinterest_handler(message: Message):
                 if media_content:
                     send_manager = MediaSender()
                     await send_manager.send(message, media_content, service="pinterest")
-            except Exception as e:
+            except Exception:
                 # Error already logged in download task
                 pass
 
-        await task_manager.add_send_task(chat_id, send_when_ready())
+        await task_manager.add_send_task(user_id, send_when_ready())
 
 
 async def process_pinterest_url(message: Message):
@@ -49,9 +51,6 @@ async def process_pinterest_url(message: Message):
         return None
 
     user_id = message.from_user.id if message.from_user else message.chat.id
-
-    from utils.arq_pool import get_arq_pool
-    from .service import PinterestService
 
     # Initialize ARQ pool
     arq = await get_arq_pool('light')
@@ -73,4 +72,4 @@ async def process_pinterest_url(message: Message):
     except Exception as e:
         logger.error(f"Error processing Pinterest URL: {e}")
         # Re-raise to let task manager handle it
-        raise e
+        raise

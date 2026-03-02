@@ -2,16 +2,17 @@ import logging
 
 from aiogram import F
 from aiogram.types import Message
+from fluentogram import TranslatorRunner
 
+from core.config import Config
+from models.service_list import Services
 from modules.router import service_router as router
 from senders.media_sender import MediaSender
+from storage.db.crud import get_user
 from tasks.task_manager import task_manager
+from utils.arq_pool import get_arq_pool
 from utils.statistics_helper import log_download_event
 from .service import TwitterService
-from models.service_list import Services
-from core.config import Config
-from fluentogram import TranslatorRunner
-from utils.arq_pool import get_arq_pool
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +24,11 @@ async def twitter_handler(message: Message, config: Config, i18n: TranslatorRunn
     if not message.text or not message.from_user:
         return
 
-    chat_id = message.chat.id
+    user_id = message.from_user.id
 
     # Start download task
     download_task = await task_manager.add_task(
-        chat_id,
+        user_id,
         download_coro=process_twitter_url(message, config, i18n),
         message=message,
         url=message.text
@@ -41,11 +42,11 @@ async def twitter_handler(message: Message, config: Config, i18n: TranslatorRunn
                 if media_content:
                     send_manager = MediaSender()
                     await send_manager.send(message, media_content, service="twitter")
-            except Exception as e:
+            except Exception:
                 # Error already logged in download task
                 pass
 
-        await task_manager.add_send_task(chat_id, send_when_ready())
+        await task_manager.add_send_task(user_id, send_when_ready())
 
 
 async def process_twitter_url(message: Message, config: Config, i18n: TranslatorRunner):
@@ -58,9 +59,12 @@ async def process_twitter_url(message: Message, config: Config, i18n: Translator
 
     arq = await get_arq_pool('light')
 
+    # Send chat action for user feedback
+    if message.bot:
+        await message.bot.send_chat_action(message.chat.id, "choose_sticker")
+
     try:
         # Download content
-        from storage.db.crud import get_user
         user = await get_user(user_id)
         is_premium = user.is_premium if user else False
 
@@ -76,4 +80,4 @@ async def process_twitter_url(message: Message, config: Config, i18n: Translator
 
     except Exception as e:
         # Error handling is usually done by task wrapper or specific exception catches if needed
-        raise e
+        raise
