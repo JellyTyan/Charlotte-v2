@@ -42,6 +42,8 @@ LANGUAGES = [
     { "code": "hi", "name": "हिन्दी", "flag": "🇮🇳" }
 ]
 
+LANGUAGES_MAP = {lang["code"]: lang for lang in LANGUAGES}
+
 DESC_MAPPING = {
     "notifications": "send_notifications",
     "reactions": "send_reactions",
@@ -53,6 +55,12 @@ DESC_MAPPING = {
     "send_covers": "send_music_covers",
     "lossless": "lossless_mode"
 }
+
+def get_language_flag(code: str) -> str:
+    lang = LANGUAGES_MAP.get(code)
+    if lang:
+        return lang['flag']
+    return code.upper()
 
 def get_desc(key: str, i18n: TranslatorRunner) -> str:
     mapped = str(DESC_MAPPING.get(key, key))
@@ -82,10 +90,12 @@ async def save_settings_obj(chat_id: int, user_id: int, settings):
 
 
 def build_main_keyboard(settings, i18n: TranslatorRunner, is_group: bool = False) -> InlineKeyboardMarkup:
+    current_flag = get_language_flag(settings.profile.language)
+    title_flag = get_language_flag(settings.profile.title_language)
     keyboards = [
         [
-            InlineKeyboardButton(text=f"{i18n.btn.language()} →", callback_data="settings_lang"),
-            InlineKeyboardButton(text=f"{i18n.btn.title.language()} →", callback_data="settings_title_language"),
+            InlineKeyboardButton(text=f"{i18n.btn.language()} {current_flag} →", callback_data="settings_lang"),
+            InlineKeyboardButton(text=f"{i18n.btn.title.language()} {title_flag} →", callback_data="settings_title_language"),
         ],
         [
             InlineKeyboardButton(
@@ -322,9 +332,9 @@ async def menu_service_block(callback: CallbackQuery, i18n: TranslatorRunner):
     if callback.message is None or callback.data is None: return
 
     service = callback.data.replace("block_svc_", "")
-    
+
     settings, is_group = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
-    if not isinstance(settings, ChatSettingsJson): 
+    if not isinstance(settings, ChatSettingsJson):
         logger.error(f"Not a chat settings: {type(settings)}")
         return
 
@@ -334,7 +344,7 @@ async def menu_service_block(callback: CallbackQuery, i18n: TranslatorRunner):
     else:
         settings.profile.blocked_services.add(service)
     logger.info(f"After toggle - blocked_services: {settings.profile.blocked_services}")
-    
+
     await save_settings_obj(callback.message.chat.id, callback.from_user.id, settings)
 
     name = service.replace("_", " ").title()
@@ -393,30 +403,26 @@ async def apply_service_setting(callback: CallbackQuery, i18n: TranslatorRunner)
 @dp.callback_query(lambda c: c.data == "settings_lang")
 async def settings_lang_menu(callback: CallbackQuery, i18n: TranslatorRunner):
     if callback.message is None: return
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="English 🇺🇲", callback_data="settings_lang_set_en"),
-            InlineKeyboardButton(text="Русский 🇷🇺", callback_data="settings_lang_set_ru"),
-        ],
-        [
-            InlineKeyboardButton(text="Українська 🇺🇦", callback_data="settings_lang_set_uk"),
-            InlineKeyboardButton(text="Беларуская 🇧🇾", callback_data="settings_lang_set_be"),
-        ],
-        [
-            InlineKeyboardButton(text="Čeština 🇨🇿", callback_data="settings_lang_set_cs"),
-            InlineKeyboardButton(text="Polski 🇵🇱", callback_data="settings_lang_set_pl"),
-        ],
-        [
-            InlineKeyboardButton(text="Deutsch 🇩🇪", callback_data="settings_lang_set_de"),
-            InlineKeyboardButton(text="Español 🇪🇸", callback_data="settings_lang_set_es"),
-        ],
-        [
-            InlineKeyboardButton(text="فارسی 🇮🇷", callback_data="settings_lang_set_fa"),
-        ],
-        [
-            InlineKeyboardButton(text=f"{i18n.get('back')}", callback_data="settings_main"),
-        ]
-    ])
+    settings, _ = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
+    current_lang = settings.profile.language
+
+    lang_buttons = [
+        ("en", "English 🇺🇲"), ("ru", "Русский 🇷🇺"),
+        ("uk", "Українська 🇺🇦"), ("be", "Беларуская 🇧🇾"),
+        ("cs", "Čeština 🇨🇿"), ("pl", "Polski 🇵🇱"),
+        ("de", "Deutsch 🇩🇪"), ("es", "Español 🇪🇸"),
+        ("fa", "فارسی 🇮🇷"),
+    ]
+
+    buttons = []
+    for code, label in lang_buttons:
+        text = f"✅ {label}" if code == current_lang else label
+        buttons.append(InlineKeyboardButton(text=text, callback_data=f"settings_lang_set_{code}"))
+
+    rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
+    rows.append([InlineKeyboardButton(text=f"{i18n.get('back')}", callback_data="settings_main")])
+
+    kb = InlineKeyboardMarkup(inline_keyboard=rows)
     text = i18n.get('pick-language')
     await safe_edit_text(callback, text, kb)
     await callback.answer()
@@ -438,11 +444,16 @@ async def settings_lang_set(callback: CallbackQuery, state: FSMContext, i18n: Tr
 @dp.callback_query(lambda c: c.data == "settings_title_language")
 async def settings_title_language_menu(callback: CallbackQuery, i18n: TranslatorRunner):
     if callback.message is None: return
+    settings, _ = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
+    current_title_lang = settings.profile.title_language
+
     buttons = []
     for lang in LANGUAGES:
+        label = f"{lang['name']} {lang['flag']}"
+        text = f"✅ {label}" if lang['code'] == current_title_lang else label
         buttons.append(
             InlineKeyboardButton(
-                text=f"{lang['name']} {lang['flag']}",
+                text=text,
                 callback_data=f"settings_title_lang_set_{lang['code']}"
             )
         )
