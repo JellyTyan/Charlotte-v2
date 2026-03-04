@@ -9,6 +9,7 @@ from modules.router import service_router as router
 from senders.media_sender import MediaSender
 from tasks.task_manager import task_manager
 from utils.arq_pool import get_arq_pool
+from storage.db.crud import get_user, get_chat_settings
 from utils.statistics_helper import log_download_event
 from .service import RedditService
 
@@ -52,6 +53,11 @@ async def process_reddit_url(message: Message):
         return None
 
     user_id = message.from_user.id if message.from_user else message.chat.id
+    allow_nsfw = True
+
+    if message.chat.id < 0:
+        settings = await get_chat_settings(message.chat.id)
+        allow_nsfw = settings.profile.allow_nsfw
 
     # Get ARQ pool
     arq = await get_arq_pool('light')
@@ -75,7 +81,7 @@ async def process_reddit_url(message: Message):
                 is_logged=True,
             )
 
-        media_content = await service.download(reddit_info)
+        media_content = await service.download(reddit_info, allow_nsfw=allow_nsfw)
 
         # Log success
         await log_download_event(user_id, Services.REDDIT, 'success')

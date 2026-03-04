@@ -14,7 +14,7 @@ SERVICE_PATTERNS = {
     "soundcloud": r"https?://(?:www\.)?soundcloud\.com/",
     "spotify": r"https?://open\.spotify\.com/",
     "applemusic": r"https?://music\.apple\.com/",
-    "deezer": r"https?://(?:www\.)?deezer\.com/",
+    "deezer": r"https?:\/\/(?:www\.|link\.)?deezer\.com/",
     "pinterest": r"https?://(?:www\.)?pinterest\.com/",
     "pixiv": r"https?://(?:www\.)?pixiv\.net/",
     "ytmusic": r"https?://music\.youtube\.com/"

@@ -157,7 +157,7 @@ class RedditService(BaseService):
 
         return None
 
-    async def download(self, meta: MediaMetadata) -> List[MediaContent]:
+    async def download(self, meta: MediaMetadata, allow_nsfw: bool = True) -> List[MediaContent]:
         media_contents = []
         if not self.arq:
             raise BotError(
@@ -166,6 +166,16 @@ class RedditService(BaseService):
                 critical=True,
                 is_logged=True
             )
+        
+        is_nsfw = meta.extra.get('spoiler', False)
+        if is_nsfw and not allow_nsfw:
+            raise BotError(
+                code=ErrorCode.NOT_ALLOWED,
+                message="NSFW content is not allowed",
+                is_logged=False,
+                critical=False
+            )
+        
         try:
             if isinstance(meta, str):
                 raise BotError(ErrorCode.INVALID_URL, message="Invalid metadata format", url=meta, is_logged=True)

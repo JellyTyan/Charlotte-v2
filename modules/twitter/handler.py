@@ -8,7 +8,7 @@ from core.config import Config
 from models.service_list import Services
 from modules.router import service_router as router
 from senders.media_sender import MediaSender
-from storage.db.crud import get_user
+from storage.db.crud import get_user, get_chat_settings
 from tasks.task_manager import task_manager
 from utils.arq_pool import get_arq_pool
 from utils.statistics_helper import log_download_event
@@ -56,6 +56,11 @@ async def process_twitter_url(message: Message, config: Config, i18n: Translator
 
     user_id = message.from_user.id if message.from_user else message.chat.id
     url = message.text.strip()
+    allow_nsfw = True
+
+    if message.chat.id < 0:
+        settings = await get_chat_settings(message.chat.id)
+        allow_nsfw = settings.profile.allow_nsfw
 
     arq = await get_arq_pool('light')
 
@@ -69,9 +74,9 @@ async def process_twitter_url(message: Message, config: Config, i18n: Translator
         is_premium = user.is_premium if user else False
 
         if is_premium:
-            media_content = await TwitterService(arq=arq).download(url, premium=True, config=config)
+            media_content = await TwitterService(arq=arq).download(url, premium=True, config=config, allow_nsfw=allow_nsfw)
         else:
-            media_content = await TwitterService(arq=arq).download(url)
+            media_content = await TwitterService(arq=arq).download(url, allow_nsfw=allow_nsfw)
 
         # Log success
         await log_download_event(user_id, Services.TWITTER, 'success')

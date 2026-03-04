@@ -84,8 +84,8 @@ class MediaSender:
             group_items = content[i:i + 10]
             media_group = MediaGroupBuilder()
 
-            if caption and i == 0 and getattr(service_settings, 'auto_caption', False):
-                if getattr(service_settings, 'auto_translate_titles', False):
+            if caption and i == 0 and getattr(service_settings, 'caption', False):
+                if getattr(service_settings, 'translate_caption', False):
                     title_lang = str(settings.profile.title_language)
                     caption = await translate_text(caption, title_lang)
                 media_group.caption = truncate_string(caption, 1024)
@@ -110,7 +110,7 @@ class MediaSender:
                 if not item.path and not (item.content and item.filename):
                     raise BotError(code=ErrorCode.SEND_ERROR, message="Missing file source", is_logged=True)
 
-                if getattr(service_settings, 'send_raw', False) and item.original_size and item.path:
+                if getattr(service_settings, 'raw', False) and item.original_size and item.path:
                     media_group.add_document(media=types.FSInputFile(item.path))
                 elif item.type == MediaType.PHOTO:
                     if item.content and item.filename:
@@ -131,7 +131,7 @@ class MediaSender:
                     self._files_to_cleanup.append(item.path)
 
             if message.bot:
-                should_send_as_doc = getattr(service_settings, 'send_raw', False) and any(item.original_size for item in group_items)
+                should_send_as_doc = getattr(service_settings, 'raw', False) and any(item.original_size for item in group_items)
                 await message.bot.send_chat_action(message.chat.id, "upload_document" if should_send_as_doc else "upload_video")
 
             try:

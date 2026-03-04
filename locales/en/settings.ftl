@@ -38,6 +38,10 @@ btn-allow-playlists = { $is_enabled ->
     [true] ✅ Allow Playlists
     *[false] ❌ Allow Playlists
 }
+btn-allow-nsfw = { $is_enabled ->
+    [true] ✅ Allow NSFW
+    *[false] ❌ Allow NSFW
+}
 
 desc-send-raw = I'll send art as uncompressed files so you get the absolute best quality! 🎨
 desc-send-music-covers = I'll attach the album art to every song I download for you. 🎵
@@ -46,6 +50,7 @@ desc-send-notifications = Disable this to receive media without notification sou
 desc-auto-caption = I'll automatically verify and add captions to media. 📝
 desc-auto-translate-titles = I'll translate video captions to your language automatically! 🌍
 desc-allow-playlists = I'll handle full playlists for you (use carefully!). 📂
+desc-allow-nsfw = Allow NSFW content in this chat. 🔞
 desc-lossless-mode = I'll try to find Hi-Res songs for you! But I don't promise I'll find it or if it's the right one. 🎧
 
 setting-status-changed = { $is_enabled ->
