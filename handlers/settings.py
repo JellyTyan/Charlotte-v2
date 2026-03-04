@@ -46,6 +46,7 @@ DESC_MAPPING = {
     "notifications": "send_notifications",
     "reactions": "send_reactions",
     "allow_playlists": "allow_playlists",
+    "allow_nsfw": "allow_nsfw",
     "raw": "send_raw",
     "caption": "auto_caption",
     "translate_caption": "auto_translate_titles",
@@ -106,6 +107,10 @@ def build_main_keyboard(settings, i18n: TranslatorRunner, is_group: bool = False
             InlineKeyboardButton(
                 text=i18n.btn.allow.playlists(is_enabled='true' if settings.profile.allow_playlists else 'false'),
                 callback_data="menu_profile_allow_playlists"
+            ),
+            InlineKeyboardButton(
+                text=i18n.btn.allow.nsfw(is_enabled='true' if settings.profile.allow_nsfw else 'false'),
+                callback_data="menu_profile_allow_nsfw"
             )
         ])
     return InlineKeyboardMarkup(inline_keyboard=keyboards)
