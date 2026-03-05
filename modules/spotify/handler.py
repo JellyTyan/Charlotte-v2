@@ -139,9 +139,9 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
                 logger.warning(f"Skipping track with missing metadata")
                 continue
             # Create download task for this track
-            async def download_track(performer=track_meta.performer, title=track_meta.title, cover=track_meta.cover):
+            async def download_track(performer=track_meta.performer, title=track_meta.title, cover=track_meta.cover, lossless_mode=lossless_mode):
                 try:
-                    track = await service.download(performer, title, cover)
+                    track = await service.download(performer, title, cover, lossless_mode=lossless_mode)
                     return track
                 except Exception as e:
                     logger.error(f"Failed to download track {title}: {e}")

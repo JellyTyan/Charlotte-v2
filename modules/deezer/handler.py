@@ -123,9 +123,9 @@ async def process_deezer_url(message: Message, config: Config, i18n: TranslatorR
             if track_meta.performer is None or track_meta.title is None:
                 logger.warning(f"Skipping track with missing metadata")
                 continue
-            async def download_track(performer=track_meta.performer, title=track_meta.title, cover=track_meta.cover, full_cover=track_meta.full_size_cover):
+            async def download_track(performer=track_meta.performer, title=track_meta.title, cover=track_meta.cover, full_cover=track_meta.full_size_cover, lossless_mode=lossless_mode):
                 try:
-                    return await service.download(performer, title, cover, full_cover)
+                    return await service.download(performer, title, cover, full_cover, lossless_mode=lossless_mode)
                 except Exception as e:
                     logger.error(f"Failed to download track {title}: {e}")
                     raise
