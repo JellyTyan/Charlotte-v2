@@ -18,6 +18,9 @@ import random
 REACTION_EMOJIS = [
     "👍", "❤", "🔥", "🥰", "👏", "😁", "🤔", "🤯", "😱", "🎉", "🤩", "🙏", "👌", "🕊", "😍", "🐳", "❤‍🔥", "🌭", "💯", "🤣", "⚡", "🍌", "🏆", "🍾", "💋", "👻", "👨‍💻", "👀", "🎃", "😇", "😨", "🤝", "✍", "🤗", "🫡", "🎅", "🎄", "☃", "💅", "🤪", "🆒", "💘", "🦄", "😘",  "😎", "👾"
 ]
+NEGATIVITY_EMOJIS =[
+    "🤬", "😢", "🤮", "💩", "🤡", "🥱", "🥴", "🌚", "💔", "🤨", "😐", "🍓", "🖕", "😈", "😴", "😭", "🤓", "🙈", "🗿", "🙉", "💊", "🙊", "🤷‍♂", "🤷", "🤷‍♀", "😡"
+]
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +63,11 @@ class MediaSender:
 
             if settings.profile.reactions and not skip_reaction:
                 try:
+                    if settings.profile.negativity:
+                        emoji = random.choice(REACTION_EMOJIS + NEGATIVITY_EMOJIS)
+                    else:
+                        emoji = random.choice(REACTION_EMOJIS)
                     from aiogram.types import ReactionTypeEmoji
-                    emoji = random.choice(REACTION_EMOJIS)
                     await message.react([ReactionTypeEmoji(emoji=emoji)])
                 except Exception as e:
                     logger.warning(f"Failed to react to message: {e}")
