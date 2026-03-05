@@ -11,6 +11,7 @@ from aiogram.types import (
     InaccessibleMessage
 )
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramRetryAfter, TelegramBadRequest
 from fluentogram import TranslatorRunner
 
 from models.settings import ChatSettingsJson, UserSettingsJson
@@ -201,21 +202,33 @@ async def check_if_admin_or_owner(bot: Bot, chat_id: int, user_id: int) -> bool:
     return chat_member.status in [ChatMemberStatus.CREATOR, ChatMemberStatus.ADMINISTRATOR]
 
 async def safe_edit_text(callback: CallbackQuery, text: str, reply_markup: InlineKeyboardMarkup, parse_mode: str = ParseMode.MARKDOWN):
-    if isinstance(callback.message, InaccessibleMessage) or callback.message is None:
-        if callback.bot is None:
-            return
-        await callback.bot.send_message(
-            callback.from_user.id,
-            text,
-            parse_mode=parse_mode,
-            reply_markup=reply_markup
-        )
-    else:
-        await callback.message.edit_text(
-            text,
-            parse_mode=parse_mode,
-            reply_markup=reply_markup
-        )
+    try:
+        if isinstance(callback.message, InaccessibleMessage) or callback.message is None:
+            if callback.bot is None:
+                return
+            await callback.bot.send_message(
+                callback.from_user.id,
+                text,
+                parse_mode=parse_mode,
+                reply_markup=reply_markup
+            )
+        else:
+            await callback.message.edit_text(
+                text,
+                parse_mode=parse_mode,
+                reply_markup=reply_markup
+            )
+    except TelegramRetryAfter as e:
+        logger.warning(f"Flood control exceeded for user {callback.from_user.id}: retry after {e.retry_after}")
+        try:
+            await callback.answer(f"⏳ Please wait {e.retry_after} seconds.", show_alert=True)
+        except Exception:
+            pass
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e).lower():
+            pass
+        else:
+            raise
 
 # === Handlers === #
 
