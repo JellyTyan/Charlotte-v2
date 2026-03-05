@@ -11,8 +11,8 @@ btn-title-language = Beschreibungssprache
 btn-blocked-services = Blockierte Dienste
 
 btn-send-raw = { $is_enabled ->
-    [true] ✅ Art als Datei (Beste Qualität)
-    *[false] ❌ Art als Datei (Beste Qualität)
+    [true] ✅ Als Datei senden
+    *[false] ❌ Als Datei senden
 }
 btn-send-music-covers = { $is_enabled ->
     [true] ✅ Musik-Cover
@@ -21,6 +21,10 @@ btn-send-music-covers = { $is_enabled ->
 btn-send-reactions = { $is_enabled ->
     [true] ✅ Lustige Reaktionen
     *[false] ❌ Lustige Reaktionen
+}
+btn-negativity = { $is_enabled ->
+    [true] ✅ Negativität
+    *[false] ❌ Negativität
 }
 btn-auto-translate = { $is_enabled ->
     [true] ✅ Beschreibungen übersetzen
@@ -38,14 +42,20 @@ btn-allow-playlists = { $is_enabled ->
     [true] ✅ Playlists erlauben
     *[false] ❌ Playlists erlauben
 }
+btn-allow-nsfw = { $is_enabled ->
+    [true] ✅ NSFW erlauben
+    *[false] ❌ NSFW erlauben
+}
 
-desc-send-raw = Ich sende Arts als unkomprimierte Dateien für die absolut beste Qualität! 🎨
+desc-send-raw = Ich werde Medien als Dateien für die beste Qualität senden! 🎨
 desc-send-music-covers = Ich hänge das Album-Cover an jeden Song an. 🎵
 desc-send-reactions = Ich reagiere mit Emojis, damit du siehst, dass ich arbeite! ⚡
+desc-negativity-mode = Ich werde einige toxische Emojis verwenden! 😈
 desc-send-notifications = Deaktivieren, um Medien ohne Benachrichtigungston zu empfangen. 🔕
 desc-auto-caption = Ich überprüfe und füge automatisch Beschreibungen hinzu. 📝
 desc-auto-translate-titles = Ich übersetze Videobeschreibungen automatisch in deine Sprache! 🌍
 desc-allow-playlists = Ich lade ganze Playlists herunter (vorsichtig nutzen!). 📂
+desc-allow-nsfw = NSFW-Inhalte in diesem Chat erlauben. 🔞
 desc-lossless-mode = Ich werde versuchen, Hi-Res-Songs für dich zu finden! Aber ich verspreche nicht, dass ich sie finde oder ob es die richtigen sind. 🎧
 
 setting-status-changed = { $is_enabled ->

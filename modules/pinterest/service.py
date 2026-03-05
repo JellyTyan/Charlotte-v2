@@ -133,7 +133,6 @@ class PinterestService(BaseService):
                         type=MediaType.VIDEO,
                         path=Path(fixed_video),
                         title=escape_html(title),
-                        original_size=True,
                         cover=Path(thumbnail),
                         width=width,
                         height=height,
@@ -184,7 +183,6 @@ class PinterestService(BaseService):
                                 type=MediaType.PHOTO,
                                 path=final_path,
                                 title=escape_html(title),
-                                original_size=True
                             ))
                             downloaded = True
                     except Exception as e:
@@ -213,7 +211,6 @@ class PinterestService(BaseService):
                                     type=MediaType.PHOTO,
                                     path=final_path,
                                     title=escape_html(title),
-                                    original_size=False
                                 ))
                         except Exception as fallback_error:
                             logger.error(f"Failed to download carousel item {i}: {fallback_error}")
@@ -241,7 +238,6 @@ class PinterestService(BaseService):
                         result.append(MediaContent(
                             type=MediaType.GIF,
                             path=Path(downloaded_path),
-                            original_size=True
                         ))
                 else:
                     # Try original quality first
@@ -275,7 +271,6 @@ class PinterestService(BaseService):
                                 type=MediaType.PHOTO,
                                 path=final_path,
                                 title=escape_html(title),
-                                original_size=True
                             ))
                             downloaded = True
                     except Exception as e:
@@ -303,7 +298,6 @@ class PinterestService(BaseService):
                                 type=MediaType.PHOTO,
                                 path=final_path,
                                 title=escape_html(title),
-                                original_size=False
                             ))
 
             else:
