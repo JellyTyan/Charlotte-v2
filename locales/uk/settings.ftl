@@ -22,6 +22,10 @@ btn-send-reactions = { $is_enabled ->
     [true] ✅ Прикольні реакції
     *[false] ❌ Прикольні реакції
 }
+btn-negativity = { $is_enabled ->
+    [true] ✅ Негативчик
+    *[false] ❌ Негативчик
+}
 btn-auto-translate = { $is_enabled ->
     [true] ✅ Автопереклад описів
     *[false] ❌ Автопереклад описів
@@ -42,6 +46,7 @@ btn-allow-playlists = { $is_enabled ->
 desc-send-raw = Буду кидати арти файлами, щоб якість була просто космос! 🎨
 desc-send-music-covers = Прикріплю гарну обкладинку до кожного треку. 🎵
 desc-send-reactions = Буду реагувати емодзі, щоб ти бачив(ла) процес! ⚡
+desc-negativity-mode = I'll send any available reaction! (Even offensive ones)
 desc-send-notifications = Вимкни, якщо хочеш отримувати медіа без звуку (тихо). 🔕
 desc-auto-caption = Я сама перевірю та додам опис до медіа. 📝
 desc-auto-translate-titles = Перекладу описи відео твоєю мовою! 🌍

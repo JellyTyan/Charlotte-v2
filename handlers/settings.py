@@ -53,7 +53,8 @@ DESC_MAPPING = {
     "caption": "auto_caption",
     "translate_caption": "auto_translate_titles",
     "send_covers": "send_music_covers",
-    "lossless": "lossless_mode"
+    "lossless": "lossless_mode",
+    "negativity": "negativity_mode"
 }
 
 def get_language_flag(code: str) -> str:
@@ -105,6 +106,12 @@ def build_main_keyboard(settings, i18n: TranslatorRunner, is_group: bool = False
             InlineKeyboardButton(
                 text=i18n.btn.send.reactions(is_enabled='true' if settings.profile.reactions else 'false'),
                 callback_data="menu_profile_reactions"
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text=i18n.btn.negativity(is_enabled='true' if settings.profile.negativity else 'false'),
+                callback_data="menu_profile_negativity"
             ),
         ],
         [
