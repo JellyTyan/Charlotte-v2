@@ -11,8 +11,8 @@ btn-title-language = زبان توضیحات
 btn-blocked-services = سرویس‌های مسدود
 
 btn-send-raw = { $is_enabled ->
-    [true] ✅ ارسال فایل (بهترین کیفیت)
-    *[false] ❌ ارسال فایل (بهترین کیفیت)
+    [true] ✅ ارسال به صورت فایل
+    *[false] ❌ ارسال به صورت فایل
 }
 btn-send-music-covers = { $is_enabled ->
     [true] ✅ کاور موزیک
@@ -21,6 +21,10 @@ btn-send-music-covers = { $is_enabled ->
 btn-send-reactions = { $is_enabled ->
     [true] ✅ واکنش‌های بامزه
     *[false] ❌ واکنش‌های بامزه
+}
+btn-negativity = { $is_enabled ->
+    [true] ✅ منفی‌نگری
+    *[false] ❌ منفی‌نگری
 }
 btn-auto-translate = { $is_enabled ->
     [true] ✅ ترجمه توضیحات
@@ -38,14 +42,20 @@ btn-allow-playlists = { $is_enabled ->
     [true] ✅ اجازه پلی‌لیست
     *[false] ❌ اجازه پلی‌لیست
 }
+btn-allow-nsfw = { $is_enabled ->
+    [true] ✅ اجازه NSFW
+    *[false] ❌ اجازه NSFW
+}
 
-desc-send-raw = تصاویر رو به صورت فایل می‌فرستم تا کیفیت عالی باشه! 🎨
+desc-send-raw = رسانه ها را به عنوان فایل برای بهترین کیفیت ارسال می کنم! 🎨
 desc-send-music-covers = کاور آلبوم رو به هر آهنگ می‌چسبونم. 🎵
 desc-send-reactions = با ایموجی واکنش نشون میدم تا ببینی دارم کار می‌کنم! ⚡
+desc-negativity-mode = من از ایموجی‌های سمی هنگام واکنش استفاده خواهم کرد! 😈
 desc-send-notifications = غیرفعال کن تا فایل‌ها رو بی‌صدا دریافت کنی. 🔕
 desc-auto-caption = خودم چک می‌کنم و توضیحات رو به مدیا اضافه می‌کنم. 📝
 desc-auto-translate-titles = توضیحات ویدیوها رو به زبان تو ترجمه می‌کنم! 🌍
 desc-allow-playlists = کل پلی‌لیست رو دانلود می‌کنم (با احتیاط استفاده کن!). 📂
+desc-allow-nsfw = اجازه محتوای NSFW در این چت. 🔞
 desc-lossless-mode = من سعی می‌کنم آهنگ‌های Hi-Res را برای شما پیدا کنم! اما قول نمی‌دهم که آن را پیدا کنم یا اینکه نسخه درست باشد. 🎧
 
 setting-status-changed = { $is_enabled ->

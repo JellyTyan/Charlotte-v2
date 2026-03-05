@@ -116,7 +116,7 @@ class MediaSender:
                 if not item.path and not (item.content and item.filename):
                     raise BotError(code=ErrorCode.SEND_ERROR, message="Missing file source", is_logged=True)
 
-                if getattr(service_settings, 'raw', False) and item.original_size and item.path:
+                if getattr(service_settings, 'raw', False) and item.path and item.type in (MediaType.PHOTO, MediaType.VIDEO):
                     media_group.add_document(media=types.FSInputFile(item.path))
                 elif item.type == MediaType.PHOTO:
                     if item.content and item.filename:
@@ -137,7 +137,7 @@ class MediaSender:
                     self._files_to_cleanup.append(item.path)
 
             if message.bot:
-                should_send_as_doc = getattr(service_settings, 'raw', False) and any(item.original_size for item in group_items)
+                should_send_as_doc = getattr(service_settings, 'raw', False) and any(item.type in (MediaType.PHOTO, MediaType.VIDEO) for item in group_items)
                 await message.bot.send_chat_action(message.chat.id, "upload_document" if should_send_as_doc else "upload_video")
 
             try:

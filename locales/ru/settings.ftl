@@ -11,8 +11,8 @@ btn-title-language = Язык описаний
 btn-blocked-services = Блокировка сервисов
 
 btn-send-raw = { $is_enabled ->
-    [true] ✅ Арт файлом (Лучшее качество)
-    *[false] ❌ Арт файлом (Лучшее качество)
+    [true] ✅ Отправить файлом
+    *[false] ❌ Отправить файлом
 }
 btn-send-music-covers = { $is_enabled ->
     [true] ✅ Обложки музыки
@@ -21,6 +21,10 @@ btn-send-music-covers = { $is_enabled ->
 btn-send-reactions = { $is_enabled ->
     [true] ✅ Прикольные реакции
     *[false] ❌ Прикольные реакции
+}
+btn-negativity = { $is_enabled ->
+    [true] ✅ Негативчик
+    *[false] ❌ Негативчик
 }
 btn-auto-translate = { $is_enabled ->
     [true] ✅ Автоперевод описаний
@@ -38,14 +42,20 @@ btn-allow-playlists = { $is_enabled ->
     [true] ✅ Разрешить плейлисты
     *[false] ❌ Разрешить плейлисты
 }
+btn-allow-nsfw = { $is_enabled ->
+    [true] ✅ Разрешить NSFW
+    *[false] ❌ Разрешить NSFW
+}
 
-desc-send-raw = Буду кидать арты файлами, чтобы качество было просто космос! 🎨
+desc-send-raw = Буду кидать медиа файлами для достижения высокого качества! 🎨
 desc-send-music-covers = Прикреплю красивую обложку к каждому треку. 🎵
 desc-send-reactions = Буду реагировать эмодзи, чтобы ты видел(а) процесс! ⚡
+desc-negativity-mode = Буду использовать токсичные эмодзи при реакциях! 😈
 desc-send-notifications = Выключи, если хочешь получать медиа без звука (тихо). 🔕
 desc-auto-caption = Я сама проверю и добавлю описание к медиа. 📝
 desc-auto-translate-titles = Переведу описания видео на твой язык! 🌍
 desc-allow-playlists = Скачаю целые плейлисты (аккуратно с этим!). 📂
+desc-allow-nsfw = Разрешить NSFW контент в этом чате. 🔞
 desc-lossless-mode = Я попытаюсь найти Hi-Res песни для вас! Только я не обещаю, что найду и найду ли правильный. 🎧
 
 setting-status-changed = { $is_enabled ->

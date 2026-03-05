@@ -11,8 +11,8 @@ btn-title-language = Caption language
 btn-blocked-services = Blocked services
 
 btn-send-raw = { $is_enabled ->
-    [true] ✅ Send art as File (Best Quality)
-    *[false] ❌ Send art as File (Best Quality)
+    [true] ✅ Send as file
+    *[false] ❌ Send as file
 }
 btn-send-music-covers = { $is_enabled ->
     [true] ✅ Send Music Covers
@@ -21,6 +21,10 @@ btn-send-music-covers = { $is_enabled ->
 btn-send-reactions = { $is_enabled ->
     [true] ✅ Send Fun Reactions
     *[false] ❌ Send Fun Reactions
+}
+btn-negativity = { $is_enabled ->
+    [true] ✅ Negativity
+    *[false] ❌ Negativity
 }
 btn-auto-translate = { $is_enabled ->
     [true] ✅ Auto-translate captions
@@ -43,10 +47,10 @@ btn-allow-nsfw = { $is_enabled ->
     *[false] ❌ Allow NSFW
 }
 
-desc-send-raw = I'll send art as uncompressed files so you get the absolute best quality! 🎨
+desc-send-raw = I'll send media as files for the best quality! 🎨
 desc-send-music-covers = I'll attach the album art to every song I download for you. 🎵
 desc-send-reactions = I'll react with emojis to show you I'm working! ⚡
-desc-negativity-mode = I'll send any available reaction! (Even offensive ones)
+desc-negativity-mode = I'll use some toxic emojis when reacting! 😈
 desc-send-notifications = Disable this to receive media without notification sound. 🔕
 desc-auto-caption = I'll automatically verify and add captions to media. 📝
 desc-auto-translate-titles = I'll translate video captions to your language automatically! 🌍

@@ -144,7 +144,6 @@ def build_services_keyboard(i18n: TranslatorRunner) -> InlineKeyboardMarkup:
 def build_service_settings_keyboard(settings, service: str, i18n: TranslatorRunner) -> InlineKeyboardMarkup:
     svc_settings = getattr(settings.services, service)
     keyboards = []
-    print(svc_settings)
 
     if hasattr(svc_settings, 'caption'):
         keyboards.append([

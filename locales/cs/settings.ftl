@@ -11,8 +11,8 @@ btn-title-language = Jazyk popisů
 btn-blocked-services = Blokované služby
 
 btn-send-raw = { $is_enabled ->
-    [true] ✅ Art jako soubor (Nejlepší kvalita)
-    *[false] ❌ Art jako soubor (Nejlepší kvalita)
+    [true] ✅ Odeslat jako soubor
+    *[false] ❌ Odeslat jako soubor
 }
 btn-send-music-covers = { $is_enabled ->
     [true] ✅ Hudební obaly
@@ -21,6 +21,10 @@ btn-send-music-covers = { $is_enabled ->
 btn-send-reactions = { $is_enabled ->
     [true] ✅ Zábavné reakce
     *[false] ❌ Zábavné reakce
+}
+btn-negativity = { $is_enabled ->
+    [true] ✅ Negativita
+    *[false] ❌ Negativita
 }
 btn-auto-translate = { $is_enabled ->
     [true] ✅ Překládat popisky
@@ -38,14 +42,20 @@ btn-allow-playlists = { $is_enabled ->
     [true] ✅ Povolit playlisty
     *[false] ❌ Povolit playlisty
 }
+btn-allow-nsfw = { $is_enabled ->
+    [true] ✅ Povolit NSFW
+    *[false] ❌ Povolit NSFW
+}
 
-desc-send-raw = Pošlu arty jako nekomprimované soubory, takže kvalita bude vesmírná! 🎨
+desc-send-raw = Budu posílat média jako soubory pro nejlepší kvalitu! 🎨
 desc-send-music-covers = Ke každé skladbě připojím krásný obal. 🎵
 desc-send-reactions = Budu reagovat emoji, ať vidíš, že na tom makám! ⚡
+desc-negativity-mode = Budu používat toxické emoji při reakcích! 😈
 desc-send-notifications = Vypni, pokud chceš dostávat média bez zvuku oznámení. 🔕
 desc-auto-caption = Sama zkontroluji a přidám popis k médiím. 📝
 desc-auto-translate-titles = Přeložím popisky videí do tvého jazyka! 🌍
 desc-allow-playlists = Stáhnu celé playlisty (opatrně s tím!). 📂
+desc-allow-nsfw = Povolit NSFW obsah v tomto chatu. 🔞
 desc-lossless-mode = Pokusím se pro vás najít Hi-Res skladby! Ale neslibuji, že je najdu, nebo že to budou ty správné. 🎧
 
 setting-status-changed = { $is_enabled ->
