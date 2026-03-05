@@ -14,11 +14,14 @@ class ProfileSettings(BaseModel):
 class MediaSettings(BaseModel):
     caption: bool = False
     translate_caption: bool = False
-    raw: bool = False
 
+class MediaSettingsExtra(MediaSettings):
+    raw: bool = False
 
 class MusicSettings(BaseModel):
     send_covers: bool = False
+
+class MusicSettingsExtra(MusicSettings):
     lossless: bool = False
 
 
@@ -27,13 +30,13 @@ class ServicesSettings(BaseModel):
     tiktok: MediaSettings = MediaSettings()
     instagram: MediaSettings = MediaSettings()
     twitter: MediaSettings = MediaSettings()
-    pinterest: MediaSettings = MediaSettings()
-    pixiv: MediaSettings = MediaSettings()
+    pinterest: MediaSettingsExtra = MediaSettingsExtra()
+    pixiv: MediaSettingsExtra = MediaSettingsExtra()
     reddit: MediaSettings = MediaSettings()
 
-    spotify: MusicSettings = MusicSettings()
-    deezer: MusicSettings = MusicSettings()
-    applemusic: MusicSettings = MusicSettings()
+    spotify: MusicSettingsExtra = MusicSettingsExtra()
+    deezer: MusicSettingsExtra = MusicSettingsExtra()
+    applemusic: MusicSettingsExtra = MusicSettingsExtra()
     ytmusic: MusicSettings = MusicSettings()
     soundcloud: MusicSettings = MusicSettings()
 
@@ -63,13 +66,13 @@ class ChatServicesSettings(BaseModel):
     tiktok: MediaSettings = MediaSettings()
     instagram: MediaSettings = MediaSettings()
     twitter: MediaSettings = MediaSettings()
-    pinterest: MediaSettings = MediaSettings()
-    pixiv: MediaSettings = MediaSettings()
+    pinterest: MediaSettingsExtra = MediaSettingsExtra()
+    pixiv: MediaSettingsExtra = MediaSettingsExtra()
     reddit: MediaSettings = MediaSettings()
 
-    spotify: MusicSettings = MusicSettings()
-    deezer: MusicSettings = MusicSettings()
-    applemusic: MusicSettings = MusicSettings()
+    spotify: MusicSettingsExtra = MusicSettingsExtra()
+    deezer: MusicSettingsExtra = MusicSettingsExtra()
+    applemusic: MusicSettingsExtra = MusicSettingsExtra()
     ytmusic: MusicSettings = MusicSettings()
     soundcloud: MusicSettings = MusicSettings()
 

@@ -137,6 +137,7 @@ def build_services_keyboard(i18n: TranslatorRunner) -> InlineKeyboardMarkup:
 def build_service_settings_keyboard(settings, service: str, i18n: TranslatorRunner) -> InlineKeyboardMarkup:
     svc_settings = getattr(settings.services, service)
     keyboards = []
+    print(svc_settings)
 
     if hasattr(svc_settings, 'caption'):
         keyboards.append([
@@ -145,14 +146,15 @@ def build_service_settings_keyboard(settings, service: str, i18n: TranslatorRunn
                 callback_data=f"menu_service_{service}_caption"
             ),
             InlineKeyboardButton(
-                text=i18n.btn.send.raw(is_enabled='true' if svc_settings.raw else 'false'),
-                callback_data=f"menu_service_{service}_raw"
-            )
-        ])
-        keyboards.append([
-            InlineKeyboardButton(
                 text=i18n.btn.auto.translate(is_enabled='true' if svc_settings.translate_caption else 'false'),
                 callback_data=f"menu_service_{service}_translate_caption"
+            )
+        ])
+    if hasattr(svc_settings, 'raw'):
+        keyboards.append([
+            InlineKeyboardButton(
+                text=i18n.btn.send.raw(is_enabled='true' if svc_settings.raw else 'false'),
+                callback_data=f"menu_service_{service}_raw"
             )
         ])
 
@@ -163,6 +165,7 @@ def build_service_settings_keyboard(settings, service: str, i18n: TranslatorRunn
                 callback_data=f"menu_service_{service}_send_covers"
             )
         ])
+    if hasattr(svc_settings, 'lossless'):
         keyboards.append([
             InlineKeyboardButton(
                 text=i18n.btn.lossless(is_enabled='true' if svc_settings.lossless else 'false'),
