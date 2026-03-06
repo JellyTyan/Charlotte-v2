@@ -9,7 +9,8 @@ class ProfileSettings(BaseModel):
     notifications: bool = True
     reactions: bool = False
     negativity: bool = False
-    news_spam: bool = False # todo implement function
+    news_spam: bool = False
+
 
 
 class MediaSettings(BaseModel):
@@ -31,6 +32,7 @@ class ServicesSettings(BaseModel):
     tiktok: MediaSettings = MediaSettings()
     instagram: MediaSettings = MediaSettings()
     twitter: MediaSettingsExtra = MediaSettingsExtra()
+    bluesky: MediaSettingsExtra = MediaSettingsExtra()
     pinterest: MediaSettingsExtra = MediaSettingsExtra()
     pixiv: MediaSettingsExtra = MediaSettingsExtra()
     reddit: MediaSettings = MediaSettings()
@@ -58,6 +60,7 @@ class ChatProfileSettings(BaseModel):
     allow_nsfw: bool = False # todo implement
     blocked_services: set[str] = Field(default_factory=set)
     banned_users: set[int] = Field(default_factory=set) # todo implement
+    news_spam: bool = False
 
 
 class ChatServicesSettings(BaseModel):
@@ -68,6 +71,7 @@ class ChatServicesSettings(BaseModel):
     tiktok: MediaSettings = MediaSettings()
     instagram: MediaSettings = MediaSettings()
     twitter: MediaSettingsExtra = MediaSettingsExtra()
+    bluesky: MediaSettingsExtra = MediaSettingsExtra()
     pinterest: MediaSettingsExtra = MediaSettingsExtra()
     pixiv: MediaSettingsExtra = MediaSettingsExtra()
     reddit: MediaSettings = MediaSettings()

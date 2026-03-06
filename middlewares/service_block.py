@@ -17,7 +17,8 @@ SERVICE_PATTERNS = {
     "deezer": r"https?:\/\/(?:www\.|link\.)?deezer\.com/",
     "pinterest": r"https?://(?:www\.)?pinterest\.com/",
     "pixiv": r"https?://(?:www\.)?pixiv\.net/",
-    "ytmusic": r"https?://music\.youtube\.com/"
+    "ytmusic": r"https?://music\.youtube\.com/",
+    "bluesky": r"https:\/\/bsky\.app\/profile\/[^\/]+\/post\/[a-z0-9]+",
 }
 
 def detect_service(text: str) -> str | None:
