@@ -108,7 +108,6 @@ class PixivService(BaseService):
                         type=MediaType.PHOTO,
                         path=Path(filename),
                         title=escape_html(title),
-                        original_size=True
                     ))
 
                 # Wait for all downloads to complete

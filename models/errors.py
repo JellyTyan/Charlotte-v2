@@ -16,6 +16,7 @@ class ErrorCode(Enum):
     METADATA_ERROR = "E008"
     SEND_ERROR = "E009"
     NOT_FOUND = "E404"
+    NOT_ALLOWED = "E403"
     INTERNAL_ERROR = "E500"
 
 @dataclass

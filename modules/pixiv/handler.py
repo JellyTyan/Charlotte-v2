@@ -3,13 +3,13 @@ import logging
 from aiogram import F
 from aiogram.types import Message
 
+from models.service_list import Services
 from modules.router import service_router as router
 from senders.media_sender import MediaSender
 from tasks.task_manager import task_manager
 from utils.arq_pool import get_arq_pool
 from utils.statistics_helper import log_download_event
 from .service import PixivService
-from models.service_list import Services
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +37,8 @@ async def pixiv_handler(message: Message):
                 media_content = await download_task
                 if media_content:
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, user_id)
-            except Exception as e:
+                    await send_manager.send(message, media_content, service="pixiv")
+            except Exception:
                 # Error already logged in download task
                 pass
 
@@ -70,4 +70,4 @@ async def process_pixiv_url(message: Message):
 
     except Exception as e:
         logger.error(f"Error processing Pixiv URL: {e}")
-        raise e
+        raise

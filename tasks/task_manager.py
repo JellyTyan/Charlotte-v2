@@ -3,6 +3,8 @@ import logging
 from collections import defaultdict
 from typing import Dict
 
+from aiogram.types import ReactionTypeEmoji
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,7 +38,6 @@ class TaskManager:
         # Initial reaction if enabled (before queue)
         if message:
             try:
-                from aiogram.types import ReactionTypeEmoji
                 await message.react([ReactionTypeEmoji(emoji="👍")])
             except Exception as e:
                 logger.warning(f"Failed to set initial reaction: {e}")
@@ -108,7 +109,7 @@ class TaskManager:
         # Get user settings for locale
         from storage.db.crud import get_user_settings
         settings = await get_user_settings(user_id)
-        lang = settings.lang if settings else "en"
+        lang = settings.profile.language if settings else "en"
         i18n = hub.get_translator_by_locale(lang)
 
         # Get error message
@@ -130,6 +131,8 @@ class TaskManager:
                 error_message = i18n.error.metadata()
             case ErrorCode.NOT_FOUND:
                 error_message = i18n.error.no.found()
+            case ErrorCode.NOT_ALLOWED:
+                error_message = i18n.error.no.allowed()
             case ErrorCode.INTERNAL_ERROR:
                 error_message = i18n.error.internal()
 

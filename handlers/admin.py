@@ -29,7 +29,9 @@ from storage.db.crud import (
     list_of_banned_users,
     get_global_settings,
     update_global_settings,
-    get_list_user_ids
+    get_list_user_ids,
+    get_news_subscribers_ids,
+    get_all_chat_ids
 )
 from states import NewsSpamGroup
 from utils import escape_markdown
@@ -351,7 +353,7 @@ async def process_user_id(message: types.Message, state: FSMContext):
         try:
             from storage.db.crud import get_user_settings
             settings = await get_user_settings(user_id)
-            lang = settings.lang if settings else "en"
+            lang = settings.profile.language if settings else "en"
 
             hub = dp.workflow_data.get("_translator_hub")
             if hub:
@@ -563,8 +565,11 @@ async def proccess_spam_news(message: types.Message, state: FSMContext) -> None:
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="yes", callback_data="news_spam_accept"),
-            InlineKeyboardButton(text="cancel", callback_data="news_spam_decline"),
+            InlineKeyboardButton(text="To subscribers", callback_data="news_spam_subscribers"),
+            InlineKeyboardButton(text="Force to all", callback_data="news_spam_force_all"),
+        ],
+        [
+            InlineKeyboardButton(text="Cancel", callback_data="news_spam_decline"),
         ]
     ])
 
@@ -574,7 +579,7 @@ async def proccess_spam_news(message: types.Message, state: FSMContext) -> None:
         text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN_V2
     )
 
-@dp.callback_query(lambda c: c.data == "news_spam_accept")
+@dp.callback_query(lambda c: c.data in ["news_spam_subscribers", "news_spam_force_all"])
 async def process_spam_news_to_chats(callback: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     bot = callback.bot
@@ -593,7 +598,13 @@ async def process_spam_news_to_chats(callback: CallbackQuery, state: FSMContext)
     success_send = 0
     error_send = 0
 
-    user_ids = await get_list_user_ids()
+    if callback.data == "news_spam_subscribers":
+        user_ids = await get_news_subscribers_ids()
+    else:
+        user_ids = await get_list_user_ids()
+        chat_ids = await get_all_chat_ids()
+        user_ids.extend(chat_ids)
+
 
     for user_id in user_ids:
         if user_id == chat_id:

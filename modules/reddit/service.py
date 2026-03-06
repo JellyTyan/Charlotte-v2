@@ -1,17 +1,15 @@
 import asyncio
+import html
 import logging
 import os
-import html
+import uuid
 from pathlib import Path
 from typing import List, Optional
-import uuid
-from concurrent.futures import ThreadPoolExecutor
-
-from models.service_list import Services
 
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType, MediaAttachment
+from models.service_list import Services
 from modules.base_service import BaseService
 from utils import truncate_string, process_video_for_telegram
 from .utils import get_post_info
@@ -21,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 class RedditService(BaseService):
     name = "Reddit"
-    _download_executor = ThreadPoolExecutor(max_workers=5)
 
     def __init__(self, output_path: str = "storage/temp", arq = None) -> None:
         super().__init__()
@@ -160,7 +157,7 @@ class RedditService(BaseService):
 
         return None
 
-    async def download(self, meta: MediaMetadata) -> List[MediaContent]:
+    async def download(self, meta: MediaMetadata, allow_nsfw: bool = True) -> List[MediaContent]:
         media_contents = []
         if not self.arq:
             raise BotError(
@@ -169,6 +166,16 @@ class RedditService(BaseService):
                 critical=True,
                 is_logged=True
             )
+        
+        is_nsfw = meta.extra.get('spoiler', False)
+        if is_nsfw and not allow_nsfw:
+            raise BotError(
+                code=ErrorCode.NOT_ALLOWED,
+                message="NSFW content is not allowed",
+                is_logged=False,
+                critical=False
+            )
+        
         try:
             if isinstance(meta, str):
                 raise BotError(ErrorCode.INVALID_URL, message="Invalid metadata format", url=meta, is_logged=True)
@@ -204,7 +211,7 @@ class RedditService(BaseService):
                             type=m_type,
                             path=path_obj,
                             title=meta.title,
-                            is_blured=meta.extra.get('spoiler', False)
+                            is_blurred=meta.extra.get('spoiler', False)
                         ))
 
                 return media_contents
@@ -227,7 +234,7 @@ class RedditService(BaseService):
                     title=meta.title,
                     width=width,
                     height=height,
-                    is_blured=meta.extra.get('spoiler', False),
+                    is_blurred=meta.extra.get('spoiler', False),
                     cover=Path(thumbnail),
                     duration=int(duration)
                 )]
@@ -255,7 +262,7 @@ class RedditService(BaseService):
                     title=meta.title,
                     width=meta.width,
                     height=meta.height,
-                    is_blured=meta.extra.get('spoiler', False)
+                    is_blurred=meta.extra.get('spoiler', False)
                 )]
             else:
                 raise BotError(ErrorCode.NOT_FOUND, message="Unsupported media type", service=Services.REDDIT, url=meta.url, is_logged=True)

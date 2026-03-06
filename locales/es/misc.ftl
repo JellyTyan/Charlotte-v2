@@ -6,10 +6,10 @@ msg-hello =
 
 msg-help =
     Aquí están mis comandos:
-      /start – ¡Di hola!
-      /help – Obtener ayuda
-      /settings – Personaliza todo a tu gusto
-      /support – Apoyar el proyecto
+      /start - ¡Di hola!
+      /help - Obtener ayuda
+      /settings - Personaliza todo a tu gusto
+      /support - Apoyar el proyecto
 
     ✨ Me encanta ayudarte a guardar medios de estas plataformas:
 
@@ -22,15 +22,16 @@ msg-help =
     ¡Obtendré la canción con la portada y todas las etiquetas!
 
     <b>Plataformas de video</b>
-      - YouTube – Videos, Shorts o audio (hasta 100 MB, ⭐ 1GB con Stars!)
-      - TikTok – Videos e imágenes
-      - Instagram – Reels y publicaciones
-      - Twitter (X) – Videos e imágenes
-      - Reddit – Todos los medios de las publicaciones
+      - YouTube - Videos, Shorts o audio (hasta 100 MB, ⭐ 1GB con Stars!)
+      - TikTok - Videos e imágenes
+      - Instagram - Reels y publicaciones
+      - Twitter (X) - Videos e imágenes
+      - BlueSky - Videos e imágenes
+      - Reddit - Todos los medios de las publicaciones
 
     <b>Plataformas de arte</b>
-      - Pixiv – Hermosas ilustraciones
-      - Pinterest – Todos los pines que amas
+      - Pixiv - Hermosas ilustraciones
+      - Pinterest - Todos los pines que amas
 
     ¡Solo envíame un enlace y me encargaré del resto! 🧡
 

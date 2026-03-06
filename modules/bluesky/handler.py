@@ -2,23 +2,25 @@ import logging
 
 from aiogram import F
 from aiogram.types import Message
+from fluentogram import TranslatorRunner
 
-from models.errors import BotError, ErrorCode
+from core.config import Config
 from models.service_list import Services
 from modules.router import service_router as router
 from senders.media_sender import MediaSender
+from storage.db.crud import get_chat_settings
 from tasks.task_manager import task_manager
 from utils.arq_pool import get_arq_pool
 from utils.statistics_helper import log_download_event
-from .service import TiktokService
+from .service import BlueSkyService
 
 logger = logging.getLogger(__name__)
 
 
-TIKTOK_REGEX = r"https?://(?:www\.)?(?:tiktok\.com/.*|(vm|vt)\.tiktok\.com/.+)"
+BLUESKY_REGEX = r"https:\/\/bsky\.app\/profile\/[^\/]+\/post\/[a-z0-9]+"
 
-@router.message(F.text.regexp(TIKTOK_REGEX))
-async def tiktok_handler(message: Message):
+@router.message(F.text.regexp(BLUESKY_REGEX))
+async def bluesky_handler(message: Message, config: Config, i18n: TranslatorRunner):
     if not message.text or not message.from_user:
         return
 
@@ -27,8 +29,9 @@ async def tiktok_handler(message: Message):
     # Start download task
     download_task = await task_manager.add_task(
         user_id,
-        download_coro=process_tiktok_url(message),
-        message=message
+        download_coro=process_bluesky_url(message, config, i18n),
+        message=message,
+        url=message.text
     )
 
     # When download completes, queue send task
@@ -38,7 +41,7 @@ async def tiktok_handler(message: Message):
                 media_content = await download_task
                 if media_content:
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, service="tiktok")
+                    await send_manager.send(message, media_content, service="bluesky")
             except Exception:
                 # Error already logged in download task
                 pass
@@ -46,37 +49,33 @@ async def tiktok_handler(message: Message):
         await task_manager.add_send_task(user_id, send_when_ready())
 
 
-async def process_tiktok_url(message: Message):
-    """Download TikTok media and return content"""
+async def process_bluesky_url(message: Message, config: Config, i18n: TranslatorRunner):
+    """Download BlueSky media and return content"""
     if not message.bot or not message.text:
         return None
 
     user_id = message.from_user.id if message.from_user else message.chat.id
+    url = message.text.strip()
+    allow_nsfw = True
+
+    if message.chat.id < 0:
+        settings = await get_chat_settings(message.chat.id)
+        allow_nsfw = settings.profile.allow_nsfw
 
     arq = await get_arq_pool('light')
-
-    service = TiktokService(arq=arq)
 
     # Send chat action for user feedback
     if message.bot:
         await message.bot.send_chat_action(message.chat.id, "choose_sticker")
 
-    # Get metadata
-    metadata = await service.get_info(message.text)
-    if not metadata:
-        raise BotError(
-            code=ErrorCode.METADATA_ERROR,
-            message="Failed to fetch metadata",
-            url=message.text,
-            service=Services.TIKTOK,
-            is_logged=True,
-            critical=True
-        )
+    try:
+        media_content = await BlueSkyService(arq=arq).download(url, allow_nsfw=allow_nsfw)
 
-    # Download content using metadata
-    media_content = await service.download(metadata)
+        # Log success
+        await log_download_event(user_id, Services.BLUESKY, 'success')
 
-    # Log success
-    await log_download_event(user_id, Services.TIKTOK, 'success')
+        return media_content
 
-    return media_content
+    except Exception as e:
+        # Error handling is usually done by task wrapper or specific exception catches if needed
+        raise
