@@ -19,8 +19,8 @@ btn-send-music-covers = { $is_enabled ->
     *[false] ❌ Обкладинки музики
 }
 btn-send-reactions = { $is_enabled ->
-    [true] ✅ Прикольні реакції
-    *[false] ❌ Прикольні реакції
+    [true] ✅ Реакції
+    *[false] ❌ Реакції
 }
 btn-negativity = { $is_enabled ->
     [true] ✅ Негативчик
@@ -39,12 +39,12 @@ btn-notifications = { $is_enabled ->
     *[false] ❌ Сповіщення
 }
 btn-allow-playlists = { $is_enabled ->
-    [true] ✅ Дозволити плейлісти
-    *[false] ❌ Дозволити плейлісти
+    [true] ✅ Плейлісти
+    *[false] ❌ Плейлісти
 }
 btn-allow-nsfw = { $is_enabled ->
-    [true] ✅ Дозволити NSFW
-    *[false] ❌ Дозволити NSFW
+    [true] ✅ NSFW
+    *[false] ❌ NSFW
 }
 
 desc-send-raw = Буду кидати медіа файлами для досягнення високої якості! 🎨
@@ -97,3 +97,9 @@ btn-service-enabled = { $is_enabled ->
     [true] ✅ Увімкнено
     *[false] ❌ Увімкнено
 }
+
+btn-news-spam = { $is_enabled ->
+    [true] ✅ Розсилка
+    *[false] ❌ Розсилка
+}
+desc-news-spam = Дозволити боту надсилати вам новини та оновлення! 📰

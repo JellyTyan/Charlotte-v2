@@ -19,8 +19,8 @@ btn-send-music-covers = { $is_enabled ->
     *[false] ❌ Send Music Covers
 }
 btn-send-reactions = { $is_enabled ->
-    [true] ✅ Send Fun Reactions
-    *[false] ❌ Send Fun Reactions
+    [true] ✅ Reactions
+    *[false] ❌ Reactions
 }
 btn-negativity = { $is_enabled ->
     [true] ✅ Negativity
@@ -43,12 +43,12 @@ btn-notifications = { $is_enabled ->
     *[false] ❌ Notifications
 }
 btn-allow-playlists = { $is_enabled ->
-    [true] ✅ Allow Playlists
-    *[false] ❌ Allow Playlists
+    [true] ✅ Playlists
+    *[false] ❌ Playlists
 }
 btn-allow-nsfw = { $is_enabled ->
-    [true] ✅ Allow NSFW
-    *[false] ❌ Allow NSFW
+    [true] ✅ NSFW
+    *[false] ❌ NSFW
 }
 
 desc-send-raw = I'll send media as files for the best quality! 🎨
