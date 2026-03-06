@@ -6,10 +6,10 @@ msg-hello =
 
 msg-help =
     Oto moje komendy:
-      /start – Przywitaj się!
-      /help – Uzyskaj pomoc
-      /settings – Dostosuj wszystko do siebie
-      /support – Wesprzyj projekt
+      /start - Przywitaj się!
+      /help - Uzyskaj pomoc
+      /settings - Dostosuj wszystko do siebie
+      /support - Wesprzyj projekt
 
     ✨ Z przyjemnością pomogę Ci zapisać media z tych platform:
 
@@ -22,15 +22,16 @@ msg-help =
     Pobiorę utwór z okładką i wszystkimi tagami!
 
     <b>Platformy wideo</b>
-      - YouTube – Filmy, Shorts lub audio (do 100 MB, ⭐ 1GB z Gwiazdkami!)
-      - TikTok – Filmy i obrazki
-      - Instagram – Reels i posty
-      - Twitter (X) – Filmy i obrazki
-      - Reddit – Wszystkie media z postów
+      - YouTube - Filmy, Shorts lub audio (do 100 MB, ⭐ 1GB z Gwiazdkami!)
+      - TikTok - Filmy i obrazki
+      - Instagram - Reels i posty
+      - Twitter (X) - Filmy i obrazki
+      - BlueSky - Filmy i obrazki
+      - Reddit - Wszystkie media z postów
 
     <b>Platformy artystyczne</b>
-      - Pixiv – Piękne ilustracje
-      - Pinterest – Wszystkie piny, które kochasz
+      - Pixiv - Piękne ilustracje
+      - Pinterest - Wszystkie piny, które kochasz
 
     Po prostu wyślij mi link, a ja zajmę się resztą! 🧡
 

@@ -6,10 +6,10 @@ msg-hello =
 
 msg-help =
     Here's what I can help you with:
-      /start – Say hello!
-      /help – Get help anytime
-      /settings – Customize your experience
-      /support – Support the project
+      /start - Say hello!
+      /help - Get help anytime
+      /settings - Customize your experience
+      /support - Support the project
 
     ✨ I love helping you save media from all these platforms:
 
@@ -22,15 +22,16 @@ msg-help =
     I'll grab the track with artwork and all the tags!
 
     <b>Video Platforms</b>
-      - YouTube – Videos, Shorts, or audio (up to 100 MB, ⭐ 1GB with Stars!)
-      - TikTok – Videos and images
-      - Instagram – Reels and posts
-      - Twitter (X) – Videos and images
-      - Reddit – All media from posts
+      - YouTube - Videos, Shorts, or audio (up to 100 MB, ⭐ 1GB with Stars!)
+      - TikTok - Videos and images
+      - Instagram - Reels and posts
+      - Twitter (X) - Videos and images
+      - BlueSky - Videos and images
+      - Reddit - All media from posts
 
     <b>Art Platforms</b>
-      - Pixiv – Beautiful illustrations
-      - Pinterest – All the pins you love
+      - Pixiv - Beautiful illustrations
+      - Pinterest - All the pins you love
 
     Just drop me a link and I'll take care of the rest! 🧡
 

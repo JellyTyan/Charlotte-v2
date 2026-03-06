@@ -17,6 +17,7 @@ from fluentogram import TranslatorRunner
 from models.settings import ChatSettingsJson, UserSettingsJson
 from models.service_list import Services
 from storage.db.crud import update_user_settings, update_chat_settings, get_user_settings, get_chat_settings, create_user, create_chat
+from middlewares.button_owner import register_message_owner
 from core.loader import dp
 
 logger = logging.getLogger(__name__)
@@ -255,10 +256,12 @@ async def settings_command(message: Message, i18n: TranslatorRunner) -> None:
         await create_user(message.from_user.id)
 
     settings, is_group = await get_settings_obj(chat.id, message.from_user.id)
-    await message.answer(
+    sent = await message.answer(
         i18n.settings.welcome(),
         reply_markup=build_main_keyboard(settings, i18n, is_group)
     )
+    if is_group and sent:
+        await register_message_owner(sent, message.from_user.id)
 
 # Comeback
 @dp.callback_query(lambda c: c.data == "settings_main")
