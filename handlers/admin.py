@@ -30,7 +30,8 @@ from storage.db.crud import (
     get_global_settings,
     update_global_settings,
     get_list_user_ids,
-    get_news_subscribers_ids
+    get_news_subscribers_ids,
+    get_all_chat_ids
 )
 from states import NewsSpamGroup
 from utils import escape_markdown
@@ -601,6 +602,8 @@ async def process_spam_news_to_chats(callback: CallbackQuery, state: FSMContext)
         user_ids = await get_news_subscribers_ids()
     else:
         user_ids = await get_list_user_ids()
+        chat_ids = await get_all_chat_ids()
+        user_ids.extend(chat_ids)
 
 
     for user_id in user_ids:
