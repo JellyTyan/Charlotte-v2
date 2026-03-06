@@ -488,17 +488,35 @@ async def get_list_user_ids() -> list[int]:
 async def get_news_subscribers_ids() -> list[int]:
     async with _get_db().async_session() as session:
         # Get users who are not banned
-        stmt = select(Users.user_id, Users.settings_json).where(Users.is_banned == False)
-        result = await session.execute(stmt)
-        users = result.fetchall()
+        stmt_users = select(Users.user_id, Users.settings_json).where(Users.is_banned == False)
+        result_users = await session.execute(stmt_users)
+        users = result_users.fetchall()
+
+        # Get all chats
+        stmt_chats = select(Chats.chat_id, Chats.settings_json)
+        result_chats = await session.execute(stmt_chats)
+        chats = result_chats.fetchall()
 
         subscriber_ids = []
+
         for user_id, settings_json in users:
             settings_dict = settings_json if isinstance(settings_json, dict) else {}
-            # Check the parsed dict manually to avoid slow Pydantic validation across thousands of rows
             profile = settings_dict.get('profile', {})
-            news_spam = profile.get('news_spam', True)  # defaults to True if missing
+            news_spam = profile.get('news_spam', False)  # defaults to False
             if news_spam:
                 subscriber_ids.append(user_id)
 
+        for chat_id, settings_json in chats:
+            settings_dict = settings_json if isinstance(settings_json, dict) else {}
+            profile = settings_dict.get('profile', {})
+            news_spam = profile.get('news_spam', False)  # defaults to False
+            if news_spam:
+                subscriber_ids.append(chat_id)
+
         return subscriber_ids
+
+async def get_all_chat_ids() -> list[int]:
+    async with _get_db().async_session() as session:
+        stmt = select(Chats.chat_id)
+        result = await session.execute(stmt)
+        return [row[0] for row in result.fetchall()]
