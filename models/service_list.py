@@ -13,3 +13,4 @@ class Services(Enum):
     PIXIV = "Pixiv"
     DEEZER = "Deezer"
     APPLE_MUSIC = "AppleMusic"
+    BLUESKY = "BlueSky"

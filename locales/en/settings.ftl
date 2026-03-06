@@ -30,6 +30,10 @@ btn-auto-translate = { $is_enabled ->
     [true] ✅ Auto-translate captions
     *[false] ❌ Auto-translate captions
 }
+btn-news-spam = { $is_enabled ->
+    [true] ✅ Newsletters
+    *[false] ❌ Newsletters
+}
 btn-auto-caption = { $is_enabled ->
     [true] ✅ Captions
     *[false] ❌ Captions
@@ -52,6 +56,7 @@ desc-send-music-covers = I'll attach the album art to every song I download for 
 desc-send-reactions = I'll react with emojis to show you I'm working! ⚡
 desc-negativity-mode = I'll use some toxic emojis when reacting! 😈
 desc-send-notifications = Disable this to receive media without notification sound. 🔕
+desc-news-spam = Allow the bot to send you feature updates and news! 📰
 desc-auto-caption = I'll automatically verify and add captions to media. 📝
 desc-auto-translate-titles = I'll translate video captions to your language automatically! 🌍
 desc-allow-playlists = I'll handle full playlists for you (use carefully!). 📂

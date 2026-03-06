@@ -484,3 +484,21 @@ async def get_list_user_ids() -> list[int]:
         stmt = select(Users.user_id).where(Users.is_banned == False)
         result = await session.execute(stmt)
         return [row[0] for row in result.fetchall()]
+
+async def get_news_subscribers_ids() -> list[int]:
+    async with _get_db().async_session() as session:
+        # Get users who are not banned
+        stmt = select(Users.user_id, Users.settings_json).where(Users.is_banned == False)
+        result = await session.execute(stmt)
+        users = result.fetchall()
+
+        subscriber_ids = []
+        for user_id, settings_json in users:
+            settings_dict = settings_json if isinstance(settings_json, dict) else {}
+            # Check the parsed dict manually to avoid slow Pydantic validation across thousands of rows
+            profile = settings_dict.get('profile', {})
+            news_spam = profile.get('news_spam', True)  # defaults to True if missing
+            if news_spam:
+                subscriber_ids.append(user_id)
+
+        return subscriber_ids
