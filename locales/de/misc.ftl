@@ -6,10 +6,10 @@ msg-hello =
 
 msg-help =
     Hier sind meine Befehle:
-      /start – Sag Hallo!
-      /help – Hilfe bekommen
-      /settings – Alles an dich anpassen
-      /support – Projekt unterstützen
+      /start - Sag Hallo!
+      /help - Hilfe bekommen
+      /settings - Alles an dich anpassen
+      /support - Projekt unterstützen
 
     ✨ Ich helfe gerne, Medien von diesen Plattformen zu speichern:
 
@@ -22,15 +22,16 @@ msg-help =
     Ich hole den Track mit Artwork und allen Tags!
 
     <b>Video-Plattformen</b>
-      - YouTube – Videos, Shorts oder Audio (bis 100 MB, ⭐ 1GB mit Stars!)
-      - TikTok – Videos und Bilder
-      - Instagram – Reels und Posts
-      - Twitter (X) – Videos und Bilder
-      - Reddit – Alle Medien aus Posts
+      - YouTube - Videos, Shorts oder Audio (bis 100 MB, ⭐ 1GB mit Stars!)
+      - TikTok - Videos und Bilder
+      - Instagram - Reels und Posts
+      - Twitter (X) - Videos und Bilder
+      - BlueSky - Videos und Bilder
+      - Reddit - Alle Medien aus Posts
 
     <b>Kunst-Plattformen</b>
-      - Pixiv – Wunderschöne Illustrationen
-      - Pinterest – Alle Pins die du liebst
+      - Pixiv - Wunderschöne Illustrationen
+      - Pinterest - Alle Pins die du liebst
 
     Schick mir einfach einen Link und ich kümmere mich um den Rest! 🧡
 

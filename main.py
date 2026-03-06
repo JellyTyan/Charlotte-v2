@@ -49,6 +49,10 @@ async def main():
     from middlewares.ban_check import BanCheckMiddleware
     dp.update.middleware(BanCheckMiddleware())
 
+    from middlewares.button_owner import UserContextMiddleware, ButtonOwnerMiddleware
+    dp.update.outer_middleware(UserContextMiddleware())
+    dp.callback_query.middleware(ButtonOwnerMiddleware())
+
     logger.info("📊 Setting up rate limiter...")
     from middlewares.rate_limiter import RateLimiter
     dp.message.middleware(RateLimiter(rate=10, per=60))
