@@ -12,7 +12,7 @@ from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
 from modules.base_service import BaseService
 from utils import truncate_string, process_video_for_telegram
-from .utils import get_post_info, sanitize_filename, download_m3u8_video
+from .utils import get_post_info, sanitize_filename
 from models.service_list import Services
 
 logger = logging.getLogger(__name__)
@@ -88,8 +88,10 @@ class BlueSkyService(BaseService):
                     if not os.path.abspath(filename).startswith(os.path.abspath(self.output_path)):
                         raise BotError(ErrorCode.INVALID_URL, message="Invalid file path")
 
-                    await download_m3u8_video(video_url, filename)
-                    fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(self.arq, filename)
+                    job = await self.arq.enqueue_job('universal_ytdlp_extract', url=video_url, output_template=filename,extract_only=False, _queue_name='heavy')
+                    job_result = await job.result()
+
+                    fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(self.arq, job_result['filepath'])
 
                     result.append(
                         MediaContent(

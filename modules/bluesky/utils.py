@@ -35,23 +35,6 @@ async def get_post_info(post_id: str, author_username: str, client: AsyncSession
             critical=True,
         )
 
-async def download_m3u8_video(url: str, filename: str) -> None:
-    try:
-        ydl_opts = {'outtmpl': filename}
-        loop = asyncio.get_event_loop()
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            await loop.run_in_executor(
-                download_executor,
-                lambda: ydl.download([url])
-            )
-    except Exception as e:
-        raise BotError(
-            code=ErrorCode.DOWNLOAD_FAILED,
-            message=f"Failed to download M3U8 video: {e}",
-            url=url,
-            critical=True,
-            is_logged=True,
-        )
 
 def sanitize_filename(filename: str) -> str:
     """Sanitize filename by removing invalid characters."""
