@@ -19,8 +19,8 @@ btn-send-music-covers = { $is_enabled ->
     *[false] ❌ کاور موزیک
 }
 btn-send-reactions = { $is_enabled ->
-    [true] ✅ واکنش‌های بامزه
-    *[false] ❌ واکنش‌های بامزه
+    [true] ✅ واکنش‌ها
+    *[false] ❌ واکنش‌ها
 }
 btn-negativity = { $is_enabled ->
     [true] ✅ منفی‌نگری
@@ -39,12 +39,12 @@ btn-notifications = { $is_enabled ->
     *[false] ❌ تبلیغات
 }
 btn-allow-playlists = { $is_enabled ->
-    [true] ✅ اجازه پلی‌لیست
-    *[false] ❌ اجازه پلی‌لیست
+    [true] ✅ پلی‌لیست
+    *[false] ❌ پلی‌لیست
 }
 btn-allow-nsfw = { $is_enabled ->
-    [true] ✅ اجازه NSFW
-    *[false] ❌ اجازه NSFW
+    [true] ✅ NSFW
+    *[false] ❌ NSFW
 }
 
 desc-send-raw = رسانه ها را به عنوان فایل برای بهترین کیفیت ارسال می کنم! 🎨
@@ -97,3 +97,9 @@ btn-service-enabled = { $is_enabled ->
     [true] ✅ Enabled
     *[false] ❌ Enabled
 }
+
+btn-news-spam = { $is_enabled ->
+    [true] ✅ خبرنامه
+    *[false] ❌ خبرنامه
+}
+desc-news-spam = به ربات اجازه دهید برای شما اخبار و بروزرسانی‌ها را ارسال کند! 📰

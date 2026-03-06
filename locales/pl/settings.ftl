@@ -19,8 +19,8 @@ btn-send-music-covers = { $is_enabled ->
     *[false] ❌ Okładki muzyki
 }
 btn-send-reactions = { $is_enabled ->
-    [true] ✅ Zabawne reakcje
-    *[false] ❌ Zabawne reakcje
+    [true] ✅ Reakcje
+    *[false] ❌ Reakcje
 }
 btn-negativity = { $is_enabled ->
     [true] ✅ Negatywność
@@ -39,12 +39,12 @@ btn-notifications = { $is_enabled ->
     *[false] ❌ Powiadomienia
 }
 btn-allow-playlists = { $is_enabled ->
-    [true] ✅ Zezwól na playlisty
-    *[false] ❌ Zezwól na playlisty
+    [true] ✅ Playlisty
+    *[false] ❌ Playlisty
 }
 btn-allow-nsfw = { $is_enabled ->
-    [true] ✅ Zezwól na NSFW
-    *[false] ❌ Zezwól na NSFW
+    [true] ✅ NSFW
+    *[false] ❌ NSFW
 }
 
 desc-send-raw = Będę wysyłać media jako pliki dla najlepszej jakości! 🎨
@@ -97,3 +97,9 @@ btn-service-enabled = { $is_enabled ->
     [true] ✅ Enabled
     *[false] ❌ Enabled
 }
+
+btn-news-spam = { $is_enabled ->
+    [true] ✅ Newsletter
+    *[false] ❌ Newsletter
+}
+desc-news-spam = Zezwól botowi na wysyłanie nowości i aktualizacji! 📰

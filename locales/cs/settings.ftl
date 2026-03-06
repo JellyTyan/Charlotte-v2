@@ -19,8 +19,8 @@ btn-send-music-covers = { $is_enabled ->
     *[false] ❌ Hudební obaly
 }
 btn-send-reactions = { $is_enabled ->
-    [true] ✅ Zábavné reakce
-    *[false] ❌ Zábavné reakce
+    [true] ✅ Reakce
+    *[false] ❌ Reakce
 }
 btn-negativity = { $is_enabled ->
     [true] ✅ Negativita
@@ -39,12 +39,12 @@ btn-notifications = { $is_enabled ->
     *[false] ❌ Oznámení
 }
 btn-allow-playlists = { $is_enabled ->
-    [true] ✅ Povolit playlisty
-    *[false] ❌ Povolit playlisty
+    [true] ✅ Playlisty
+    *[false] ❌ Playlisty
 }
 btn-allow-nsfw = { $is_enabled ->
-    [true] ✅ Povolit NSFW
-    *[false] ❌ Povolit NSFW
+    [true] ✅ NSFW
+    *[false] ❌ NSFW
 }
 
 desc-send-raw = Budu posílat média jako soubory pro nejlepší kvalitu! 🎨
@@ -97,3 +97,9 @@ btn-service-enabled = { $is_enabled ->
     [true] ✅ Enabled
     *[false] ❌ Enabled
 }
+
+btn-news-spam = { $is_enabled ->
+    [true] ✅ Novinky
+    *[false] ❌ Novinky
+}
+desc-news-spam = Povolit botovi posílat vám novinky a aktualizace! 📰
