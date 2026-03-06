@@ -33,6 +33,7 @@
 - [x] Pixiv
 - [x] X (Twitter)
 - [x] Reddit
+- [x] BlueSky
 
 <!-- FEATURES -->
 ## <img src="https://cdn.discordapp.com/emojis/852881450667081728.gif" width="20px" height="20px">》Features

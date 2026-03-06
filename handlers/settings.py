@@ -1,3 +1,4 @@
+import logging
 from aiogram import Bot
 from aiogram.enums.chat_member_status import ChatMemberStatus
 from aiogram.filters import Command
@@ -10,22 +11,16 @@ from aiogram.types import (
     InaccessibleMessage
 )
 from aiogram.enums import ParseMode
-import logging
+from aiogram.exceptions import TelegramRetryAfter, TelegramBadRequest
 from fluentogram import TranslatorRunner
 
+from models.settings import ChatSettingsJson, UserSettingsJson
+from models.service_list import Services
 from storage.db.crud import update_user_settings, update_chat_settings, get_user_settings, get_chat_settings, create_user, create_chat
+from middlewares.button_owner import register_message_owner
 from core.loader import dp
-# from utils.register_services import SERVICES
 
-
-settings_keys = [
-    "send_raw", "send_music_covers", "send_reactions", "send_notifications",
-    "auto_caption", "auto_translate_titles", "lossless_mode"
-]
-
-chat_only_settings = [
-    "allow_playlists", "blocked_services"
-]
+logger = logging.getLogger(__name__)
 
 LANGUAGES = [
     { "code": "en", "name": "English", "flag": "🇺🇲" },
@@ -49,122 +44,201 @@ LANGUAGES = [
     { "code": "hi", "name": "हिन्दी", "flag": "🇮🇳" }
 ]
 
-# ... existing code ...
+LANGUAGES_MAP = {lang["code"]: lang for lang in LANGUAGES}
 
-def build_main_keyboard(settings: dict, i18n: TranslatorRunner, is_group: bool = False) -> InlineKeyboardMarkup:
-    # Добавляем настройки только для групп
+DESC_MAPPING = {
+    "notifications": "send_notifications",
+    "reactions": "send_reactions",
+    "allow_playlists": "allow_playlists",
+    "allow_nsfw": "allow_nsfw",
+    "raw": "send_raw",
+    "caption": "auto_caption",
+    "translate_caption": "auto_translate_titles",
+    "send_covers": "send_music_covers",
+    "lossless": "lossless_mode",
+    "negativity": "negativity_mode",
+    "news_spam": "news_spam"
+}
+
+def get_language_flag(code: str) -> str:
+    lang = LANGUAGES_MAP.get(code)
+    if lang:
+        return lang['flag']
+    return code.upper()
+
+def get_desc(key: str, i18n: TranslatorRunner) -> str:
+    mapped = str(DESC_MAPPING.get(key, key))
+    return i18n.get(f"desc-{mapped.replace('_', '-')}")
+
+async def get_settings_obj(chat_id: int, user_id: int) -> tuple[UserSettingsJson | ChatSettingsJson, bool]:
+    is_group = chat_id < 0
+    if is_group:
+        settings = await get_chat_settings(chat_id)
+        if not settings:
+            await create_chat(chat_id, user_id)
+            settings = await get_chat_settings(chat_id)
+        return settings, True
+    else:
+        settings = await get_user_settings(user_id)
+        if not settings:
+            await create_user(user_id)
+            settings = await get_user_settings(user_id)
+        return settings, False
+
+async def save_settings_obj(chat_id: int, user_id: int, settings):
+    is_group = chat_id < 0
+    if is_group:
+        await update_chat_settings(chat_id, settings)
+    else:
+        await update_user_settings(user_id, settings)
+
+
+def build_main_keyboard(settings, i18n: TranslatorRunner, is_group: bool = False) -> InlineKeyboardMarkup:
+    current_flag = get_language_flag(settings.profile.language)
+    title_flag = get_language_flag(settings.profile.title_language)
     keyboards = [
         [
+            InlineKeyboardButton(text=f"{i18n.btn.language()} {current_flag} →", callback_data="settings_lang"),
+            InlineKeyboardButton(text=f"{i18n.btn.title.language()} {title_flag} →", callback_data="settings_title_language"),
+        ],
+        [
             InlineKeyboardButton(
-                text=f"{i18n.btn.language()} →",
-                callback_data="settings_lang"
+                text=i18n.btn.notifications(is_enabled='true' if settings.profile.notifications else 'false'),
+                callback_data="menu_profile_notifications"
             ),
             InlineKeyboardButton(
-                text=i18n.btn.send.raw(is_enabled='true' if settings['send_raw'] else 'false'),
-                callback_data="settings_send_raw"
+                text=i18n.btn.send.reactions(is_enabled='true' if settings.profile.reactions else 'false'),
+                callback_data="menu_profile_reactions"
             ),
         ],
         [
             InlineKeyboardButton(
-                text=i18n.btn.send.music.covers(is_enabled='true' if settings['send_music_covers'] else 'false'),
-                callback_data="settings_send_music_covers"
+                text=i18n.btn.negativity(is_enabled='true' if settings.profile.negativity else 'false'),
+                callback_data="menu_profile_negativity"
             ),
             InlineKeyboardButton(
-                text=i18n.btn.send.reactions(is_enabled='true' if settings['send_reactions'] else 'false'),
-                callback_data="settings_send_reactions"
+                text=i18n.btn.news.spam(is_enabled='true' if settings.profile.news_spam else 'false'),
+                callback_data="menu_profile_news_spam"
             ),
         ],
         [
-            InlineKeyboardButton(
-                text=i18n.btn.auto.caption(is_enabled='true' if settings['auto_caption'] else 'false'),
-                callback_data="settings_auto_caption"
-            ),
-            InlineKeyboardButton(
-                text=i18n.btn.notifications(is_enabled='true' if settings['send_notifications'] else 'false'),
-                callback_data="settings_send_notifications"
-            ),
-        ],
-        [
-            InlineKeyboardButton(
-                text=i18n.btn.auto.translate(is_enabled='true' if settings['auto_translate_titles'] else 'false'),
-                callback_data="settings_auto_translate_titles"
-            ),
-            InlineKeyboardButton(
-                text=f"{i18n.btn.title.language()} →",
-                callback_data="settings_title_language"
-            ),
-        ],
+            InlineKeyboardButton(text=i18n.btn.configure.services(), callback_data="settings_services")
+        ]
     ]
 
-    if not is_group:
-         keyboards.append([
-            InlineKeyboardButton(
-                text=f"🎧 LOSSLESS (Experimental): {'✅' if settings.get('lossless_mode') else '❌'}",
-                callback_data="settings_lossless_mode"
-            )
-        ])
-
     if is_group:
-        keyboards.append([
+        keyboards.insert(2, [
             InlineKeyboardButton(
-                text=i18n.btn.allow.playlists(is_enabled='true' if settings['allow_playlists'] else 'false'),
-                callback_data="settings_allow_playlists"
+                text=i18n.btn.allow.playlists(is_enabled='true' if settings.profile.allow_playlists else 'false'),
+                callback_data="menu_profile_allow_playlists"
             ),
             InlineKeyboardButton(
-                text=i18n.btn.blocked.services(),
-                callback_data="settings_blocked_services"
-            ),
+                text=i18n.btn.allow.nsfw(is_enabled='true' if settings.profile.allow_nsfw else 'false'),
+                callback_data="menu_profile_allow_nsfw"
+            )
         ])
     return InlineKeyboardMarkup(inline_keyboard=keyboards)
 
-def build_back_keyboard(i18n: TranslatorRunner):
-    """Back button - used within handlers when i18n context is already available"""
+def build_services_keyboard(i18n: TranslatorRunner) -> InlineKeyboardMarkup:
+    buttons = []
+    for s in Services:
+        buttons.append(InlineKeyboardButton(text=s.value, callback_data=f"settings_svc_{s.value.lower()}"))
+
+    rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
+    rows.append([InlineKeyboardButton(text=f"{i18n.settings.back()}", callback_data="settings_main")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+def build_service_settings_keyboard(settings, service: str, i18n: TranslatorRunner) -> InlineKeyboardMarkup:
+    svc_settings = getattr(settings.services, service)
+    keyboards = []
+
+    if hasattr(svc_settings, 'caption'):
+        keyboards.append([
+            InlineKeyboardButton(
+                text=i18n.btn.auto.caption(is_enabled='true' if svc_settings.caption else 'false'),
+                callback_data=f"menu_service_{service}_caption"
+            ),
+            InlineKeyboardButton(
+                text=i18n.btn.auto.translate(is_enabled='true' if svc_settings.translate_caption else 'false'),
+                callback_data=f"menu_service_{service}_translate_caption"
+            )
+        ])
+    if hasattr(svc_settings, 'raw'):
+        keyboards.append([
+            InlineKeyboardButton(
+                text=i18n.btn.send.raw(is_enabled='true' if svc_settings.raw else 'false'),
+                callback_data=f"menu_service_{service}_raw"
+            )
+        ])
+
+    if hasattr(svc_settings, 'send_covers'):
+        keyboards.append([
+            InlineKeyboardButton(
+                text=i18n.btn.send.music.covers(is_enabled='true' if svc_settings.send_covers else 'false'),
+                callback_data=f"menu_service_{service}_send_covers"
+            )
+        ])
+    if hasattr(svc_settings, 'lossless'):
+        keyboards.append([
+            InlineKeyboardButton(
+                text=i18n.btn.lossless(is_enabled='true' if svc_settings.lossless else 'false'),
+                callback_data=f"menu_service_{service}_lossless"
+            )
+        ])
+    if isinstance(settings, ChatSettingsJson) and hasattr(settings.profile, 'blocked_services'):
+        keyboards.append([
+            InlineKeyboardButton(
+                text=i18n.btn.service.enabled(is_enabled='false' if service in settings.profile.blocked_services else 'true'),
+                callback_data=f"block_svc_{service}"
+            )
+        ])
+
+    keyboards.append([InlineKeyboardButton(text=f"{i18n.settings.back()}", callback_data="settings_services")])
+    return InlineKeyboardMarkup(inline_keyboard=keyboards)
+
+def build_back_keyboard(i18n: TranslatorRunner, to="settings_main", text=None):
+    if not text:
+        text = i18n.settings.back()
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text=i18n.settings.back(), callback_data="settings_back")]]
+        inline_keyboard=[[InlineKeyboardButton(text=text, callback_data=to)]]
     )
 
-async def get_default_settings():
-    """Returns default settings"""
-    return {
-        "send_raw": False,
-        "send_music_covers": False,
-        "send_reactions": False,
-        "send_notifications": False,
-        "auto_caption": False,
-        "auto_translate_titles": False,
-        "lossless_mode": False,
-        "allow_playlists": True,
-        "blocked_services": [],
-    }
+async def check_if_admin_or_owner(bot: Bot, chat_id: int, user_id: int) -> bool:
+    chat_member = await bot.get_chat_member(chat_id, user_id)
+    return chat_member.status in [ChatMemberStatus.CREATOR, ChatMemberStatus.ADMINISTRATOR]
 
-async def get_settings_for_chat(chat_id: int, user_id: int) -> dict:
-    """Gets settings for chat or user"""
-    if chat_id < 0:  # Group
-        settings_obj = await get_chat_settings(chat_id)
-        if not settings_obj:
-            await create_chat(chat_id, user_id)
-            settings_obj = await get_chat_settings(chat_id)
-    else:  # Private chat
-        settings_obj = await get_user_settings(user_id)
-        if not settings_obj:
-            await create_user(user_id)
-            settings_obj = await get_user_settings(user_id)
+async def safe_edit_text(callback: CallbackQuery, text: str, reply_markup: InlineKeyboardMarkup, parse_mode: str = ParseMode.MARKDOWN):
+    try:
+        if isinstance(callback.message, InaccessibleMessage) or callback.message is None:
+            if callback.bot is None:
+                return
+            await callback.bot.send_message(
+                callback.from_user.id,
+                text,
+                parse_mode=parse_mode,
+                reply_markup=reply_markup
+            )
+        else:
+            await callback.message.edit_text(
+                text,
+                parse_mode=parse_mode,
+                reply_markup=reply_markup
+            )
+    except TelegramRetryAfter as e:
+        logger.warning(f"Flood control exceeded for user {callback.from_user.id}: retry after {e.retry_after}")
+        try:
+            await callback.answer(f"⏳ Please wait {e.retry_after} seconds.", show_alert=True)
+        except Exception:
+            pass
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e).lower():
+            pass
+        else:
+            raise
 
-    if not settings_obj:
-        return await get_default_settings()
+# === Handlers === #
 
-    return {
-        "send_raw": settings_obj.send_raw,
-        "send_notifications": settings_obj.send_notifications,
-        "send_music_covers": settings_obj.send_music_covers,
-        "send_reactions": settings_obj.send_reactions,
-        "auto_caption": settings_obj.auto_caption,
-        "auto_translate_titles": settings_obj.auto_translate_titles,
-        "lossless_mode": getattr(settings_obj, 'lossless_mode', False),
-        "allow_playlists": getattr(settings_obj, 'allow_playlists', True),
-        "blocked_services": getattr(settings_obj, 'blocked_services', []),
-    }
-
+# Main settings
 @dp.message(Command("settings"))
 async def settings_command(message: Message, i18n: TranslatorRunner) -> None:
     chat = message.chat
@@ -175,374 +249,265 @@ async def settings_command(message: Message, i18n: TranslatorRunner) -> None:
         if not is_admin:
             await message.answer(i18n.settings.no.permission())
             return
+        admins = await message.bot.get_chat_administrators(chat.id)
+        owner_id = next((admin.user.id for admin in admins if admin.status == "creator"), message.from_user.id)
+        await create_chat(chat.id, owner_id)
+    else:
+        await create_user(message.from_user.id)
 
-    settings = await get_settings_for_chat(chat.id, message.from_user.id)
-    is_group = chat.type in ("group", "supergroup")
-
-    await message.answer(
+    settings, is_group = await get_settings_obj(chat.id, message.from_user.id)
+    sent = await message.answer(
         i18n.settings.welcome(),
         reply_markup=build_main_keyboard(settings, i18n, is_group)
     )
+    if is_group and sent:
+        await register_message_owner(sent, message.from_user.id)
 
-
-@dp.callback_query(lambda c: c.data == "settings_back")
-async def settings_back(callback: CallbackQuery, i18n: TranslatorRunner):
-    if callback.message is None:
-        return
-    settings = await get_settings_for_chat(callback.message.chat.id, callback.from_user.id)
-    is_group = callback.message.chat.type in ("group", "supergroup")
-    text = i18n.settings.welcome()
-    if isinstance(callback.message, InaccessibleMessage) or callback.message is None:
-        if callback.bot is None:
-            return
-        await callback.bot.send_message(
-            callback.from_user.id,
-            text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=build_main_keyboard(settings, i18n, is_group)
-            )
-    else:
-        await callback.message.edit_text(
-            text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=build_main_keyboard(settings, i18n, is_group)
-        )
+# Comeback
+@dp.callback_query(lambda c: c.data == "settings_main")
+async def settings_main(callback: CallbackQuery, i18n: TranslatorRunner):
+    if callback.message is None: return
+    settings, is_group = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
+    await safe_edit_text(callback, i18n.settings.welcome(), build_main_keyboard(settings, i18n, is_group), ParseMode.HTML)
     await callback.answer()
 
+# Service settings: choosing one
+@dp.callback_query(lambda c: c.data == "settings_services")
+async def settings_services_menu(callback: CallbackQuery, i18n: TranslatorRunner):
+    if callback.message is None: return
+    text = i18n.settings.select.service()
+    await safe_edit_text(callback, text, build_services_keyboard(i18n))
+    await callback.answer()
 
-@dp.callback_query(lambda c: c.data.startswith("settings_") and c.data in [f"settings_{k}" for k in settings_keys + ["allow_playlists"]])
-async def toggle_setting(callback: CallbackQuery, i18n: TranslatorRunner):
-    data = callback.data
-    message = callback.message
-    if not data or not message:
-        return
-    key = data.split("_", 1)[1]
-    chat = message.chat
+# Service settings
+@dp.callback_query(lambda c: c.data.startswith("settings_svc_"))
+async def settings_svc_menu(callback: CallbackQuery, i18n: TranslatorRunner):
+    if callback.message is None: return
+    if callback.data is None: return
+    service = callback.data.replace("settings_svc_", "")
+    settings, is_group = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
+    name = service.replace("_", " ").title()
+    text = i18n.settings.service.title(name=name)
+    await safe_edit_text(callback, text, build_service_settings_keyboard(settings, service, i18n))
+    await callback.answer()
 
-    # Check if the setting is available for this chat type
-    if chat.type in ("group", "supergroup"):
-        if key not in settings_keys and key != "allow_playlists":
-            await callback.answer(i18n.settings.no.allowed.groups())
-            return
-    else:
-        if key not in settings_keys:
-            await callback.answer(i18n.settings.no.allowed.dm())
-            return
+@dp.callback_query(lambda c: c.data.startswith("menu_profile_"))
+async def menu_profile_setting(callback: CallbackQuery, i18n: TranslatorRunner):
+    if callback.message is None: return
+    if callback.data is None: return
+    key = callback.data.replace("menu_profile_", "")
+    settings, is_group = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
+    current_value = getattr(settings.profile, key)
 
-    # Get current settings
-    current_settings = await get_settings_for_chat(chat.id, callback.from_user.id)
-    current_value = current_settings[key]
-
-    # Create enable/disable keyboard
     new_value = not current_value
-    callback_data = f"toggle_{key}_{new_value}"
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text=f"✅ {i18n.get('enable')}" if not current_value else f"❌ {i18n.get('disable')}",
+                callback_data=f"toggle_profile_{key}_{new_value}"
+            ),
+        ],
+        [InlineKeyboardButton(text=f"{i18n.get('back')}", callback_data="settings_main")]
+    ])
+
+    description = get_desc(key, i18n)
+    status_word = i18n.get('enabled') if current_value else i18n.get('disabled')
+    status_text = i18n.get('current-status', status=status_word)
+    text = f"{description}\n\n{status_text}"
+
+    await safe_edit_text(callback, text, kb)
+    await callback.answer()
+
+@dp.callback_query(lambda c: c.data.startswith("menu_service_"))
+async def menu_service_setting(callback: CallbackQuery, i18n: TranslatorRunner):
+    if callback.message is None or callback.data is None: return
+    parts = callback.data.replace("menu_service_", "").split("_")
+
+    service_map = {s.value.lower(): s.value.lower() for s in Services}
+    target_service = None
+    for svc_name in service_map:
+        if callback.data.startswith(f"menu_service_{svc_name}_"):
+            target_service = svc_name
+            break
+    if not target_service: return
+
+    key = callback.data.replace(f"menu_service_{target_service}_", "")
+    settings, is_group = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
+
+    svc_settings = getattr(settings.services, target_service)
+    current_value = getattr(svc_settings, key)
+    new_value = not current_value
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
                 text=f"✅ {i18n.get('enable')}" if not current_value else f"❌ {i18n.get('disable')}",
-                callback_data=callback_data
+                callback_data=f"toggle_service_{target_service}_{key}_{new_value}"
             ),
         ],
-        [
-            InlineKeyboardButton(text=f"🔙 {i18n.get('back')}", callback_data="settings_back"),
-        ]
+        [InlineKeyboardButton(text=f"{i18n.get('back')}", callback_data=f"settings_svc_{target_service}")]
     ])
 
-    # Show setting description with enable/disable options
-    description = i18n.get(f"desc-{key.replace('_', '-')}")
-
-    # Статус
-    # Статус
+    description = get_desc(key, i18n)
     status_word = i18n.get('enabled') if current_value else i18n.get('disabled')
     status_text = i18n.get('current-status', status=status_word)
-    text = f"{description}\n\n{status_text}"
-    if isinstance(callback.message, InaccessibleMessage) or callback.message is None:
-        if callback.bot is None:
-            return
-        await callback.bot.send_message(
-            callback.from_user.id,
-            text,
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=kb
-            )
-    else:
-        await callback.message.edit_text(
-            text,
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=kb
-        )
+    title = i18n.settings.service.title(name=target_service.replace('_', ' ').title())
+    text = f"{title}\n\n{description}\n\n{status_text}"
+
+    await safe_edit_text(callback, text, kb)
     await callback.answer()
 
+@dp.callback_query(lambda c: c.data.startswith("block_svc_"))
+async def menu_service_block(callback: CallbackQuery, i18n: TranslatorRunner):
+    if callback.message is None or callback.data is None: return
 
-@dp.callback_query(lambda c: c.data.startswith("toggle_") and not c.data.startswith("toggle_service_"))
-async def apply_setting_toggle(callback: CallbackQuery, i18n: TranslatorRunner):
-    data = callback.data
-    if not data or not data.startswith("toggle_"):
-        logging.error(f"Invalid callback data format, data don't starts with toggle_: {callback.data}")
-        await callback.answer(i18n.get('invalid-setting'))
+    service = callback.data.replace("block_svc_", "")
+
+    settings, is_group = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
+    if not isinstance(settings, ChatSettingsJson):
+        logger.error(f"Not a chat settings: {type(settings)}")
         return
 
-    message = callback.message
-    if not message:
-        return
+    logger.info(f"Before toggle - blocked_services: {settings.profile.blocked_services}, target: {service}")
+    if service in settings.profile.blocked_services:
+        settings.profile.blocked_services.remove(service)
+    else:
+        settings.profile.blocked_services.add(service)
+    logger.info(f"After toggle - blocked_services: {settings.profile.blocked_services}")
 
-    # Remove prefix toggle_
-    data_without_prefix = data[7:]
+    await save_settings_obj(callback.message.chat.id, callback.from_user.id, settings)
 
-    last_underscore_index = data_without_prefix.rfind("_")
-    if last_underscore_index == -1:
-        logging.error(f"Invalid callback data format: {callback.data}")
-        await callback.answer(i18n.get('invalid-setting'))
-        return
+    name = service.replace("_", " ").title()
+    text = i18n.settings.service.title(name=name)
 
-    key = data_without_prefix[:last_underscore_index]
-    value_str = data_without_prefix[last_underscore_index + 1:]
-    new_value = value_str == "True"
-    chat = message.chat
+    await safe_edit_text(callback, text, build_service_settings_keyboard(settings, service, i18n))
+    await callback.answer()
 
-    # Validate that the key is in our allowed settings
-    if key not in settings_keys and key != "allow_playlists":
-        logging.error(f"Key '{key}' not found in settings_keys: {settings_keys}")
-        await callback.answer(i18n.get('invalid-setting'))
-        return
+@dp.callback_query(lambda c: c.data.startswith("toggle_profile_"))
+async def apply_profile_setting(callback: CallbackQuery, i18n: TranslatorRunner):
+    if callback.message is None or callback.data is None: return
+    data = callback.data.replace("toggle_profile_", "")
+    last_uscores = data.rfind("_")
+    key = data[:last_uscores]
+    new_value = data[last_uscores+1:] == "True"
 
-    try:
-        # Update in database
-        if chat.type in ("group", "supergroup"):
-            await update_chat_settings(chat.id, **{key: new_value})
-        else:
-            await update_user_settings(callback.from_user.id, **{key: new_value})
+    chat_id = callback.message.chat.id
+    settings, is_group = await get_settings_obj(chat_id, callback.from_user.id)
+    setattr(settings.profile, key, new_value)
+    await save_settings_obj(chat_id, callback.from_user.id, settings)
 
-        # Show confirmation message
-        status_text = i18n.get('enabled') if new_value else i18n.get('disabled')
-        text = i18n.get('setting-changed', setting=key, status=status_text)
-        if isinstance(callback.message, InaccessibleMessage) or callback.message is None:
-            if callback.bot is None:
-                return
-            await callback.bot.send_message(
-                callback.from_user.id,
-                text,
-                parse_mode=ParseMode.MARKDOWN,
-                reply_markup=build_back_keyboard(i18n)
-                )
-        else:
-            await callback.message.edit_text(
-                text,
-                parse_mode=ParseMode.MARKDOWN,
-                reply_markup=build_back_keyboard(i18n)
-            )
-        await callback.answer(i18n.get('setting-updated'))
-    except Exception as e:
-        logging.error(f"Error updating setting {key}: {e}")
-        await callback.answer(i18n.get('error-updating'))
-
-# Обработчик для управления заблокированными сервисами
-# @dp.callback_query(lambda c: c.data == "settings_blocked_services")
-# async def blocked_services_menu(callback: CallbackQuery):
-#     chat = callback.message.chat
-
-#     # Проверяем права администратора для групп
-#     if chat.type in ("group", "supergroup"):
-#         is_admin = await check_if_admin_or_owner(callback.bot, chat.id, callback.from_user.id)
-#         if not is_admin:
-#             await callback.answer(_("You don't have permission to edit these settings!"))
-#             return
-
-#     settings = await get_settings_for_chat(chat.id, callback.from_user.id)
-#     blocked_services = settings.get("blocked_services", [])
-
-#     # Получаем список всех доступных сервисов
-#     available_services = list(SERVICES.keys())
-
-#     # Создаем клавиатуру с сервисами
-#     keyboards = []
-#     for service in available_services:
-#         is_blocked = service in blocked_services
-#         icon = "🚫" if is_blocked else "✅"
-#         keyboards.append([
-#             InlineKeyboardButton(
-#                 text=f"{icon} {service}",
-#                 callback_data=f"toggle_service_{service}"
-#             )
-#         ])
-
-#     keyboards.append([InlineKeyboardButton(text="🔙 " + _("Back"), callback_data="settings_back")])
-
-#     kb = InlineKeyboardMarkup(inline_keyboard=keyboards)
-
-#     blocked_count = len(blocked_services)
-#     text = _("**Blocked Services Management**\n\nCurrently blocked: {count} services\n\nTap a service to toggle its status.").format(count=blocked_count)
-
-#     await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=kb)
-#     await callback.answer()
-
+    status_text = i18n.get('enabled') if new_value else i18n.get('disabled')
+    text = i18n.get('setting-changed', setting=key.replace('_', ' '), status=status_text)
+    await safe_edit_text(callback, text, build_back_keyboard(i18n, "settings_main"))
+    await callback.answer(i18n.get('setting-updated'))
 
 @dp.callback_query(lambda c: c.data.startswith("toggle_service_"))
-async def toggle_service_block(callback: CallbackQuery, i18n: TranslatorRunner):
-    data = callback.data
-    if not data:
-        return
-    service_name = data.replace("toggle_service_", "")
-    message = callback.message
-    if not message:
-        return
-    chat = message.chat
+async def apply_service_setting(callback: CallbackQuery, i18n: TranslatorRunner):
+    if callback.message is None or callback.data is None: return
 
-    # Проверяем права администратора для групп
-    if chat.type in ("group", "supergroup"):
-        bot = callback.bot
-        if not bot:
-            return
-        is_admin = await check_if_admin_or_owner(bot, chat.id, callback.from_user.id)
-        if not is_admin:
-            await callback.answer(i18n.get('no-permission-service'))
-            return
+    service_map = {s.value.lower(): s.value.lower() for s in Services}
+    target_service = None
+    for svc_name in service_map:
+        if callback.data.startswith(f"toggle_service_{svc_name}_"):
+            target_service = svc_name
+            break
+    if not target_service: return
 
-    try:
-        # Получаем текущие настройки
-        if chat.type in ("group", "supergroup"):
-            settings_obj = await get_chat_settings(chat.id)
-            if not settings_obj:
-                await create_chat(chat.id, callback.from_user.id)
-                settings_obj = await get_chat_settings(chat.id)
-        else:
-            settings_obj = await get_user_settings(callback.from_user.id)
-            if not settings_obj:
-                await create_user(callback.from_user.id)
-                settings_obj = await get_user_settings(callback.from_user.id)
+    data = callback.data.replace(f"toggle_service_{target_service}_", "")
+    last_uscores = data.rfind("_")
+    key = data[:last_uscores]
+    new_value = data[last_uscores+1:] == "True"
 
-        if not settings_obj:
-            await callback.answer(i18n.get('settings-not-found'))
-            return
+    chat_id = callback.message.chat.id
+    settings, is_group = await get_settings_obj(chat_id, callback.from_user.id)
+    svc_settings = getattr(settings.services, target_service)
+    setattr(svc_settings, key, new_value)
+    await save_settings_obj(chat_id, callback.from_user.id, settings)
 
-        blocked_services = getattr(settings_obj, 'blocked_services', [])
+    status_text = i18n.get('enabled') if new_value else i18n.get('disabled')
+    text = i18n.get('setting-changed', setting=key.replace('_', ' '), status=status_text)
+    await safe_edit_text(callback, text, build_back_keyboard(i18n, f"settings_svc_{target_service}"))
+    await callback.answer(i18n.get('setting-updated'))
 
-        # Переключаем статус сервиса
-        if service_name in blocked_services:
-            blocked_services.remove(service_name)
-            status_text = i18n.get('unblocked')
-        else:
-            blocked_services.append(service_name)
-            status_text = i18n.get('blocked')
 
-        # Обновляем в базе данных
-        if chat.type in ("group", "supergroup"):
-            await update_chat_settings(chat.id, blocked_services=blocked_services)
-        else:
-            await update_user_settings(callback.from_user.id, blocked_services=blocked_services)
-
-        # Обновляем интерфейс
-        # await blocked_services_menu(callback)
-        await callback.answer(i18n.get('service-status-changed', service=service_name, status=status_text))
-
-    except Exception as e:
-        logging.error(f"Error toggling service block {service_name}: {e}")
-        await callback.answer(i18n.get('error-service-status'))
-
-# Language selection
 @dp.callback_query(lambda c: c.data == "settings_lang")
 async def settings_lang_menu(callback: CallbackQuery, i18n: TranslatorRunner):
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="English 🇺🇲", callback_data="settings_lang_en"),
-            InlineKeyboardButton(text="Русский 🇷🇺", callback_data="settings_lang_ru"),
-        ],
-        [
-            InlineKeyboardButton(text="Українська 🇺🇦", callback_data="settings_lang_uk"),
-            InlineKeyboardButton(text="Беларуская 🇧🇾", callback_data="settings_lang_be"),
-        ],
-        [
-            InlineKeyboardButton(text="Čeština 🇨🇿", callback_data="settings_lang_cs"),
-            InlineKeyboardButton(text="Polski 🇵🇱", callback_data="settings_lang_pl"),
-        ],
-        [
-            InlineKeyboardButton(text="Deutsch 🇩🇪", callback_data="settings_lang_de"),
-            InlineKeyboardButton(text="Español 🇪🇸", callback_data="settings_lang_es"),
-        ],
-        [
-            InlineKeyboardButton(text="فارسی 🇮🇷", callback_data="settings_lang_fa"),
-        ],
-        [
-            InlineKeyboardButton(text=f"🔙 {i18n.get('back')}", callback_data="settings_back"),
-        ]
-    ])
+    if callback.message is None: return
+    settings, _ = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
+    current_lang = settings.profile.language
+
+    lang_buttons = [
+        ("en", "English 🇺🇲"), ("ru", "Русский 🇷🇺"),
+        ("uk", "Українська 🇺🇦"), ("be", "Беларуская 🇧🇾"),
+        ("cs", "Čeština 🇨🇿"), ("pl", "Polski 🇵🇱"),
+        ("de", "Deutsch 🇩🇪"), ("es", "Español 🇪🇸"),
+        ("fa", "فارسی 🇮🇷"),
+    ]
+
+    buttons = []
+    for code, label in lang_buttons:
+        text = f"✅ {label}" if code == current_lang else label
+        buttons.append(InlineKeyboardButton(text=text, callback_data=f"settings_lang_set_{code}"))
+
+    rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
+    rows.append([InlineKeyboardButton(text=f"{i18n.get('back')}", callback_data="settings_main")])
+
+    kb = InlineKeyboardMarkup(inline_keyboard=rows)
     text = i18n.get('pick-language')
-    if isinstance(callback.message, InaccessibleMessage) or callback.message is None:
-        if callback.bot is None:
-            return
-        await callback.bot.send_message(
-            callback.from_user.id,
-            text,
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=kb
-            )
-    else:
-        await callback.message.edit_text(
-            text,
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=kb
-        )
+    await safe_edit_text(callback, text, kb)
     await callback.answer()
 
-
-@dp.callback_query(lambda c: c.data.startswith("settings_lang_") and c.data != "settings_lang")
+@dp.callback_query(lambda c: c.data.startswith("settings_lang_set_"))
 async def settings_lang_set(callback: CallbackQuery, state: FSMContext, i18n: TranslatorRunner):
-    lang = callback.data.removeprefix("settings_lang_")
-    chat = callback.message.chat
-
-    if chat.type == "private":
-        await update_user_settings(user_id=callback.from_user.id, lang=lang)
-        # Clear cache for user
-        # custom_i18n.clear_cache(callback.from_user.id)
-    else:
-        await update_chat_settings(chat_id=chat.id, lang=lang)
-        # Clear cache for chat
-        # custom_i18n.clear_cache(chat.id)
+    if callback.message is None or callback.data is None: return
+    lang = callback.data.replace("settings_lang_set_", "")
+    settings, is_group = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
+    settings.profile.language = lang
+    await save_settings_obj(callback.message.chat.id, callback.from_user.id, settings)
 
     await state.clear()
-
     text = i18n.get('language-changed', language=lang.upper())
-    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=build_back_keyboard(i18n))
+    await safe_edit_text(callback, text, build_back_keyboard(i18n, "settings_main"))
     await callback.answer(i18n.get('language-updated'))
 
 
-# Title language selection
 @dp.callback_query(lambda c: c.data == "settings_title_language")
 async def settings_title_language_menu(callback: CallbackQuery, i18n: TranslatorRunner):
+    if callback.message is None: return
+    settings, _ = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
+    current_title_lang = settings.profile.title_language
+
     buttons = []
     for lang in LANGUAGES:
+        label = f"{lang['name']} {lang['flag']}"
+        text = f"✅ {label}" if lang['code'] == current_title_lang else label
         buttons.append(
             InlineKeyboardButton(
-                text=f"{lang['name']} {lang['flag']}",
-                callback_data=f"settings_title_lang_{lang['code']}"
+                text=text,
+                callback_data=f"settings_title_lang_set_{lang['code']}"
             )
         )
 
     rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
     kb = InlineKeyboardMarkup(
-        inline_keyboard=rows + [[InlineKeyboardButton(text=f"🔙 {i18n.get('back')}", callback_data="settings_back")]]
+        inline_keyboard=rows + [[InlineKeyboardButton(text=f"{i18n.get('back')}", callback_data="settings_main")]]
     )
 
-    await callback.message.edit_text(i18n.get('pick-title-language'), reply_markup=kb)
+    await safe_edit_text(callback, i18n.get('pick-title-language'), kb)
     await callback.answer()
 
-
-@dp.callback_query(lambda c: c.data.startswith("settings_title_lang_") and c.data != "settings_title_language")
+@dp.callback_query(lambda c: c.data.startswith("settings_title_lang_set_"))
 async def settings_title_language_set(callback: CallbackQuery, i18n: TranslatorRunner):
-    lang = callback.data.removeprefix("settings_title_lang_")
-    chat = callback.message.chat
+    if callback.message is None or callback.data is None: return
+    lang = callback.data.replace("settings_title_lang_set_", "")
 
-    if chat.type == "private":
-        await update_user_settings(user_id=callback.from_user.id, title_language=lang)
-    else:
-        await update_chat_settings(chat_id=chat.id, title_language=lang)
+    settings, is_group = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
+
+    if hasattr(settings.profile, 'title_language'):
+        settings.profile.title_language = lang
+
+    await save_settings_obj(callback.message.chat.id, callback.from_user.id, settings)
 
     text = i18n.get('title-language-changed', language=lang.upper())
-    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=build_back_keyboard(i18n))
+    await safe_edit_text(callback, text, build_back_keyboard(i18n, "settings_main"))
     await callback.answer(i18n.get('title-language-updated'))
-
-
-async def check_if_admin_or_owner(bot: Bot, chat_id: int, user_id: int) -> bool:
-    chat_member = await bot.get_chat_member(chat_id, user_id)
-    return chat_member.status in [ChatMemberStatus.CREATOR, ChatMemberStatus.ADMINISTRATOR]

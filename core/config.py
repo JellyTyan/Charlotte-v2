@@ -19,3 +19,11 @@ class Config:
     TELEGRAM_API_HASH: str = os.getenv("TELEGRAM_API_HASH", "")
     TELEGRAM_LOCAL: bool = os.getenv("TELEGRAM_LOCAL", "False").lower() == "true"
     TELEGRAM_SERVER_URL: str = os.getenv("TELEGRAM_SERVER_URL", "http://nginx:80")
+
+    _instance = None
+
+    @classmethod
+    def instance(cls) -> "Config":
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance

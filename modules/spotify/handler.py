@@ -6,10 +6,16 @@ from aiogram.types import FSInputFile, Message
 from fluentogram import TranslatorRunner
 
 from core.config import Config
-from modules.router import service_router as router
-from tasks.task_manager import task_manager
-from utils.file_utils import delete_files
+from models.errors import BotError, ErrorCode
 from models.service_list import Services
+from modules.router import service_router as router
+from senders.media_sender import MediaSender
+from storage.db.crud import get_user_settings, get_chat_settings
+from tasks.task_manager import task_manager
+from utils.arq_pool import get_arq_pool
+from utils.file_utils import delete_files
+from utils.statistics_helper import log_download_event
+from .service import SpotifyService
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +43,9 @@ async def spotify_handler(message: Message, config: Config, i18n: TranslatorRunn
             try:
                 media_content = await download_task
                 if media_content:
-                    from senders.media_sender import MediaSender
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, user_id)
-            except Exception as e:
+                    await send_manager.send(message, media_content, service="spotify")
+            except Exception:
                 # Error already logged in download task
                 pass
 
@@ -52,14 +57,10 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
     if not message.text:
         return None
 
-    user_id = message.from_user.id if message.from_user else message.chat.id
-
-    from models.errors import BotError, ErrorCode
-    from senders.media_sender import MediaSender
-    from utils.statistics_helper import log_download_event
-    from storage.db.crud import get_user_settings
-    from utils.arq_pool import get_arq_pool
-    from .service import SpotifyService
+    chat_id = message.chat.id
+    user = message.from_user
+    if not chat_id or not user:
+        return None
 
     arq = await get_arq_pool('light')
 
@@ -70,8 +71,11 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
     service = SpotifyService(arq=arq)
 
     # Get user settings for lossless mode
-    user_settings = await get_user_settings(user_id)
-    lossless_mode = user_settings.lossless_mode if user_settings else False
+    if chat_id < 0:
+        settings = await get_chat_settings(chat_id)
+    else:
+        settings = await get_user_settings(chat_id)
+    lossless_mode = settings.services.spotify.lossless if settings else False
 
     media_metadata = await service.get_info(message.text, config=config)
     if not media_metadata:
@@ -79,7 +83,7 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
             code=ErrorCode.METADATA_ERROR,
             message="Failed to get metadata",
             url=message.text,
-            service= Services.SPOTIFY,
+            service=Services.SPOTIFY,
             is_logged=True
         )
 
@@ -89,7 +93,7 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
                 code=ErrorCode.METADATA_ERROR,
                 message="Failed to get metadata",
                 url=message.text,
-                service= Services.SPOTIFY,
+                service=Services.SPOTIFY,
                 is_logged=True
             )
         if message.bot:
@@ -101,10 +105,16 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
             lossless_mode=lossless_mode
         )
 
-        await log_download_event(user_id, Services.SPOTIFY, 'success')
+        await log_download_event(user.id, Services.SPOTIFY, 'success')
         return track
 
     elif media_metadata.media_type == "album" or media_metadata.media_type == "playlist":
+        if chat_id < 0 and settings.profile.allow_playlists == False:
+            raise BotError(
+                code=ErrorCode.NOT_ALLOWED,
+                message="Playlists are not allowed in this chat",
+                service=Services.SPOTIFY,
+            )
         # Show playlist info
         text = f"{media_metadata.title} by <a href=\"{media_metadata.performer_url}\">{media_metadata.performer}</a>\n"
         if media_metadata.media_type == "playlist":
@@ -122,8 +132,6 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
         await message.reply(i18n.get('downloading-tracks'))
 
         send_manager = MediaSender()
-        success_count = 0
-        failed_count = 0
 
         # Queue each track for download and send
         for track_meta in media_metadata.items:
@@ -131,17 +139,17 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
                 logger.warning(f"Skipping track with missing metadata")
                 continue
             # Create download task for this track
-            async def download_track(performer=track_meta.performer, title=track_meta.title, cover=track_meta.cover):
+            async def download_track(performer=track_meta.performer, title=track_meta.title, cover=track_meta.cover, lossless_mode=lossless_mode):
                 try:
-                    track = await service.download(performer, title, cover)
+                    track = await service.download(performer, title, cover, lossless_mode=lossless_mode)
                     return track
                 except Exception as e:
                     logger.error(f"Failed to download track {title}: {e}")
-                    raise e
+                    raise
 
             # Add to download queue
             track_download_task = await task_manager.add_task(
-                user_id,
+                user.id,
                 download_coro=download_track(),
                 message=None  # No reaction for individual tracks
             )
@@ -152,19 +160,16 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
                     try:
                         track_content = await task
                         if track_content:
-                            await send_manager.send(message, track_content, user_id, skip_reaction=True)
+                            await send_manager.send(message, track_content, skip_reaction=True, service="spotify")
                             return True
                         return False
-                    except Exception as e:
+                    except Exception:
                         return False
 
                 # Queue send task
-                send_task = await task_manager.add_send_task(user_id, send_track())
+                await task_manager.add_send_task(user.id, send_track())
 
-        # Note: we can't track success/failed counts accurately here anymore
-        # since tasks are async. This is a limitation of the new architecture.
-        # We could use a shared counter with locks, but keep it simple for now.
-        await log_download_event(user_id, Services.SPOTIFY, 'success')
+        await log_download_event(user.id, Services.SPOTIFY, 'success')
 
         # Return None for playlists (no single content to send)
         return None

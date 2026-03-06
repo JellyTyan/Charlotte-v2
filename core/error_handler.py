@@ -1,10 +1,13 @@
 import logging
-from aiogram.types import ErrorEvent
+
 from aiogram.enums import ParseMode
+from aiogram.types import ErrorEvent
 from fluentogram import TranslatorRunner
-from models.errors import BotError, ErrorCode
-from core.loader import dp, bot
+
 from core.config import Config
+from core.loader import dp, bot
+from models.errors import BotError, ErrorCode
+from storage.db.crud import get_chat_settings
 
 logger = logging.getLogger(__name__)
 config = Config()
@@ -49,15 +52,14 @@ async def global_error_handler(event: ErrorEvent):
     lang = "en"
 
     if chat and chat.type != "private":
-        from storage.db.crud import get_chat_settings
         settings = await get_chat_settings(chat.id)
         if settings:
-            lang = settings.lang
+            lang = settings.profile.language
     elif user:
         from storage.db.crud import get_user_settings
         settings = await get_user_settings(user.id)
         if settings:
-            lang = settings.lang
+            lang = settings.profile.language
 
     i18n: TranslatorRunner = hub.get_translator_by_locale(lang)
 

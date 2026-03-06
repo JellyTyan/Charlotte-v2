@@ -6,10 +6,16 @@ from aiogram.types import FSInputFile, Message
 from fluentogram import TranslatorRunner
 
 from core.config import Config
-from modules.router import service_router as router
-from tasks.task_manager import task_manager
-from utils.file_utils import delete_files
+from models.errors import BotError, ErrorCode
 from models.service_list import Services
+from modules.router import service_router as router
+from senders.media_sender import MediaSender
+from storage.db.crud import get_user_settings, get_chat_settings
+from tasks.task_manager import task_manager
+from utils.arq_pool import get_arq_pool
+from utils.file_utils import delete_files
+from utils.statistics_helper import log_download_event
+from .service import DeezerService
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +39,8 @@ async def deezer_handler(message: Message, config: Config, i18n: TranslatorRunne
             try:
                 media_content = await download_task
                 if media_content:
-                    from senders.media_sender import MediaSender
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, user_id)
+                    await send_manager.send(message, media_content, service="deezer")
             except Exception:
                 pass
         await task_manager.add_send_task(user_id, send_when_ready())
@@ -44,24 +49,20 @@ async def deezer_handler(message: Message, config: Config, i18n: TranslatorRunne
 async def process_deezer_url(message: Message, config: Config, i18n: TranslatorRunner):
     if not message.text:
         return None
+    chat_id = message.chat.id
     user = message.from_user
-    if not user:
+    if not chat_id or not user:
         return None
-
-    from models.errors import BotError, ErrorCode
-    from senders.media_sender import MediaSender
-    from utils.statistics_helper import log_download_event
-    from storage.db.crud import get_user_settings
-    from utils.arq_pool import get_arq_pool
-
-    from .service import DeezerService
 
     arq = await get_arq_pool('light')
     service = DeezerService(arq=arq)
 
     # Get user settings for lossless mode
-    user_settings = await get_user_settings(user.id)
-    lossless_mode = user_settings.lossless_mode if user_settings else False
+    if chat_id < 0:
+        settings = await get_chat_settings(chat_id)
+    else:
+        settings = await get_user_settings(chat_id)
+    lossless_mode = settings.services.deezer.lossless if settings else False
 
     media_metadata = await service.get_info(message.text, config=config)
     if not media_metadata:
@@ -69,6 +70,7 @@ async def process_deezer_url(message: Message, config: Config, i18n: TranslatorR
             code=ErrorCode.METADATA_ERROR,
             message="Failed to get metadata",
             url=message.text,
+            service=Services.DEEZER,
             is_logged=True
         )
 
@@ -78,6 +80,7 @@ async def process_deezer_url(message: Message, config: Config, i18n: TranslatorR
                 code=ErrorCode.METADATA_ERROR,
                 message="Failed to get metadata",
                 url=message.text,
+                service=Services.DEEZER,
                 is_logged=True
             )
         if message.bot:
@@ -94,6 +97,12 @@ async def process_deezer_url(message: Message, config: Config, i18n: TranslatorR
         return track
 
     elif media_metadata.media_type == "album" or media_metadata.media_type == "playlist":
+        if chat_id < 0 and settings.profile.allow_playlists == False:
+            raise BotError(
+                code=ErrorCode.NOT_ALLOWED,
+                message="Playlists are not allowed in this chat",
+                service=Services.DEEZER,
+            )
         text = f"{media_metadata.title} by <a href=\"{media_metadata.performer_url}\">{media_metadata.performer}</a>\n"
         if media_metadata.media_type == "playlist":
             text += f"<i>{media_metadata.description}</i>\n"
@@ -114,12 +123,12 @@ async def process_deezer_url(message: Message, config: Config, i18n: TranslatorR
             if track_meta.performer is None or track_meta.title is None:
                 logger.warning(f"Skipping track with missing metadata")
                 continue
-            async def download_track(performer=track_meta.performer, title=track_meta.title, cover=track_meta.cover, full_cover=track_meta.full_size_cover):
+            async def download_track(performer=track_meta.performer, title=track_meta.title, cover=track_meta.cover, full_cover=track_meta.full_size_cover, lossless_mode=lossless_mode):
                 try:
-                    return await service.download(performer, title, cover, full_cover)
+                    return await service.download(performer, title, cover, full_cover, lossless_mode=lossless_mode)
                 except Exception as e:
                     logger.error(f"Failed to download track {title}: {e}")
-                    raise e
+                    raise
 
             track_download_task = await task_manager.add_task(
                 user.id,
@@ -132,7 +141,7 @@ async def process_deezer_url(message: Message, config: Config, i18n: TranslatorR
                     try:
                         track_content = await task
                         if track_content:
-                            await send_manager.send(message, track_content, user.id, skip_reaction=True)
+                            await send_manager.send(message, track_content, user.id, skip_reaction=True, service="deezer")
                             return True
                         return False
                     except Exception:

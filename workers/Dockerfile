@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 # Create user with consistent UID/GID
 RUN useradd -m -u 1000 charlotte && \
@@ -7,7 +7,7 @@ RUN useradd -m -u 1000 charlotte && \
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (ffmpeg for heavy worker, deno for yt-dlp PO tokens)
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     git \
@@ -16,23 +16,22 @@ RUN apt-get update && apt-get install -y \
     unzip \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Deno globally for all users
+# Install Deno globally (needed for yt-dlp PO token provider)
 RUN curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh
 
-# Copy requirements and install
-COPY --chown=charlotte:charlotte requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy requirements and install (worker-only deps)
+COPY --chown=charlotte:charlotte requirements.worker.txt .
+RUN pip install --no-cache-dir -r requirements.worker.txt
 RUN pip install --no-cache-dir gallery-dl
 RUN pip install -U --no-cache-dir --pre yt-dlp[default,curl-cffi]
 
-# Copy project files
-COPY --chown=charlotte:charlotte . .
+# Copy only worker files (workers are self-contained)
+COPY --chown=charlotte:charlotte workers/ workers/
 
 # Copy and setup worker entrypoint
-COPY --chown=charlotte:charlotte workers/entrypoint.sh /app/worker_entrypoint.sh
-RUN chmod +x /app/worker_entrypoint.sh
+RUN chmod +x /app/workers/entrypoint.sh
 
 # Volumes for persistence
 VOLUME ["/app/storage", "/app/logs"]
 
-ENTRYPOINT ["/app/worker_entrypoint.sh"]
+ENTRYPOINT ["/app/workers/entrypoint.sh"]

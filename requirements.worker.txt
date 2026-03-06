@@ -1,0 +1,6 @@
+# Worker-specific dependencies (media processing only)
+arq==0.27.0
+curl-cffi==0.14.0
+aiofiles
+beautifulsoup4==4.14.3
+mutagen==1.47.0

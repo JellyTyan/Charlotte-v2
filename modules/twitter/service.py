@@ -28,7 +28,7 @@ class TwitterService(BaseService):
         self.auth = "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
         self.arq = arq
 
-    async def download(self, url: str, premium: bool = False, config: Optional[Config] = None) -> List[MediaContent]:
+    async def download(self, url: str, premium: bool = False, config: Optional[Config] = None, allow_nsfw: Optional[bool] = True) -> List[MediaContent]:
         match = re.search(r"status/(\d+)", url)
         if not match:
             raise BotError(
@@ -110,6 +110,13 @@ class TwitterService(BaseService):
 
                 # Check if media is blurred
                 is_blurred = bool(result_data.get("mediaVisibilityResults"))
+                if is_blurred and not allow_nsfw:
+                    raise BotError(
+                        code=ErrorCode.NOT_ALLOWED,
+                        message="NSFW content is not allowed",
+                        is_logged=False,
+                        critical=False
+                    )
 
                 # Handle different response structures (Tweet vs TweetWithVisibilityResults)
                 if result_data.get("__typename") == "TweetWithVisibilityResults":
@@ -156,7 +163,7 @@ class TwitterService(BaseService):
                             path=Path(filename),
                             title=truncate_string(f"{author} - {title}", 1024),
                             performer=author,
-                            is_blured=sensitive
+                            is_blurred=sensitive
                         ))
 
                     elif media["type"] == "video":
@@ -179,7 +186,7 @@ class TwitterService(BaseService):
                             path=Path(filename),
                             title=truncate_string(f"{author} - {title}", 1024),
                             performer=author,
-                            is_blured=sensitive
+                            is_blurred=sensitive
                         ))
 
                     elif media["type"] == "animated_gif":
@@ -196,7 +203,7 @@ class TwitterService(BaseService):
                             path=Path(filename),
                             title=truncate_string(f"{author} - {title}", 1024),
                             performer=author,
-                            is_blured=sensitive
+                            is_blurred=sensitive
                         ))
 
                 await asyncio.gather(*[job.result() for job in tasks], return_exceptions=True)

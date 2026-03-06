@@ -19,12 +19,12 @@ class TranslatorRunnerMiddleware(BaseMiddleware):
         if chat and chat.type != "private":
             settings = await get_chat_settings(chat.id)
             if settings:
-                lang = settings.lang
+                lang = settings.profile.language
 
         elif user:
             settings = await get_user_settings(user.id)
             if settings:
-                lang = settings.lang
+                lang = settings.profile.language
 
         hub: TranslatorHub = data.get("_translator_hub")
 
