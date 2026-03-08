@@ -113,28 +113,8 @@ class TaskManager:
         i18n = hub.get_translator_by_locale(lang)
 
         # Get error message
-        error_message = None
-        match exception.code:
-            case ErrorCode.INVALID_URL:
-                error_message = i18n.error.invalid.url()
-            case ErrorCode.LARGE_FILE:
-                error_message = i18n.error.large.file()
-            case ErrorCode.SIZE_CHECK_FAIL:
-                error_message = i18n.error.fail.check()
-            case ErrorCode.DOWNLOAD_FAILED:
-                error_message = i18n.error.download.error()
-            case ErrorCode.DOWNLOAD_CANCELLED:
-                error_message = i18n.error.download.canceled()
-            case ErrorCode.PLAYLIST_INFO_ERROR:
-                error_message = i18n.error.playlist.info()
-            case ErrorCode.METADATA_ERROR:
-                error_message = i18n.error.metadata()
-            case ErrorCode.NOT_FOUND:
-                error_message = i18n.error.no.found()
-            case ErrorCode.NOT_ALLOWED:
-                error_message = i18n.error.no.allowed()
-            case ErrorCode.INTERNAL_ERROR:
-                error_message = i18n.error.internal()
+        from utils.error_messages import get_i18n_error_message
+        error_message = get_i18n_error_message(exception.code, i18n)
 
         if error_message:
             await message.answer(error_message)
