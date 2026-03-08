@@ -1,5 +1,3 @@
-import logging
-
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
@@ -8,8 +6,6 @@ from fluentogram import TranslatorRunner
 from storage.db.crud import create_user, create_chat
 
 from core.loader import dp
-
-logger = logging.getLogger(__name__)
 
 
 @dp.message(CommandStart())

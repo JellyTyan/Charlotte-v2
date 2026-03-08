@@ -1,4 +1,3 @@
-import logging
 import asyncio
 import os
 import random
@@ -8,8 +7,6 @@ from concurrent.futures import ThreadPoolExecutor
 from models.errors import BotError, ErrorCode
 
 from ytmusicapi import YTMusic
-
-logger = logging.getLogger(__name__)
 
 
 _search_executor = ThreadPoolExecutor(max_workers=5)

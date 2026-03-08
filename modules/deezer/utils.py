@@ -1,12 +1,8 @@
-import logging
-
 from curl_cffi.requests import AsyncSession
 
 from models.errors import BotError, ErrorCode
 from models.metadata import MediaMetadata, MetadataType
 from utils.download_utils import download_file
-
-logger = logging.getLogger(__name__)
 
 async def get_track_info(track_id: int) -> MediaMetadata:
     async with AsyncSession(impersonate="chrome136") as session:

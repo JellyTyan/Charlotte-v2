@@ -1,5 +1,3 @@
-import logging
-
 from aiogram import F
 from aiogram.types import Message
 
@@ -11,8 +9,6 @@ from tasks.task_manager import task_manager
 from utils.arq_pool import get_arq_pool
 from utils.statistics_helper import log_download_event
 from .service import TiktokService
-
-logger = logging.getLogger(__name__)
 
 
 TIKTOK_REGEX = r"https?://(?:www\.)?(?:tiktok\.com/.*|(vm|vt)\.tiktok\.com/.+)"

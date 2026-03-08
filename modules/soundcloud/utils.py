@@ -1,7 +1,11 @@
+import logging
+
 from curl_cffi.requests import AsyncSession
 import re
 from models.metadata import MediaMetadata, MetadataType
 from storage.cache.redis_client import cache_get, cache_set
+
+logger = logging.getLogger(__name__)
 
 def get_cover_url(info_dict: dict):
     """
@@ -58,7 +62,7 @@ async def get_auth_token(session: AsyncSession) -> str:
                 return key
 
         except Exception as e:
-            print(f"Error when loading {script_url}: {e}")
+            logger.error(f"Error when loading {script_url}: {e}")
             continue
 
     raise Exception("Key not founded")
