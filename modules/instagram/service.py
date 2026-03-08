@@ -222,9 +222,10 @@ class InstagramService(BaseService):
                 ErrorCode.DOWNLOAD_FAILED,
                 service=Services.INSTAGRAM,
                 message=f"All methods failed. yt-dlp error: {e}",
+                url=url,
                 critical=True,
                 is_logged=True
-                )
+            )
 
     async def get_info(self, url: str) -> Optional[MediaMetadata]:
         return None
