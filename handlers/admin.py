@@ -643,28 +643,26 @@ async def send_message_safe(bot: Bot, user_id: int, text: str) -> bool:
     """
     try:
         await bot.send_message(chat_id=user_id, text=text, parse_mode=ParseMode.MARKDOWN_V2)
-        logger.info(f"[SUCCESS] Сообщение отправлено пользователю: {user_id}")
         return True
 
     except TelegramRetryAfter as e:
         # Если словили лимит, ждем указанное время и пробуем снова (рекурсия)
-        logger.info(f"[WAIT] Лимит запросов. Ждем {e.retry_after} секунд для пользователя {user_id}...")
+        logger.warning(f"Rate limit hit for user {user_id}, waiting {e.retry_after}s")
         await asyncio.sleep(e.retry_after)
         return await send_message_safe(bot, user_id, text)
 
     except TelegramForbiddenError:
         # Пользователь заблокировал бота
-        logger.info(f"[FAIL] Пользователь {user_id} заблокировал бота.")
         return False
 
     except TelegramBadRequest as e:
         # Ошибка запроса (например, чат не найден)
-        logger.info(f"[FAIL] Ошибка запроса для {user_id}: {e}")
+        logger.debug(f"Bad request for user {user_id}: {e}")
         return False
 
     except Exception as e:
         # Любая другая непредвиденная ошибка
-        logger.info(f"[ERROR] Неизвестная ошибка для {user_id}: {e}")
+        logger.error(f"Unexpected error sending message to {user_id}: {e}")
         return False
 
 @dp.callback_query(lambda c: c.data == "news_spam_decline")

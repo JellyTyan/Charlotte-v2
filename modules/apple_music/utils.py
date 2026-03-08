@@ -1,12 +1,8 @@
-import logging
-
 from curl_cffi. requests import AsyncSession
 
 from models.errors import BotError, ErrorCode
 from models.metadata import MediaMetadata, MetadataType
 from utils.download_utils import download_file
-
-logger = logging.getLogger(__name__)
 
 
 async def get_track_info(song_id: int, token: str, region_code: str = "us") -> MediaMetadata:

@@ -368,12 +368,10 @@ async def menu_service_block(callback: CallbackQuery, i18n: TranslatorRunner):
         logger.error(f"Not a chat settings: {type(settings)}")
         return
 
-    logger.info(f"Before toggle - blocked_services: {settings.profile.blocked_services}, target: {service}")
     if service in settings.profile.blocked_services:
         settings.profile.blocked_services.remove(service)
     else:
         settings.profile.blocked_services.add(service)
-    logger.info(f"After toggle - blocked_services: {settings.profile.blocked_services}")
 
     await save_settings_obj(callback.message.chat.id, callback.from_user.id, settings)
 

@@ -1,4 +1,3 @@
-import logging
 import re
 import asyncio
 import yt_dlp
@@ -7,8 +6,6 @@ from curl_cffi.requests import AsyncSession
 from concurrent.futures import ThreadPoolExecutor
 from models.errors import BotError, ErrorCode
 from urllib.parse import quote
-
-logger = logging.getLogger(__name__)
 
 download_executor = ThreadPoolExecutor(max_workers=10)
 

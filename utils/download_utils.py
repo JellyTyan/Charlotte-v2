@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from pathlib import Path
 from typing import Optional
 
@@ -7,8 +6,6 @@ import aiofiles
 from curl_cffi.requests import AsyncSession, RequestsError
 
 from models.errors import BotError, ErrorCode
-
-logger = logging.getLogger(__name__)
 
 
 async def download_file(

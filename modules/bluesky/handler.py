@@ -1,5 +1,3 @@
-import logging
-
 from aiogram import F
 from aiogram.types import Message
 from fluentogram import TranslatorRunner
@@ -13,8 +11,6 @@ from tasks.task_manager import task_manager
 from utils.arq_pool import get_arq_pool
 from utils.statistics_helper import log_download_event
 from .service import BlueSkyService
-
-logger = logging.getLogger(__name__)
 
 
 BLUESKY_REGEX = r"https:\/\/bsky\.app\/profile\/[^\/]+\/post\/[a-z0-9]+"
