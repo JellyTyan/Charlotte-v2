@@ -33,7 +33,7 @@ class RedditService(BaseService):
         has_spoiler = info.get("spoiler", False)
         is_over18 = info.get("over_18", False)
 
-        if info.get("is_self") == True:
+        if info.get("is_self") == True and not info.get("media_metadata"):
             raise BotError(ErrorCode.NOT_FOUND, message="Failed to get Reddit post info", service=Services.REDDIT, url=url, is_logged=False)
 
         # If post is video
@@ -48,10 +48,13 @@ class RedditService(BaseService):
                 }
             )
         # If post is Gallery with photo and gif
-        elif info.get("is_gallery") == True:
+        elif info.get("is_gallery") == True or info.get("media_metadata"):
             media_type = "gallery"
             media_metadata = info.get("media_metadata", {})
             items = info.get("gallery_data", {}).get("items", [])
+
+            if not items and media_metadata:
+                items = [{"media_id": media_id} for media_id in media_metadata.keys()]
 
             media_items = []
 
