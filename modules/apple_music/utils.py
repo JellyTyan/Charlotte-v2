@@ -2,6 +2,7 @@ from curl_cffi. requests import AsyncSession
 
 from models.errors import BotError, ErrorCode
 from models.metadata import MediaMetadata, MetadataType
+from models.service_list import Services
 from utils.download_utils import download_file
 
 
@@ -21,6 +22,7 @@ async def get_track_info(song_id: int, token: str, region_code: str = "us") -> M
             raise BotError(
                 code=ErrorCode.METADATA_ERROR,
                 message=f"HTTP {response.status_code}",
+                service=Services.APPLE_MUSIC,
                 url=f"https://music.apple.com/{region_code}/song/{song_id}",
                 is_logged=True
             )
@@ -31,6 +33,7 @@ async def get_track_info(song_id: int, token: str, region_code: str = "us") -> M
             raise BotError(
                 code=ErrorCode.METADATA_ERROR,
                 message="Invalid JSON response",
+                service=Services.APPLE_MUSIC,
                 url=f"https://music.apple.com/{region_code}/song/{song_id}",
                 is_logged=True
             )
@@ -39,6 +42,7 @@ async def get_track_info(song_id: int, token: str, region_code: str = "us") -> M
             raise BotError(
                 code=ErrorCode.METADATA_ERROR,
                 message="No track data returned",
+                service=Services.APPLE_MUSIC,
                 url=f"https://music.apple.com/{region_code}/song/{song_id}",
                 is_logged=True
             )
@@ -78,6 +82,7 @@ async def get_playlist_info(playlist_id: str, token: str, region_code: str = "us
             raise BotError(
                 code=ErrorCode.METADATA_ERROR,
                 message=f"HTTP {response.status_code}",
+                service=Services.APPLE_MUSIC,
                 url=f"https://music.apple.com/{region_code}/playlist/{playlist_id}",
                 is_logged=True
             )
@@ -166,6 +171,7 @@ async def get_album_info(album_id: str, token: str, region_code: str = "us") -> 
             raise BotError(
                 code=ErrorCode.METADATA_ERROR,
                 message=f"HTTP {response.status_code}",
+                service=Services.APPLE_MUSIC,
                 url=f"https://music.apple.com/{region_code}/album/{album_id}",
                 is_logged=True
             )
@@ -176,6 +182,7 @@ async def get_album_info(album_id: str, token: str, region_code: str = "us") -> 
             raise BotError(
                 code=ErrorCode.METADATA_ERROR,
                 message="Invalid JSON response",
+                service=Services.APPLE_MUSIC,
                 url=f"https://music.apple.com/{region_code}/album/{album_id}",
                 is_logged=True
             )
@@ -184,6 +191,7 @@ async def get_album_info(album_id: str, token: str, region_code: str = "us") -> 
             raise BotError(
                 code=ErrorCode.METADATA_ERROR,
                 message="No album data returned",
+                service=Services.APPLE_MUSIC,
                 url=f"https://music.apple.com/{region_code}/album/{album_id}",
                 is_logged=True
             )

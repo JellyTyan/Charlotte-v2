@@ -12,6 +12,7 @@ from aiofiles import os as aios
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
+from models.service_list import Services
 from modules.base_service import BaseService
 from utils import search_music, transliterate, random_cookie_file, get_extra_audio_options
 from utils.tidal import TidalUtil
@@ -39,6 +40,7 @@ class DeezerService(BaseService):
             raise BotError(
                 code=ErrorCode.INTERNAL_ERROR,
                 message="ARQ pool is required",
+                service=Services.DEEZER,
                 critical=True,
                 is_logged=True
             )
@@ -76,6 +78,7 @@ class DeezerService(BaseService):
             raise BotError(
                 code=ErrorCode.INTERNAL_ERROR,
                 message="ARQ pool is required",
+                service=Services.DEEZER,
                 critical=True,
                 is_logged=True
             )
@@ -170,6 +173,7 @@ class DeezerService(BaseService):
             raise BotError(
                 code=ErrorCode.DOWNLOAD_FAILED,
                 message=f"No YouTube results found for: {performer} - {title}",
+                service=Services.DEEZER,
                 is_logged=True
             )
         logger.debug(f"Found YouTube link: {video_link}")
@@ -250,6 +254,7 @@ class DeezerService(BaseService):
                     code=ErrorCode.DOWNLOAD_FAILED,
                     message="Audio file not found after download",
                     url=video_link,
+                    service=Services.DEEZER,
                     is_logged=True,
                 )
         except BotError:
@@ -259,6 +264,7 @@ class DeezerService(BaseService):
                 code=ErrorCode.DOWNLOAD_FAILED,
                 message=f"Error downloading YouTube Audio: {e}",
                 url=video_link,
+                service=Services.DEEZER,
                 critical=True,
                 is_logged=True
             )

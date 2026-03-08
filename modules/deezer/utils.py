@@ -2,6 +2,7 @@ from curl_cffi.requests import AsyncSession
 
 from models.errors import BotError, ErrorCode
 from models.metadata import MediaMetadata, MetadataType
+from models.service_list import Services
 from utils.download_utils import download_file
 
 async def get_track_info(track_id: int) -> MediaMetadata:
@@ -12,6 +13,7 @@ async def get_track_info(track_id: int) -> MediaMetadata:
             raise BotError(
                 code=ErrorCode.METADATA_ERROR,
                 message=f"HTTP {response.status_code}",
+                service=Services.DEEZER,
                 url=f"https://www.deezer.com/track/{track_id}",
                 is_logged=True
             )
@@ -22,6 +24,7 @@ async def get_track_info(track_id: int) -> MediaMetadata:
             raise BotError(
                 code=ErrorCode.METADATA_ERROR,
                 message=data['error'].get('message', 'Unknown error'),
+                service=Services.DEEZER,
                 url=f"https://www.deezer.com/track/{track_id}",
                 is_logged=True
             )
@@ -49,6 +52,7 @@ async def get_album_info(album_id: int) -> MediaMetadata:
             raise BotError(
                 code=ErrorCode.METADATA_ERROR,
                 message=f"HTTP {response.status_code}",
+                service=Services.DEEZER,
                 url=f"https://www.deezer.com/album/{album_id}",
                 is_logged=True
             )
@@ -59,6 +63,7 @@ async def get_album_info(album_id: int) -> MediaMetadata:
             raise BotError(
                 code=ErrorCode.METADATA_ERROR,
                 message=data['error'].get('message', 'Unknown error'),
+                service=Services.DEEZER,
                 url=f"https://www.deezer.com/album/{album_id}",
                 is_logged=True
             )
@@ -111,6 +116,7 @@ async def get_playlist_info(playlist_id: int) -> MediaMetadata:
             raise BotError(
                 code=ErrorCode.METADATA_ERROR,
                 message=f"HTTP {response.status_code}",
+                service=Services.DEEZER,
                 url=f"https://www.deezer.com/playlist/{playlist_id}",
                 is_logged=True
             )
@@ -121,6 +127,7 @@ async def get_playlist_info(playlist_id: int) -> MediaMetadata:
             raise BotError(
                 code=ErrorCode.METADATA_ERROR,
                 message=data['error'].get('message', 'Unknown error'),
+                service=Services.DEEZER,
                 url=f"https://www.deezer.com/playlist/{playlist_id}",
                 is_logged=True
             )
