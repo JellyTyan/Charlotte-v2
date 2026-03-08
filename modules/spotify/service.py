@@ -11,6 +11,7 @@ from yt_dlp.utils import sanitize_filename
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
+from models.service_list import Services
 from modules.base_service import BaseService
 from storage.cache.redis_client import get_or_cache
 from utils import search_music, transliterate, random_cookie_file, get_extra_audio_options
@@ -39,6 +40,7 @@ class SpotifyService(BaseService):
             raise BotError(
                 code=ErrorCode.INTERNAL_ERROR,
                 message="Config is required",
+                service=Services.SPOTIFY,
                 critical=True,
                 is_logged=True
             )
@@ -47,6 +49,7 @@ class SpotifyService(BaseService):
             raise BotError(
                 code=ErrorCode.INTERNAL_ERROR,
                 message="ARQ pool is required",
+                service=Services.SPOTIFY,
                 critical=True,
                 is_logged=True
             )
@@ -90,6 +93,7 @@ class SpotifyService(BaseService):
             raise BotError(
                 code=ErrorCode.INVALID_URL,
                 message="Unrecognized Spotify URL format",
+                service=Services.SPOTIFY,
                 url=url,
                 is_logged=True
             )
@@ -99,6 +103,7 @@ class SpotifyService(BaseService):
             raise BotError(
                 code=ErrorCode.INTERNAL_ERROR,
                 message="ARQ pool is required",
+                service=Services.SPOTIFY,
                 critical=True,
                 is_logged=True
             )
@@ -183,6 +188,7 @@ class SpotifyService(BaseService):
             raise BotError(
                 code=ErrorCode.DOWNLOAD_FAILED,
                 message=f"No YouTube results found for: {performer} - {title}",
+                service=Services.SPOTIFY,
                 is_logged=True
             )
         logger.debug(f"Found YouTube link: {video_link}")
@@ -207,6 +213,7 @@ class SpotifyService(BaseService):
                 raise BotError(
                     code=ErrorCode.DOWNLOAD_FAILED,
                     message="Failed to get audio info",
+                    service=Services.SPOTIFY,
                     url=video_link,
                     is_logged=True
                 )
@@ -262,6 +269,7 @@ class SpotifyService(BaseService):
                     code=ErrorCode.DOWNLOAD_FAILED,
                     message="Audio file not found after download",
                     url=video_link,
+                    service=Services.SPOTIFY,
                     is_logged=True,
                 )
 
@@ -272,6 +280,7 @@ class SpotifyService(BaseService):
                 code=ErrorCode.DOWNLOAD_FAILED,
                 message=f"Error downloading YouTube Audio: {e}",
                 url=video_link,
+                service=Services.SPOTIFY,
                 critical=True,
                 is_logged=True
             )

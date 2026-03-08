@@ -10,6 +10,7 @@ from aiofiles import os as aios
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
+from models.service_list import Services
 from modules.base_service import BaseService
 
 from .utils import get_album_info, get_track_info, get_playlist_info
@@ -35,6 +36,7 @@ class AppleMusicService(BaseService):
             raise BotError(
                 code=ErrorCode.INTERNAL_ERROR,
                 message="Config is required",
+                service=Services.APPLE_MUSIC,
                 critical=True,
                 is_logged=True
             )
@@ -43,6 +45,7 @@ class AppleMusicService(BaseService):
             raise BotError(
                 code=ErrorCode.INTERNAL_ERROR,
                 message="ARQ pool is required",
+                service=Services.APPLE_MUSIC,
                 critical=True,
                 is_logged=True
             )
@@ -62,7 +65,7 @@ class AppleMusicService(BaseService):
             m = song_pattern.match(url)
 
             if m:
-                return await get_track_info(m.group("id"), token, m.group("region"))
+                return await get_track_info(int(m.group("id")), token, m.group("region"))
         elif match_album_track:
             album_track_pattern = re.compile(
                 r"^https?://music\.apple\.com/(?P<region>[a-z]{2})/album/(?:[^/]+/)?(?P<album_id>\d+).*?[?&]i=(?P<track_id>\d+)"
@@ -70,7 +73,7 @@ class AppleMusicService(BaseService):
             m = album_track_pattern.match(url)
 
             if m:
-                return await get_track_info(m.group("track_id"), token, m.group("region"))
+                return await get_track_info(int(m.group("track_id")), token, m.group("region"))
         elif match_playlist:
             playlist_pattern = re.compile(
                 r"^https?://music\.apple\.com/(?P<region>[a-z]{2})/playlist/(?:[^/]+/)?(?P<id>[^/?\s]+)"
@@ -92,12 +95,14 @@ class AppleMusicService(BaseService):
             raise BotError(
                 code=ErrorCode.INVALID_URL,
                 message="Unrecognized AppleMusic URL format",
+                service=Services.APPLE_MUSIC,
                 url=url,
                 is_logged=True
             )
         raise BotError(
             code=ErrorCode.METADATA_ERROR,
             message=f"Failed to get parse data",
+            service=Services.APPLE_MUSIC,
             url=url,
             is_logged=True
         )
@@ -109,6 +114,7 @@ class AppleMusicService(BaseService):
             raise BotError(
                 code=ErrorCode.INTERNAL_ERROR,
                 message="ARQ pool is required",
+                service=Services.APPLE_MUSIC,
                 critical=True,
                 is_logged=True
             )
@@ -203,6 +209,7 @@ class AppleMusicService(BaseService):
             raise BotError(
                 code=ErrorCode.DOWNLOAD_FAILED,
                 message=f"No YouTube results found for: {performer} - {title}",
+                service=Services.APPLE_MUSIC,
                 is_logged=True
             )
         logger.debug(f"Found YouTube link: {video_link}")
@@ -283,6 +290,7 @@ class AppleMusicService(BaseService):
                     code=ErrorCode.DOWNLOAD_FAILED,
                     message="Audio file not found after download",
                     url=video_link,
+                    service=Services.APPLE_MUSIC,
                     is_logged=True,
                 )
 
@@ -293,6 +301,7 @@ class AppleMusicService(BaseService):
                 code=ErrorCode.DOWNLOAD_FAILED,
                 message=f"Error downloading YouTube Audio: {e}",
                 url=video_link,
+                service=Services.APPLE_MUSIC,
                 critical=True,
                 is_logged=True
             )

@@ -4,6 +4,7 @@ import logging
 from curl_cffi.requests import AsyncSession
 
 from models.errors import BotError, ErrorCode
+from models.service_list import Services
 
 TOKEN_URL = "https://accounts.spotify.com/api/token"
 
@@ -30,6 +31,7 @@ async def get_access_token(session: AsyncSession, spotify_client_id: str, spotif
         raise BotError(
             code=ErrorCode.INTERNAL_ERROR,
             message=f"Failed to get token: {response.status_code}",
+            service=Services.SPOTIFY,
             is_logged=True,
             critical=True,
         )
@@ -41,6 +43,7 @@ async def get_access_token(session: AsyncSession, spotify_client_id: str, spotif
         raise BotError(
             code=ErrorCode.INTERNAL_ERROR,
             message="Invalid JSON response from Spotify",
+            service=Services.SPOTIFY,
             is_logged=True,
             critical=True,
         )
@@ -50,6 +53,7 @@ async def get_access_token(session: AsyncSession, spotify_client_id: str, spotif
         raise BotError(
             code=ErrorCode.INTERNAL_ERROR,
             message="Access token not found in response",
+            service=Services.SPOTIFY,
             is_logged=True,
             critical=True,
         )

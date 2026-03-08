@@ -6,6 +6,7 @@ from curl_cffi.requests import AsyncSession
 from core.config import Config
 from models.errors import BotError, ErrorCode
 from models.metadata import MediaMetadata, MetadataType
+from models.service_list import Services
 from utils.download_utils import download_file
 
 from .auth import get_access_token
@@ -45,6 +46,7 @@ async def get_spotify_author(track_id: str, token: str):
         raise BotError(
             code=ErrorCode.PLAYLIST_INFO_ERROR,
             message=f"Error fetching track {track_id}: {e}",
+            service=Services.SPOTIFY,
             url=None,
             critical=True,
             is_logged=True
@@ -80,6 +82,7 @@ async def get_set_list(set_id: str, type: str, token: str) -> MediaMetadata:
                     raise BotError(
                         code=ErrorCode.PLAYLIST_INFO_ERROR,
                         message=f"Error fetching playlist tracks: {response.text}",
+                        service=Services.SPOTIFY,
                         url=url,
                         critical=True,
                         is_logged=True
@@ -132,6 +135,7 @@ async def get_set_list(set_id: str, type: str, token: str) -> MediaMetadata:
                     raise BotError(
                         code=ErrorCode.PLAYLIST_INFO_ERROR,
                         message=f"Error fetching playlist tracks: {response.text}",
+                        service=Services.SPOTIFY,
                         url=url,
                         critical=True,
                         is_logged=True
@@ -196,6 +200,7 @@ async def get_set_list(set_id: str, type: str, token: str) -> MediaMetadata:
             raise BotError(
                 code=ErrorCode.PLAYLIST_INFO_ERROR,
                 message=f"Invalid playlist type: {type}",
+                service=Services.SPOTIFY,
                 url=set_id,
                 critical=True,
                 is_logged=True
@@ -208,6 +213,7 @@ async def get_set_list(set_id: str, type: str, token: str) -> MediaMetadata:
         raise BotError(
             code=ErrorCode.PLAYLIST_INFO_ERROR,
             message=f"Error fetching playlist tracks: {e}",
+            service=Services.SPOTIFY,
             url=set_id,
             critical=True,
             is_logged=True
@@ -225,6 +231,7 @@ async def fetch_spotify_token(config: Config):
         raise BotError(
             code=ErrorCode.INTERNAL_ERROR,
             message=f"Failed to fetch Spotify token: {e}",
+            service=Services.SPOTIFY,
             critical=True,
             is_logged=True
         )
