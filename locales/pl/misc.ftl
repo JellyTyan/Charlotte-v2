@@ -28,6 +28,7 @@ msg-help =
       - Twitter (X) - Filmy i obrazki
       - BlueSky - Filmy i obrazki
       - Reddit - Wszystkie media z postów
+      - Twitch - Klipy
 
     <b>Platformy artystyczne</b>
       - Pixiv - Piękne ilustracje

@@ -14,3 +14,4 @@ class Services(Enum):
     DEEZER = "Deezer"
     APPLE_MUSIC = "AppleMusic"
     BLUESKY = "BlueSky"
+    TWITCH = "Twitch"
