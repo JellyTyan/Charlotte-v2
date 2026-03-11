@@ -99,41 +99,44 @@ async def universal_ytdlp_extract(
         if extra_opts:
             ydl_opts.update(extra_opts)
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=not extract_only)
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=not extract_only)
 
-            # Clean info dict to make it serializable
-            clean_info = {
-                "id": info.get("id"),
-                "title": info.get("title"),
-                "description": info.get("description"),
-                "uploader": info.get("uploader"),
-                "channel_url": info.get("channel_url"),
-                "duration": info.get("duration"),
-                "thumbnail": info.get("thumbnail"),
-                "thumbnails": info.get("thumbnails"),
-                "width": info.get("width"),
-                "height": info.get("height"),
-                "ext": info.get("ext"),
-                "formats": info.get("formats"),
-                "filesize": info.get("filesize"),
-            }
+                # Clean info dict to make it serializable
+                clean_info = {
+                    "id": info.get("id"),
+                    "title": info.get("title"),
+                    "description": info.get("description"),
+                    "uploader": info.get("uploader"),
+                    "channel_url": info.get("channel_url"),
+                    "duration": info.get("duration"),
+                    "thumbnail": info.get("thumbnail"),
+                    "thumbnails": info.get("thumbnails"),
+                    "width": info.get("width"),
+                    "height": info.get("height"),
+                    "ext": info.get("ext"),
+                    "formats": info.get("formats"),
+                    "filesize": info.get("filesize"),
+                }
 
-            result = {
-                "info": clean_info,
-                "title": info.get("title"),
-                "duration": info.get("duration"),
-                "thumbnail": info.get("thumbnail"),
-            }
+                result = {
+                    "info": clean_info,
+                    "title": info.get("title"),
+                    "duration": info.get("duration"),
+                    "thumbnail": info.get("thumbnail"),
+                }
 
-            if not extract_only:
-                filepath = ydl.prepare_filename(info)
-                # Handle audio extraction filename change
-                if extract_audio:
-                    filepath = os.path.splitext(filepath)[0] + f".{audio_format}"
-                result["filepath"] = filepath
+                if not extract_only:
+                    filepath = ydl.prepare_filename(info)
+                    # Handle audio extraction filename change
+                    if extract_audio:
+                        filepath = os.path.splitext(filepath)[0] + f".{audio_format}"
+                    result["filepath"] = filepath
 
-            return result
+                return result
+        except yt_dlp.utils.DownloadError as e:
+            raise Exception(str(e))
 
     return await loop.run_in_executor(None, process)
 

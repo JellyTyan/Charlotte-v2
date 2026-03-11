@@ -28,6 +28,7 @@ msg-help =
       - Twitter (X) - Videos and images
       - BlueSky - Videos and images
       - Reddit - All media from posts
+      - Twitch - Clips
 
     <b>Art Platforms</b>
       - Pixiv - Beautiful illustrations

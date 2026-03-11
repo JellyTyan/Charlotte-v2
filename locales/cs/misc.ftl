@@ -28,6 +28,7 @@ msg-help =
       - Twitter (X) - Videa a obrázky
       - BlueSky - Videa a obrázky
       - Reddit - Všechna média z příspěvků
+      - Twitch - Klipy
 
     <b>Umělecké platformy</b>
       - Pixiv - Krásné ilustrace

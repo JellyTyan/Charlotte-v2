@@ -36,6 +36,7 @@ class ServicesSettings(BaseModel):
     pinterest: MediaSettingsExtra = MediaSettingsExtra()
     pixiv: MediaSettingsExtra = MediaSettingsExtra()
     reddit: MediaSettings = MediaSettings()
+    twitch: MediaSettings = MediaSettings()
 
     spotify: MusicSettingsExtra = MusicSettingsExtra()
     deezer: MusicSettingsExtra = MusicSettingsExtra()
@@ -75,6 +76,7 @@ class ChatServicesSettings(BaseModel):
     pinterest: MediaSettingsExtra = MediaSettingsExtra()
     pixiv: MediaSettingsExtra = MediaSettingsExtra()
     reddit: MediaSettings = MediaSettings()
+    twitch: MediaSettings = MediaSettings()
 
     spotify: MusicSettingsExtra = MusicSettingsExtra()
     deezer: MusicSettingsExtra = MusicSettingsExtra()
