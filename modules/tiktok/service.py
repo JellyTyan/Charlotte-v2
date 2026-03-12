@@ -76,22 +76,30 @@ class TiktokService(BaseService):
         resolved_url = urlunparse(parsed._replace(query=""))
         logger.debug(f"Resolved URL: {resolved_url}")
 
-        # 1. Fetch data from both sources
-        tikwm_info = await get_tikwm_info(resolved_url)
-        tikwm_data = tikwm_info.get("data", {}) if tikwm_info and tikwm_info.get("msg") == "success" else {}
+        # 1. Fetch data from both sources in parallel
+        async def fetch_gallery_dl():
+            job = await self.arq.enqueue_job(
+                "universal_gallery_dl",
+                url=resolved_url,
+                extract_only=True,
+                _queue_name='heavy'
+            )
+            result = await job.result()
+            return result.get("items", [None])[0]
 
-        job = await self.arq.enqueue_job(
-            "universal_gallery_dl",
-            url=resolved_url,
-            extract_only=True,
-            _queue_name='heavy'
+        tikwm_info, gallery_data = await asyncio.gather(
+            get_tikwm_info(resolved_url),
+            fetch_gallery_dl(),
+            return_exceptions=True
         )
-        result = await job.result()
 
-        gallery_data = result.get("items", None)[0]
-        if not gallery_data:
+        tikwm_data = {}
+        if not isinstance(tikwm_info, BaseException) and tikwm_info and tikwm_info.get("msg") == "success":
+            tikwm_data = tikwm_info.get("data", {})
+        
+        if isinstance(gallery_data, BaseException) or not gallery_data:
             logger.warning(f"Gallery-dl failed for {resolved_url}")
-            pass
+            gallery_data = None
 
         # 2. Extract General Metadata (Priority: Gallery-DL)
         author_data = gallery_data.get("author", {}) if gallery_data else tikwm_data.get("author", {})
