@@ -31,7 +31,8 @@ from storage.db.crud import (
     update_global_settings,
     get_list_user_ids,
     get_news_subscribers_ids,
-    get_all_chat_ids
+    get_all_chat_ids,
+    get_db_overview_stats
 )
 from states import NewsSpamGroup
 from utils import escape_markdown
@@ -140,12 +141,22 @@ async def admin_panel_stats(callback: CallbackQuery, state: FSMContext):
 
     user_count = await get_user_counts()
     status_stats = await get_status_stats()
+    db_overview = await get_db_overview_stats()
 
     total_requests = status_stats['complete'] + status_stats['error']
     success_rate = (status_stats['complete'] / total_requests * 100) if total_requests > 0 else 0
 
+    total_users = db_overview['total_users']
+    total_chats = db_overview['total_chats']
+    inactive_users = db_overview['inactive_users']
+    inactive_users_pct = (inactive_users / total_users * 100) if total_users > 0 else 0
+
     text = (
         "📊 <b>Global Statistics</b>\n\n"
+        "<b>🗄 Database</b>\n"
+        f"  👤 Users: <b>{total_users:,}</b>\n"
+        f"  └ Inactive (30d+): {inactive_users:,} ({inactive_users_pct:.1f}%)\n"
+        f"  💬 Chats: <b>{total_chats:,}</b>\n\n"
         "<b>👥 Active Users:</b>\n"
         f"  Today: {user_count['today']}\n"
         f"  Yesterday: {user_count['yesterday']}\n"
