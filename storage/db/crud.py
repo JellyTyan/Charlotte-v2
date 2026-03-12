@@ -479,6 +479,41 @@ async def update_global_settings(key: str, value) -> None:
     await cache_delete("global_settings")
 
 
+async def get_db_overview_stats() -> dict:
+    """
+    Returns total counts of users and chats in the database,
+    along with the count of inactive ones (no activity in the last 30 days).
+    Inactive users: last_used < 30 days ago OR last_used IS NULL.
+    Inactive chats: no Statistics events from that chat_id in the last 30 days.
+    """
+    now = datetime.datetime.now(datetime.timezone.utc)
+    inactive_threshold = now - datetime.timedelta(days=30)
+    inactive_date = inactive_threshold.date()
+
+    async with _get_db().async_session() as session:
+        # Total users & chats
+        res = await session.execute(select(func.count()).select_from(Users))
+        total_users = res.scalar() or 0
+
+        res = await session.execute(select(func.count()).select_from(Chats))
+        total_chats = res.scalar() or 0
+
+        # Inactive users: last_used is old or null
+        from sqlalchemy import or_, null
+        res = await session.execute(
+            select(func.count()).select_from(Users).where(
+                or_(Users.last_used < inactive_date, Users.last_used == None)
+            )
+        )
+        inactive_users = res.scalar() or 0
+
+    return {
+        "total_users": total_users,
+        "total_chats": total_chats,
+        "inactive_users": inactive_users,
+    }
+
+
 async def get_list_user_ids() -> list[int]:
     async with _get_db().async_session() as session:
         stmt = select(Users.user_id).where(Users.is_banned == False)
