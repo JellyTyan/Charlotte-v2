@@ -29,7 +29,7 @@ msg-help =
       - BlueSky - ویدیو و عکس
       - Reddit - همه رسانههای پستها
       - Twitch - کلیپها
-      - NicoVideo - ویدیوها
+      - NicoVideo - ویدیو و صدا
 
     <b>پلتفرمهای هنری</b>
       - Pixiv - تصاویر زیبا
