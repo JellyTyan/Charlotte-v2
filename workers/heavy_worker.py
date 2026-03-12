@@ -116,8 +116,26 @@ async def universal_ytdlp_extract(
                     "width": info.get("width"),
                     "height": info.get("height"),
                     "ext": info.get("ext"),
-                    "formats": info.get("formats"),
+                    "formats": [
+                        {
+                            "format_id": f.get("format_id"),
+                            "ext": f.get("ext"),
+                            "width": f.get("width"),
+                            "height": f.get("height"),
+                            "vcodec": f.get("vcodec"),
+                            "acodec": f.get("acodec"),
+                            "filesize": f.get("filesize"),
+                            "filesize_approx": f.get("filesize_approx"),
+                            "tbr": f.get("tbr"),
+                            "vbr": f.get("vbr"),
+                            "abr": f.get("abr"),
+                            "duration": f.get("duration"),
+                            "format_note": f.get("format_note"),
+                        }
+                        for f in (info.get("formats") or [])
+                    ],
                     "filesize": info.get("filesize"),
+                    "filesize_approx": info.get("filesize_approx"),
                 }
 
                 result = {

@@ -37,6 +37,7 @@ class ServicesSettings(BaseModel):
     pixiv: MediaSettingsExtra = MediaSettingsExtra()
     reddit: MediaSettings = MediaSettings()
     twitch: MediaSettings = MediaSettings()
+    nicovideo: MediaSettings = MediaSettings()
 
     spotify: MusicSettingsExtra = MusicSettingsExtra()
     deezer: MusicSettingsExtra = MusicSettingsExtra()
@@ -77,6 +78,7 @@ class ChatServicesSettings(BaseModel):
     pixiv: MediaSettingsExtra = MediaSettingsExtra()
     reddit: MediaSettings = MediaSettings()
     twitch: MediaSettings = MediaSettings()
+    nicovideo: MediaSettings = MediaSettings()
 
     spotify: MusicSettingsExtra = MusicSettingsExtra()
     deezer: MusicSettingsExtra = MusicSettingsExtra()
