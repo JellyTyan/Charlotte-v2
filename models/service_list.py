@@ -15,3 +15,4 @@ class Services(Enum):
     APPLE_MUSIC = "AppleMusic"
     BLUESKY = "BlueSky"
     TWITCH = "Twitch"
+    NICOVIDEO = "NicoVideo"

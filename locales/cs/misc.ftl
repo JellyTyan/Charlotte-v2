@@ -29,6 +29,7 @@ msg-help =
       - BlueSky - Videa a obrázky
       - Reddit - Všechna média z příspěvků
       - Twitch - Klipy
+      - NicoVideo - Videa
 
     <b>Umělecké platformy</b>
       - Pixiv - Krásné ilustrace

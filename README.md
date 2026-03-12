@@ -35,6 +35,7 @@
 - [x] Reddit
 - [x] BlueSky
 - [x] Twitch
+- [x] NicoVideo
 
 <!-- FEATURES -->
 ## <img src="https://cdn.discordapp.com/emojis/852881450667081728.gif" width="20px" height="20px">》Features

@@ -29,6 +29,7 @@ msg-help =
       - Reddit - Все медіа з постів
       - BlueSky - Відео та картинки
       - Twitch - Кліпи
+      - NicoVideo - Відео
 
 
     <b>Арт-платформи</b>
