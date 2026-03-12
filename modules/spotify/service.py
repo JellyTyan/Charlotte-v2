@@ -111,6 +111,8 @@ class SpotifyService(BaseService):
 
         # Experimental Tidal Lossless Download
         if lossless_mode:
+            tidal_downloaded_path = None
+            tidal_item = None
             try:
                 logger.debug(f"Attempting Tidal download for: {performer} - {title}")
                 tidal = TidalUtil()
@@ -137,48 +139,53 @@ class SpotifyService(BaseService):
 
                         if downloaded_path and await aios.path.exists(downloaded_path):
                             logger.info(f"Successfully downloaded from Tidal: {downloaded_path}")
-
-                            # Download cover if needed
-                            cover_path = None
-                            base_path = os.path.join(self.output_path, pathlib.Path(downloaded_path).stem)
-
-                            if cover_url:
-                                try:
-                                    cover_path = f"{base_path}.jpg"
-                                    job = await self.arq.enqueue_job("universal_download", cover_url, cover_path)
-                                    await job.result()
-                                except Exception as e:
-                                    logger.warning(f"Failed to download cover: {e}")
-                                    cover_path = None
-
-                            # 3. Update Metadata
-                            job = await self.arq.enqueue_job(
-                                "universal_metadata_update",
-                                downloaded_path,
-                                title=title,
-                                artist=performer,
-                                cover_file=cover_path,
-                                _queue_name='heavy'
-                            )
-                            await job.result()
-
-                            # Return MediaContent
-                            duration = item.get('duration', 0)
-
-                            cover_file = Path(cover_path) if cover_path and await aios.path.exists(cover_path) else None
-
-                            return [MediaContent(
-                                type=MediaType.AUDIO,
-                                path=Path(downloaded_path),
-                                duration=duration,
-                                title=title,
-                                performer=performer,
-                                cover=cover_file
-                            )]
+                            tidal_downloaded_path = downloaded_path
+                            tidal_item = item
                         else:
                             logger.warning("Tidal download returned path but file missing or failed.")
+                        break
             except Exception as e:
                 logger.error(f"Tidal download failed: {e}. Falling back to standard method.")
+
+            if tidal_downloaded_path and tidal_item:
+                # Download cover if needed
+                cover_path = None
+                base_path = os.path.join(self.output_path, pathlib.Path(tidal_downloaded_path).stem)
+
+                if cover_url:
+                    try:
+                        cover_path = f"{base_path}.jpg"
+                        job = await self.arq.enqueue_job("universal_download", cover_url, cover_path)
+                        await job.result()
+                    except Exception as e:
+                        logger.warning(f"Failed to download cover: {e}")
+                        cover_path = None
+
+                # Update Metadata
+                try:
+                    job = await self.arq.enqueue_job(
+                        "universal_metadata_update",
+                        tidal_downloaded_path,
+                        title=title,
+                        artist=performer,
+                        cover_file=cover_path,
+                        _queue_name='heavy'
+                    )
+                    await job.result()
+                except Exception as e:
+                    logger.warning(f"Failed to update Tidal metadata: {e}")
+
+                duration = tidal_item.get('duration', 0)
+                cover_file = Path(cover_path) if cover_path and await aios.path.exists(cover_path) else None
+
+                return [MediaContent(
+                    type=MediaType.AUDIO,
+                    path=Path(tidal_downloaded_path),
+                    duration=duration,
+                    title=title,
+                    performer=performer,
+                    cover=cover_file
+                )]
 
         # Fallback to standard YouTube/yt-dlp method
         options = get_audio_options(f"{performer} - {title}")
