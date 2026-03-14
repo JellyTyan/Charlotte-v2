@@ -92,7 +92,7 @@ class InstagramService(BaseService):
                     path_obj = Path(res)
                     ext = path_obj.suffix.lower()
                     if ext == '.mp4':
-                        fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(self.arq, res)
+                        fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(self.arq, res, force_reencode=True)
                         path_obj = Path(fixed_video)
                         media_contents.append(MediaContent(
                             type=MediaType.VIDEO,
@@ -209,14 +209,34 @@ class InstagramService(BaseService):
             description = info.get("description", "") or ""
             final_caption = truncate_string(f"{author} - {description}", 1024)
 
-            return [
-                MediaContent(
-                    type=MediaType.VIDEO if info.get('ext') == 'mp4' else MediaType.PHOTO,
-                    path=path,
-                    title=final_caption,
-                    performer=author
+            # Process video for Telegram compatibility
+            if info.get('ext') == 'mp4':
+                # Instagram DASH formats often have compatibility issues
+                # Force re-encode to ensure Telegram compatibility
+                fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(
+                    self.arq, str(path), force_reencode=True
                 )
-            ]
+                return [
+                    MediaContent(
+                        type=MediaType.VIDEO,
+                        path=Path(fixed_video),
+                        title=final_caption,
+                        performer=author,
+                        cover=Path(thumbnail) if thumbnail and os.path.exists(thumbnail) else None,
+                        width=width,
+                        height=height,
+                        duration=int(duration)
+                    )
+                ]
+            else:
+                return [
+                    MediaContent(
+                        type=MediaType.PHOTO,
+                        path=path,
+                        title=final_caption,
+                        performer=author
+                    )
+                ]
         except Exception as e:
             raise BotError(
                 ErrorCode.DOWNLOAD_FAILED,
