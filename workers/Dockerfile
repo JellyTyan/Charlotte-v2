@@ -23,6 +23,9 @@ RUN curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh
 COPY --chown=charlotte:charlotte requirements.worker.txt .
 RUN pip install --no-cache-dir -r requirements.worker.txt
 RUN pip install --no-cache-dir gallery-dl
+
+# Force yt-dlp update by using build arg (pass --build-arg YTDLP_VERSION=$(date +%s) to force update)
+ARG YTDLP_VERSION=1
 RUN pip install -U --no-cache-dir --pre yt-dlp[default,curl-cffi]
 
 # Copy only worker files (workers are self-contained)
