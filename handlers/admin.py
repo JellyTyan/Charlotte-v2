@@ -810,7 +810,7 @@ async def admin_panel_service_usage(callback: CallbackQuery, state: FSMContext):
         success_rate = (success / total * 100) if total > 0 else 0
         text += f"<b>{service}</b>\n"
         text += f"  👥 Users: {unique_users}\n"
-        text += f"  Total: {total}\n"
+        text += f"  Total requests: {total}\n"
         text += f"  ✅ Success: {success} ({success_rate:.1f}%)\n"
         text += f"  ❌ Failed: {failed}\n\n"
         total_all += total
