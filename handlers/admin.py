@@ -791,7 +791,8 @@ async def admin_panel_service_usage(callback: CallbackQuery, state: FSMContext):
                 Statistics.service_name,
                 func.count(Statistics.event_id).label('total'),
                 func.sum(case((Statistics.status == 'success', 1), else_=0)).label('success'),
-                func.sum(case((Statistics.status == 'failed', 1), else_=0)).label('failed')
+                func.sum(case((Statistics.status == 'failed', 1), else_=0)).label('failed'),
+                func.count(func.distinct(Statistics.user_id)).label('unique_users')
             )
             .where(Statistics.event_time >= since)
             .group_by(Statistics.service_name)
@@ -805,9 +806,10 @@ async def admin_panel_service_usage(callback: CallbackQuery, state: FSMContext):
     success_all = 0
     failed_all = 0
 
-    for service, total, success, failed in stats:
+    for service, total, success, failed, unique_users in stats:
         success_rate = (success / total * 100) if total > 0 else 0
         text += f"<b>{service}</b>\n"
+        text += f"  👥 Users: {unique_users}\n"
         text += f"  Total: {total}\n"
         text += f"  ✅ Success: {success} ({success_rate:.1f}%)\n"
         text += f"  ❌ Failed: {failed}\n\n"
