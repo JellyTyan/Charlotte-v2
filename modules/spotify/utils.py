@@ -178,6 +178,12 @@ async def _get_album_info(album_id: str, safe_id: str, token_data: dict, session
     
     data = response.json()["data"]["albumUnion"]
     
+    # Получаем обложку альбома сразу
+    album_cover_url = None
+    cover_sources = data.get("coverArt", {}).get("sources", [])
+    if cover_sources:
+        album_cover_url = cover_sources[0]["url"]
+    
     items = []
     # В альбоме треки находятся в tracksV2.items, и каждый элемент имеет поле track
     for track_item in data.get("tracksV2", {}).get("items", []):
@@ -200,7 +206,7 @@ async def _get_album_info(album_id: str, safe_id: str, token_data: dict, session
             url=f"https://open.spotify.com/track/{track_id}",
             title=track.get("name", "Unknown"),
             performer=artist,
-            cover=None,  # Обложка будет общая для альбома
+            cover=album_cover_url,
             media_type="track",
             extra={
                 "duration_ms": track.get("duration", {}).get("totalMilliseconds", 0),
@@ -217,12 +223,10 @@ async def _get_album_info(album_id: str, safe_id: str, token_data: dict, session
             artists.append(name)
     artist_name = ", ".join(artists) if artists else "Unknown Artist"
     
-    # Обрабатываем обложку альбома
+    # Скачиваем обложку альбома для метаданных
     cover_url = None
-    cover_sources = data.get("coverArt", {}).get("sources", [])
-    if cover_sources:
-        cover_url = cover_sources[0]["url"]
-        cover = await download_file(cover_url, f"storage/temp/spotify_album_{safe_id}.jpg")
+    if album_cover_url:
+        cover = await download_file(album_cover_url, f"storage/temp/spotify_album_{safe_id}.jpg")
         if cover:
             cover_url = str(cover)
     
