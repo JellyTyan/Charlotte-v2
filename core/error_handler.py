@@ -78,9 +78,10 @@ async def global_error_handler(event: ErrorEvent):
 
         if exception.critical and config.ADMIN_ID:
             logger.info(f"Sending critical error notification to admin {config.ADMIN_ID}")
+            service_name = exception.service.value if exception.service else "Unknown"
             await bot.send_message(
                 config.ADMIN_ID,
-                f"Sorry, there was an error:\n{exception.url}\n\n<pre>{exception.message}</pre>",
+                f"Sorry, there was an error:\nService: {service_name}\n{exception.url}\n\n<pre>{exception.message}</pre>",
                 parse_mode=ParseMode.HTML
             )
 
