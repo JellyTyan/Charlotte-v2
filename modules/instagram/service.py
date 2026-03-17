@@ -92,7 +92,7 @@ class InstagramService(BaseService):
                     path_obj = Path(res)
                     ext = path_obj.suffix.lower()
                     if ext == '.mp4':
-                        fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(self.arq, res, force_reencode=True)
+                        fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(self.arq, res)
                         path_obj = Path(fixed_video)
                         media_contents.append(MediaContent(
                             type=MediaType.VIDEO,
@@ -212,10 +212,8 @@ class InstagramService(BaseService):
             # Process video for Telegram compatibility
             if info.get('ext') == 'mp4':
                 # Instagram DASH formats often have compatibility issues
-                # Force re-encode to ensure Telegram compatibility
                 fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(
-                    self.arq, str(path), force_reencode=True
-                )
+                    self.arq, str(path))
                 return [
                     MediaContent(
                         type=MediaType.VIDEO,
