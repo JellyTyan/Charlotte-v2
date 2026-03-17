@@ -12,7 +12,7 @@ def get_ytdlp_options():
         "no_exec": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["tv", "web_safari", "web_embedded", "ios"]
+                "player_client": ["tv", "web_safari", "web_embedded", "web"]
             },
             "youtubepot-bgutilhttp": {
                 "base_url": ["http://bgutil:4416"]
