@@ -117,7 +117,7 @@ async def  get_video_info(info_dict: dict, max_size_mb: int = 50) -> dict:
         if best_audio:
             result["best_audio"] = {
                 "format_id": best_audio["format_id"],
-                "filesize": best_audio.get("filesize") or best_audio.get("filesize_approx") or 0
+                "filesize": round((best_audio.get("filesize") or best_audio.get("filesize_approx") or 0)  / (1024 * 1024), 2)
             }
 
         return result

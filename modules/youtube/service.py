@@ -177,7 +177,7 @@ class YouTubeService(BaseService):
 
                 markup.row(
                     InlineKeyboardButton(
-                        text="🎵 Audio",
+                        text=f"🎵 Audio ~{video_info['best_audio']['filesize']}MB",
                         callback_data=callback_data_audio
                     )
                 )
