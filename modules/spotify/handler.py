@@ -36,8 +36,6 @@ async def spotify_handler(message: Message, config: Config, i18n: TranslatorRunn
         message=message
     )
 
-    # For single tracks, queue send task
-    # For playlists, send tasks are queued for each track inside process_spotify_url
     if download_task:
         async def send_when_ready():
             try:
@@ -64,7 +62,6 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
 
     arq = await get_arq_pool('light')
 
-    # Send chat action for user feedback
     if message.bot:
         await message.bot.send_chat_action(message.chat.id, "choose_sticker")
 

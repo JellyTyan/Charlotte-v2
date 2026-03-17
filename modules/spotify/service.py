@@ -54,14 +54,18 @@ class SpotifyService(BaseService):
                 is_logged=True
             )
 
-        logger.debug("Fetching Spotify access token")
-        data = await get_or_cache(
-            "spotify_bearer_token",
-            lambda: fetch_spotify_token(config),
-            ttl=3500
-        )
-        token = data["token"]
-        logger.debug("Token retrieved successfully")
+        try:
+            logger.debug("Fetching Spotify access token")
+            data = await get_or_cache(
+                "spotify_bearer_token",
+                lambda: fetch_spotify_token(config),
+                ttl=3500
+            )
+            token = data["token"]
+            logger.debug(f"Token retrieved successfully")
+        except Exception as e:
+            logger.error(f"Failed to get token: {e}", exc_info=True)
+            raise
 
         match_track = re.search(r"track/([^/?]+)", url)
         match_playlist = re.search(r"playlist/([^/?]+)", url)
@@ -69,8 +73,12 @@ class SpotifyService(BaseService):
         if match_track:
             track_id = match_track.group(1)
             logger.debug(f"Extracting track info for ID: {track_id}")
-            performer, title, cover_url = await get_spotify_author(track_id, token)
-            logger.debug(f"Track info: {performer} - {title}")
+            try:
+                performer, title, cover_url = await get_spotify_author(track_id, token)
+                logger.debug(f"Track info: {performer} - {title}")
+            except Exception as e:
+                logger.error(f"Failed to get track info: {e}", exc_info=True)
+                raise
 
             return MediaMetadata(
                 type=MetadataType.METADATA,
