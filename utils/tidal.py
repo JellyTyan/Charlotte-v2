@@ -22,8 +22,8 @@ class TidalUtil:
         'x-client': 'BiniLossless/v3.4',
     }
 
-    SEARCH_URL = 'https://vogel.qqdl.site/search/'
-    TRACK_URL = 'https://triton.squid.wtf/track/'
+    SEARCH_URL = 'https://hifi-one.spotisaver.net/search/'
+    TRACK_URL = 'https://hifi-one.spotisaver.net/track/'
 
     async def search(self, query: str, limit: int = 10) -> List[dict]:
         """
