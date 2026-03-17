@@ -246,6 +246,15 @@ class YouTubeService(BaseService):
         except BotError as ebot:
             ebot.service = Services.YOUTUBE
             raise ebot
+        except Exception as e:
+            logger.error(f"Failed to download video: {e}")
+            raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                message=str(e),
+                url=url,
+                service=Services.YOUTUBE,
+                is_logged=True
+            )
 
     async def download_audio(self, url: str, format: str) -> List[MediaContent]:
         logger.info(f"Starting audio download for URL: {url} with format: {format}")
@@ -313,3 +322,12 @@ class YouTubeService(BaseService):
         except BotError as ebot:
             ebot.service = Services.YOUTUBE
             raise ebot
+        except Exception as e:
+            logger.error(f"Failed to download audio: {e}")
+            raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                message=str(e),
+                url=url,
+                service=Services.YOUTUBE,
+                is_logged=True
+            )
