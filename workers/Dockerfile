@@ -26,7 +26,11 @@ RUN pip install --no-cache-dir gallery-dl
 
 # Force yt-dlp update by using build arg (pass --build-arg YTDLP_VERSION=$(date +%s) to force update)
 ARG YTDLP_VERSION=1
-RUN pip install -U --no-cache-dir --pre yt-dlp[default,curl-cffi]
+RUN pip install -U --no-cache-dir --pre yt-dlp[default,curl-cffi] && \
+    pip install -U --no-cache-dir --pre yt-dlp-ejs
+
+    echo "--remote-components ejs:npm" > /home/charlotte/.config/yt-dlp/config && \
+    chown -R charlotte:charlotte /home/charlotte/.config
 
 # Copy only worker files (workers are self-contained)
 COPY --chown=charlotte:charlotte workers/ workers/
