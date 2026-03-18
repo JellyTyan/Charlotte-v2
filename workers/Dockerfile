@@ -29,6 +29,7 @@ ARG YTDLP_VERSION=1
 RUN pip install -U --no-cache-dir --pre yt-dlp[default,curl-cffi] && \
     pip install -U --no-cache-dir --pre yt-dlp-ejs
 
+RUN mkdir -p /home/charlotte/.config/yt-dlp && \
     echo "--remote-components ejs:npm" > /home/charlotte/.config/yt-dlp/config && \
     chown -R charlotte:charlotte /home/charlotte/.config
 
