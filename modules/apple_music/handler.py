@@ -88,10 +88,7 @@ async def process_apple_url(message: Message, config: Config, i18n: TranslatorRu
         if message.bot:
             await message.bot.send_chat_action(message.chat.id, "record_audio")
         track = await service.download(
-            media_metadata.performer,
-            media_metadata.title,
-            media_metadata.cover,
-            media_metadata.full_size_cover,
+            media_metadata,
             lossless_mode=lossless_mode
         )
 
@@ -125,31 +122,32 @@ async def process_apple_url(message: Message, config: Config, i18n: TranslatorRu
             if track_meta.performer is None or track_meta.title is None:
                 logger.warning(f"Skipping track with missing metadata")
                 continue
-            async def download_track(performer=track_meta.performer, title=track_meta.title, cover=track_meta.cover, full_cover=track_meta.full_size_cover, lossless_mode=lossless_mode):
+
+            async def download_track_logic(meta=track_meta, mode=lossless_mode):
                 try:
-                    return await service.download(performer, title, cover, full_cover, lossless_mode=lossless_mode)
+                    return await service.download(meta, lossless_mode=mode)
                 except Exception as e:
-                    logger.error(f"Failed to download track {title}: {e}")
+                    logger.error(f"Failed to download track {meta.title}: {e}")
                     raise
 
             track_download_task = await task_manager.add_task(
                 user.id,
-                download_coro=download_track(),
+                download_coro=download_track_logic(track_meta, lossless_mode),  # Pass args here
                 message=None
             )
 
             if track_download_task:
-                async def send_track(task=track_download_task):
+                async def send_track_logic(task=track_download_task):
                     try:
                         track_content = await task
                         if track_content:
-                            await send_manager.send(message, track_content, skip_reaction=True, service="apple_music")
+                            await send_manager.send(message, track_content, skip_reaction=True, service="spotify")
                             return True
                         return False
                     except Exception:
                         return False
 
-                await task_manager.add_send_task(user.id, send_track())
+                await task_manager.add_send_task(user.id, send_track_logic(track_download_task))
 
         await log_download_event(user.id, Services.APPLE_MUSIC, 'success')
         return None
