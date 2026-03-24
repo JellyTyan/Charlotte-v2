@@ -74,8 +74,8 @@ class SpotifyService(BaseService):
             track_id = match_track.group(1)
             logger.debug(f"Extracting track info for ID: {track_id}")
             try:
-                performer, title, cover_url = await get_spotify_author(track_id, token)
-                logger.debug(f"Track info: {performer} - {title}")
+                track_info = await get_spotify_author(track_id, token)
+                logger.debug(f"Track info: {track_info["artist"]} - {track_info["title"]}")
             except Exception as e:
                 logger.error(f"Failed to get track info: {e}", exc_info=True)
                 raise
@@ -83,10 +83,11 @@ class SpotifyService(BaseService):
             return MediaMetadata(
                 type=MetadataType.METADATA,
                 url=url,
-                title=title,
-                performer=performer,
-                cover=cover_url,
+                title=track_info["title"],
+                performer=track_info["artist"],
+                cover=track_info["cover_url"],
                 media_type="track",
+                extra={"album_name": track_info["album_name"],"date": track_info["date"]}
             )
         elif match_playlist:
             playlist_id = match_playlist.group(1)
@@ -106,7 +107,7 @@ class SpotifyService(BaseService):
                 is_logged=True
             )
 
-    async def download(self, performer: str, title: str, cover_url: Optional[str] = None, lossless_mode: bool = False) -> List[MediaContent]:
+    async def download(self, metadata: MediaMetadata, lossless_mode: bool = False) -> List[MediaContent]:
         if not self.arq:
             raise BotError(
                 code=ErrorCode.INTERNAL_ERROR,
@@ -115,7 +116,13 @@ class SpotifyService(BaseService):
                 critical=True,
                 is_logged=True
             )
-        logger.debug(f"Starting download for: {performer} - {title} (Lossless: {lossless_mode})")
+        logger.debug(f"Starting download for: {metadata.performer} - {metadata.title} (Lossless: {lossless_mode})")
+
+        title = metadata.title
+        performer = metadata.performer
+        cover_url = metadata.cover
+        album_name = metadata.extra.get("album_name", None)
+        date = metadata.extra.get("date", None)
 
         # Experimental Tidal Lossless Download
         if lossless_mode:
@@ -177,6 +184,8 @@ class SpotifyService(BaseService):
                         title=title,
                         artist=performer,
                         cover_file=cover_path,
+                        album_name=album_name,
+                        date=date,
                         _queue_name='heavy'
                     )
                     await job.result()
@@ -262,6 +271,8 @@ class SpotifyService(BaseService):
                 title=title,
                 artist=performer,
                 cover_file=cover_path,
+                album_name=album_name,
+                date=date,
                 _queue_name='heavy'
             )
             await job.result()

@@ -96,9 +96,7 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
         if message.bot:
             await message.bot.send_chat_action(message.chat.id, "record_audio")
         track = await service.download(
-            media_metadata.performer,
-            media_metadata.title,
-            media_metadata.cover,
+            media_metadata,
             lossless_mode=lossless_mode
         )
 
@@ -135,25 +133,22 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
             if track_meta.performer is None or track_meta.title is None:
                 logger.warning(f"Skipping track with missing metadata")
                 continue
-            # Create download task for this track
-            async def download_track(performer=track_meta.performer, title=track_meta.title, cover=track_meta.cover, lossless_mode=lossless_mode):
+
+            async def download_track_logic(meta=track_meta, mode=lossless_mode):
                 try:
-                    track = await service.download(performer, title, cover, lossless_mode=lossless_mode)
-                    return track
+                    return await service.download(meta, lossless_mode=mode)
                 except Exception as e:
-                    logger.error(f"Failed to download track {title}: {e}")
+                    logger.error(f"Failed to download track {meta.title}: {e}")
                     raise
 
-            # Add to download queue
             track_download_task = await task_manager.add_task(
                 user.id,
-                download_coro=download_track(),
-                message=None  # No reaction for individual tracks
+                download_coro=download_track_logic(track_meta, lossless_mode),  # Pass args here
+                message=None
             )
 
-            # Add to send queue
             if track_download_task:
-                async def send_track(task=track_download_task):
+                async def send_track_logic(task=track_download_task):
                     try:
                         track_content = await task
                         if track_content:
@@ -163,8 +158,7 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
                     except Exception:
                         return False
 
-                # Queue send task
-                await task_manager.add_send_task(user.id, send_track())
+                await task_manager.add_send_task(user.id, send_track_logic(track_download_task))
 
         await log_download_event(user.id, Services.SPOTIFY, 'success')
 
