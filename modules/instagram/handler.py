@@ -14,7 +14,7 @@ from .service import InstagramService
 logger = logging.getLogger(__name__)
 
 
-INSTAGRAM_REGEX = r"https?://(?:www\.)?instagram\.com/(?:p|reel|tv)/[\w-]+(?:/\d+)?"
+INSTAGRAM_REGEX = r"https?://(?:www\.)?instagram\.com/(?:p|reels?|tv)/[\w-]+/?"
 
 @router.message(F.text.regexp(INSTAGRAM_REGEX))
 async def instagram_handler(message: Message):
