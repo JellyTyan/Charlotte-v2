@@ -46,11 +46,14 @@ async def get_track_info(song_id: int, token: str, region_code: str = "us") -> M
                 url=f"https://music.apple.com/{region_code}/song/{song_id}",
                 is_logged=True
             )
-
         track = data['data'][0]
         attrs = track.get('attributes', {})
         artwork = attrs.get('artwork', {})
         cover_url = artwork.get('url', '')
+        genres = attrs.get('genreNames', [])
+        release_date = attrs.get("releaseDate", "")
+        track_number = attrs.get('trackNumber', 0)
+        album_name = attrs.get('albumName', '')
 
         small_cover = cover_url.replace('{w}x{h}', '400x400').replace('{f}', '.jpg') if cover_url else None
         full_cover = cover_url.replace('{w}x{h}', f"{artwork.get('width', 3000)}x{artwork.get('height', 3000)}").replace('{f}', '.png') if cover_url else None
@@ -63,6 +66,12 @@ async def get_track_info(song_id: int, token: str, region_code: str = "us") -> M
             cover=small_cover,
             full_size_cover=full_cover,
             media_type="track",
+            extra={
+                'genres': genres,
+                'release_date': release_date,
+                'track_number': track_number,
+                'album_name': album_name
+            }
         )
 
 
@@ -129,6 +138,10 @@ async def get_playlist_info(playlist_id: str, token: str, region_code: str = "us
             track_cover_url = track_artwork.get('url', '')
             track_cover = track_cover_url.replace('{w}x{h}', '400x400').replace('{f}', '.jpg') if track_cover_url else None
             track_full_cover = track_cover_url.replace('{w}x{h}', f"{track_artwork.get('width', 3000)}x{track_artwork.get('height', 3000)}").replace('{f}', '.png') if track_cover_url else None
+            genres = track_attrs.get('genreNames', [])
+            release_date = track_attrs.get("releaseDate", "")
+            track_number = track_attrs.get('trackNumber', 0)
+            album_name = track_attrs.get('albumName', '')
 
             items.append(MediaMetadata(
                 type=MetadataType.METADATA,
@@ -137,7 +150,13 @@ async def get_playlist_info(playlist_id: str, token: str, region_code: str = "us
                 performer=track_attrs.get('artistName'),
                 cover=track_cover,
                 full_size_cover=track_full_cover,
-                media_type='track'
+                media_type='track',
+                extra={
+                    'genres': genres,
+                    'release_date': release_date,
+                    'track_number': track_number,
+                    'album_name': album_name
+                }
             ))
 
         return MediaMetadata(
@@ -218,6 +237,10 @@ async def get_album_info(album_id: str, token: str, region_code: str = "us") -> 
             track_cover_url = track_artwork.get('url', '')
             track_cover = track_cover_url.replace('{w}x{h}', '400x400').replace('{f}', '.jpg') if track_cover_url else None
             track_full_cover = track_cover_url.replace('{w}x{h}', f"{track_artwork.get('width', 3000)}x{track_artwork.get('height', 3000)}").replace('{f}', '.png') if track_cover_url else None
+            genres = track_attrs.get('genreNames', [])
+            release_date = track_attrs.get("releaseDate", "")
+            track_number = track_attrs.get('trackNumber', 0)
+            album_name = track_attrs.get('albumName', '')
 
             items.append(MediaMetadata(
                 type=MetadataType.METADATA,
@@ -227,7 +250,13 @@ async def get_album_info(album_id: str, token: str, region_code: str = "us") -> 
                 duration=track_attrs.get('durationInMillis', 0) // 1000,
                 cover=track_cover,
                 full_size_cover=track_full_cover,
-                media_type='track'
+                media_type='track',
+                extra={
+                    'genres': genres,
+                    'release_date': release_date,
+                    'track_number': track_number,
+                    'album_name': album_name
+                }
             ))
 
         return MediaMetadata(
