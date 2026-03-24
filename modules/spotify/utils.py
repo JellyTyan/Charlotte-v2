@@ -70,7 +70,7 @@ async def get_spotify_author(track_id: str, token: str):
             # Получаем новый токен с client_token
             token_data = await get_access_token(session)
             track_info = await get_track_info(track_id, token_data, session)
-        
+
         # Парсим артистов из новой структуры: firstArtist + otherArtists
         artists = []
         
@@ -95,9 +95,19 @@ async def get_spotify_author(track_id: str, token: str):
         album_cover = track_info.get("albumOfTrack", {}).get("coverArt", {}).get("sources", [])
         if album_cover:
             cover_url = album_cover[0]["url"]
+
+        album_name = track_info.get("albumOfTrack", {}).get("name", "Uknown")
+        date = track_info.get("albumOfTrack", {}).get("date", {}).get("isoString", "")[:10]
         
         logger.debug(f"Parsed track: {artist} - {title}")
-        return artist, title, cover_url
+        return {
+            "artist": artist,
+            "title": title,
+            "cover_url": cover_url,
+            "album_name": album_name,
+            "date": date,
+
+        }
         
     except Exception as e:
         logger.error(f"Error fetching track {track_id}: {e}", exc_info=True)
@@ -318,7 +328,7 @@ async def _get_playlist_info(playlist_id: str, safe_id: str, token_data: dict, s
             track_data = None
             if "itemV2" in item and "data" in item["itemV2"]:
                 track_data = item["itemV2"]["data"]
-            
+
             if not track_data or not track_data.get("uri", "").startswith("spotify:track:"):
                 continue
             
