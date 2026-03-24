@@ -71,8 +71,8 @@ class DeezerService(BaseService):
             logger.debug(f"Extracting album info for ID: {playlist_id}")
             return await get_playlist_info(playlist_id)
 
-    async def download(self, performer: str, title: str, cover_url: Optional[str] = None, full_cover_url: Optional[str] = None, lossless_mode: bool = False) -> List[MediaContent]:
-        logger.debug(f"Starting download for: {performer} - {title} (Lossless: {lossless_mode})")
+    async def download(self, media_metadata: MediaMetadata, lossless_mode: bool = False) -> List[MediaContent]:
+        logger.debug(f"Starting download for: {media_metadata.performer} - {media_metadata.title} (Lossless: {lossless_mode})")
 
         if not self.arq:
             raise BotError(
@@ -82,6 +82,14 @@ class DeezerService(BaseService):
                 critical=True,
                 is_logged=True
             )
+
+        performer = media_metadata.performer
+        title = media_metadata.title
+        cover_url = media_metadata.cover
+        full_cover_url = media_metadata.full_size_cover
+        release_date = media_metadata.extra.get("release_date", "")
+        track_number = media_metadata.extra.get("track_number", 0)
+        album_name = media_metadata.extra.get("album_name", "")
 
         # Experimental Tidal Lossless Download
         if lossless_mode:
@@ -152,7 +160,10 @@ class DeezerService(BaseService):
                         tidal_downloaded_path,
                         title=title,
                         artist=performer,
-                        cover_file=cover_path,
+                        cover_file=full_cover_path,
+                        album_name=album_name,
+                        date=release_date,
+                        track_number=track_number,
                         _queue_name='heavy'
                     )
                     await job.result()
@@ -237,7 +248,10 @@ class DeezerService(BaseService):
                 audio_path,
                 title=title,
                 artist=performer,
-                cover_file=cover_path,
+                cover_file=full_cover_path,
+                album_name=album_name,
+                date=release_date,
+                track_number=track_number,
                 _queue_name='heavy'
             )
             await job.result()
