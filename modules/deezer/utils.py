@@ -19,7 +19,6 @@ async def get_track_info(track_id: int) -> MediaMetadata:
             )
 
         data = response.json()
-
         if data.get('error'):
             raise BotError(
                 code=ErrorCode.METADATA_ERROR,
@@ -41,7 +40,12 @@ async def get_track_info(track_id: int) -> MediaMetadata:
             cover=cover_url,
             full_size_cover=full_cover_url,
             duration=data.get('duration'),
-            media_type="track"
+            media_type="track",
+            extra={
+                'release_date': data.get('release_date'),
+                'track_number': data.get('track_position'),
+                'album_name': data.get('album', {}).get('title')
+            }
         )
 
 async def get_album_info(album_id: int) -> MediaMetadata:
@@ -89,7 +93,12 @@ async def get_album_info(album_id: int) -> MediaMetadata:
                 cover=track_cover,
                 full_size_cover=track_full_cover,
                 duration=track.get('duration'),
-                media_type='track'
+                media_type="track",
+                extra={
+                    'release_date': track.get('release_date'),
+                    'track_number': track.get('track_position'),
+                    'album_name': track.get('album', {}).get('title')
+                }
             ))
 
         return MediaMetadata(
@@ -152,7 +161,12 @@ async def get_playlist_info(playlist_id: int) -> MediaMetadata:
                 cover=track_cover,
                 full_size_cover=track_full_cover,
                 duration=track.get('duration'),
-                media_type='track'
+                media_type="track",
+                extra={
+                    'release_date': track.get('release_date'),
+                    'track_number': track.get('track_position'),
+                    'album_name': track.get('album', {}).get('title')
+                }
             ))
 
         return MediaMetadata(
