@@ -175,7 +175,7 @@ class InstagramService(BaseService):
             images_urls.append(post.url)
             filenames.append(f"{shortcode}.jpg")
 
-        caption = post.caption or ""
+        caption = f"<a href='https://www.instagram.com/{post.owner_profile.username}/'>{post.owner_profile.username}</a> - {post.caption}" or ""
         author = post.owner_username or "Instagram User"
 
         return images_urls, filenames, caption, author
@@ -205,21 +205,28 @@ class InstagramService(BaseService):
             path = Path(result['filepath'])
             info = result['info']
 
-            author = info.get("uploader", "Unknown")
-            description = info.get("description", "") or ""
-            final_caption = truncate_string(f"{author} - {description}", 1024)
+            title = info.get("title") or ""
+            uploader = info.get("uploader")  # Имя автора (Display Name)
+            description = (info.get("description") or "").strip()
+
+            username = title.split()[-1].strip(" @.") if title else None
+
+            display_name = uploader or username
+            author_link = f"<a href='https://www.instagram.com/{username}/'>{display_name}</a>" if username else ""
+
+            parts = [p for p in [author_link, description] if p]
+            caption = " - ".join(parts)
 
             # Process video for Telegram compatibility
             if info.get('ext') == 'mp4':
-                # Instagram DASH formats often have compatibility issues
                 fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(
                     self.arq, str(path))
                 return [
                     MediaContent(
                         type=MediaType.VIDEO,
                         path=Path(fixed_video),
-                        title=final_caption,
-                        performer=author,
+                        title=caption,
+                        performer=username,
                         cover=Path(thumbnail) if thumbnail and os.path.exists(thumbnail) else None,
                         width=width,
                         height=height,
@@ -231,8 +238,8 @@ class InstagramService(BaseService):
                     MediaContent(
                         type=MediaType.PHOTO,
                         path=path,
-                        title=final_caption,
-                        performer=author
+                        title=caption,
+                        performer=username
                     )
                 ]
         except Exception as e:
