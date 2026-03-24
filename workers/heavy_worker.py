@@ -12,7 +12,7 @@ import yt_dlp
 from arq.connections import RedisSettings
 from mutagen.flac import FLAC, Picture
 from mutagen.id3 import ID3
-from mutagen.id3._frames import TIT2, TPE1, TALB, TPE2, TRCK, TCON, APIC
+from mutagen.id3._frames import TIT2, TPE1, TALB, TPE2, TRCK, TCON, APIC, TDRC
 from mutagen.id3._util import ID3NoHeaderError
 from mutagen.mp3 import HeaderNotFoundError
 from mutagen.mp4 import MP4, MP4Cover
@@ -543,7 +543,8 @@ async def universal_metadata_update(
     album_name: Optional[str] = None,
     orchestra_name: Optional[str] = None,
     track_number: Optional[str] = None,
-    genre_name: Optional[str] = None
+    genre_name: Optional[str] = None,
+    date: Optional[str] = None,
 ) -> bool:
     """
     Update metadata for audio files (MP3, FLAC, M4A, etc.).
@@ -601,6 +602,7 @@ async def universal_metadata_update(
                 if orchestra_name: tags.add(TPE2(encoding=3, text=orchestra_name))
                 if track_number: tags.add(TRCK(encoding=3, text=str(track_number)))
                 if genre_name: tags.add(TCON(encoding=3, text=genre_name))
+                if date: tags.add(TDRC(encoding=3, text=str(date)))
 
                 if cover_data:
                     tags.delall("APIC")
@@ -612,7 +614,7 @@ async def universal_metadata_update(
                         data=cover_data
                     ))
 
-                tags.save(audio_file, v2_version=3)
+                tags.save(audio_file, v2_version=4)
 
             # --- M4A / MP4 ---
             elif ext in ["m4a", "mp4"]:
@@ -626,6 +628,7 @@ async def universal_metadata_update(
                 # Номер трека в MP4 - это кортеж (номер, всего), требует int
                 if track_number and track_number.isdigit():
                     audio["trkn"] = [(int(track_number), 0)]
+                if date: audio["\xa9day"] = str(date)
 
                 if cover_data:
                     # Нужно выбрать правильный формат для MP4 контейнера
@@ -643,6 +646,7 @@ async def universal_metadata_update(
                 if album_name: audio["ALBUM"] = album_name
                 if genre_name: audio["GENRE"] = genre_name
                 if track_number: audio["TRACKNUMBER"] = str(track_number)
+                if date: audio["DATE"] = str(date)
 
                 if cover_data:
                     image = Picture()
