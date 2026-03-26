@@ -2,60 +2,27 @@ import asyncio
 import logging
 import os
 import re
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import List, Tuple, Optional
-import instaloader
-
+from typing import List, Optional
+from urllib.parse import urlparse
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
 from modules.base_service import BaseService
-from utils import truncate_string, random_cookie_file, process_video_for_telegram
+from utils import truncate_string, random_cookie_file, process_video_for_telegram, escape_html
 from models.service_list import Services
+from .utils import get_post_data
 
 logger = logging.getLogger(__name__)
 
 
 class InstagramService(BaseService):
     name = "Instagram"
-    _download_executor = ThreadPoolExecutor(max_workers=5)
-
-    # Path to instaloader session file (usually "session-yourusername")
-    # Created via command: instaloader -l username
-    SESSION_FILE_PATH = "session-charlottelopster"
 
     def __init__(self, output_path: str = "storage/temp", arq = None) -> None:
         super().__init__()
         self.output_path = output_path
         self.arq = arq
-
-        self.L = instaloader.Instaloader(
-            download_pictures=False,
-            download_videos=False,
-            download_video_thumbnails=False,
-            download_geotags=False,
-            download_comments=False,
-            save_metadata=False,
-            compress_json=False,
-            iphone_support=True
-        )
-
-        self._load_session()
-
-    def _load_session(self):
-        """Load session for accessing 18+ and private content if available."""
-        if os.path.exists(self.SESSION_FILE_PATH):
-            try:
-                # Load session from file.
-                # Filename format is usually "session-username"
-                username = self.SESSION_FILE_PATH.replace("session-", "")
-                self.L.load_session_from_file(username=username, filename=self.SESSION_FILE_PATH)
-                logger.info(f"Instagram session loaded for {username} from {self.SESSION_FILE_PATH}")
-            except Exception as e:
-                logger.error(f"Failed to load Instagram session: {e}")
-        else:
-            logger.warning(f"Instagram session file not found at {self.SESSION_FILE_PATH}")
 
     async def download(self, url: str) -> List[MediaContent]:
         if not self.arq:
@@ -66,61 +33,18 @@ class InstagramService(BaseService):
                 is_logged=True
             )
         try:
-            # 1. Get direct links via Instaloader
-            try:
-                media_items, filenames, caption, author = await self._get_post_metadata(url)
-            except Exception as e:
-                logger.warning(f"Instaloader failed for {url}: {e}. Trying fallback to yt-dlp...")
-                return await self._process_fallback_ytdlp(url)
-
-            # 2. Download files using project utility
-            download_tasks = []
-            for link, name in zip(media_items, filenames):
-                filepath = os.path.join(self.output_path, name)
-                download_tasks.append(await self.arq.enqueue_job('universal_download', url=link, destination=filepath, _queue_name='light'))
-
-            results = await asyncio.gather(*[job.result() for job in download_tasks], return_exceptions=True)
-
-            media_contents = []
-            for i, res in enumerate(results):
-                if isinstance(res, BaseException):
-                    logger.error(f"Error downloading instagram item {i}: {res}")
-                    continue
-
-                if res and os.path.exists(str(res)):
-                    thumbnail = None
-                    path_obj = Path(res)
-                    ext = path_obj.suffix.lower()
-                    if ext == '.mp4':
-                        fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(self.arq, res)
-                        path_obj = Path(fixed_video)
-                        media_contents.append(MediaContent(
-                            type=MediaType.VIDEO,
-                            path=path_obj,
-                            title=truncate_string(caption, 1024),
-                            performer=author,
-                            cover=Path(thumbnail),
-                            width=width,
-                            height=height,
-                            duration=int(duration)
-                        ))
-                    else:
-                        media_contents.append(MediaContent(
-                            type=MediaType.PHOTO,
-                            path=path_obj,
-                            title=truncate_string(caption, 1024),
-                            performer=author
-                        ))
-
-            if not media_contents:
-                 raise BotError(
-                    code=ErrorCode.DOWNLOAD_FAILED,
+            if re.match(r"https?://(?:www\.)?instagram\.com/p/[\w-]+/?", url):
+                return await self._download_post(url)
+            elif re.match(r"https?://(?:www\.)?instagram\.com/reel(?:s)?/[\w-]+/?", url):
+                return await self._download_video(url)
+            else:
+                raise BotError(
+                    code=ErrorCode.INVALID_URL,
                     service=Services.INSTAGRAM,
-                    message="Failed to download any media files",
-                    url=url
+                    message="Invalid Instagram URL",
+                    url=url,
+                    is_logged=False
                 )
-
-            return media_contents
 
         except BotError as e:
             raise e
@@ -132,55 +56,74 @@ class InstagramService(BaseService):
                 is_logged=True,
             )
 
-    async def _get_post_metadata(self, url: str) -> Tuple[List[str], List[str], str, str]:
-        pattern = r'https://www\.instagram\.com/(?:p|reel|tv)/([A-Za-z0-9_-]+)'
-        match = re.search(pattern, url)
-        if match:
-            shortcode = match.group(1)
-        else:
-            # Try to handle stories if needed, or just throw error for now as regex above is strictly posts
-            raise BotError(ErrorCode.INVALID_URL, message="Invalid Instagram URL", service=Services.INSTAGRAM, url=url, is_logged=False)
+    async def _download_post(self, url: str) -> List[MediaContent]:
+        post_data = await get_post_data(url)
 
-        loop = asyncio.get_running_loop()
+        caption = post_data.get("caption", None)
+        author_username = post_data.get("username", None)
+        author_name = post_data.get("full_name", None)
+        images = post_data.get("media", [])
+        filenames = [
+            f"{post_data.get('shortcode', i)}_{i}.{urlparse(img).path.split('.')[-1]}"
+            for i, img in enumerate(images, start=1)
+        ]
 
-        try:
-            post = await loop.run_in_executor(
-                self._download_executor,
-                lambda: instaloader.Post.from_shortcode(self.L.context, shortcode)
-            )
-        except Exception as e:
-            raise BotError(ErrorCode.INVALID_URL, message=f"Post not found or private: {e}", service=Services.INSTAGRAM, url=url, is_logged=True)
+        download_tasks = []
+        for link, name in zip(images, filenames):
+            filepath = os.path.join(self.output_path, name)
+            download_tasks.append(
+                await self.arq.enqueue_job('universal_download', url=link, destination=filepath, _queue_name='light'))
 
-        images_urls = []
-        filenames = []
+        results = await asyncio.gather(*[job.result() for job in download_tasks], return_exceptions=True)
 
-        # Logic for types
-        if post.typename == 'GraphSidecar':
-            # Carousel
-            for i, node in enumerate(post.get_sidecar_nodes(), start=1):
-                if node.is_video:
-                    images_urls.append(node.video_url)
-                    filenames.append(f"{shortcode}_{i}.mp4")
+        description = escape_html((caption or "").strip())
+
+        display_name = author_name or author_username
+        author_link = f"<a href='https://www.instagram.com/{author_username}/'>{display_name}</a>" if author_username else ""
+
+        parts = [p for p in [author_link, description] if p]
+        caption = " - ".join(parts)
+
+        media_contents = []
+        for i, res in enumerate(results):
+            if isinstance(res, BaseException):
+                logger.error(f"Error downloading instagram item {i}: {res}")
+                continue
+
+            if res and os.path.exists(str(res)):
+                thumbnail = None
+                path_obj = Path(res)
+                ext = path_obj.suffix.lower()
+                if ext == '.mp4':
+                    fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(self.arq, res)
+                    path_obj = Path(fixed_video)
+                    media_contents.append(MediaContent(
+                        type=MediaType.VIDEO,
+                        path=path_obj,
+                        title=truncate_string(caption, 1024),
+                        cover=Path(thumbnail),
+                        width=width,
+                        height=height,
+                        duration=int(duration)
+                    ))
                 else:
-                    images_urls.append(node.display_url)
-                    filenames.append(f"{shortcode}_{i}.jpg")
+                    media_contents.append(MediaContent(
+                        type=MediaType.PHOTO,
+                        path=path_obj,
+                        title=truncate_string(caption, 1024)
+                    ))
 
-        elif post.is_video:
-            # Reels or Video
-            images_urls.append(post.video_url)
-            filenames.append(f"{shortcode}.mp4")
+        if not media_contents:
+            raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                service=Services.INSTAGRAM,
+                message="Failed to download any media files",
+                url=url
+            )
 
-        else:
-            # Photo
-            images_urls.append(post.url)
-            filenames.append(f"{shortcode}.jpg")
+        return media_contents
 
-        caption = f"<a href='https://www.instagram.com/{post.owner_profile.username}/'>{post.owner_profile.username}</a> - {post.caption}" or ""
-        author = post.owner_username or "Instagram User"
-
-        return images_urls, filenames, caption, author
-
-    async def _process_fallback_ytdlp(self, url: str) -> List[MediaContent]:
+    async def _download_video(self, url: str) -> List[MediaContent]:
         logger.info(f"Fallback processing with yt-dlp: {url}")
         if not self.arq:
             raise BotError(
@@ -198,6 +141,13 @@ class InstagramService(BaseService):
                 format_selector = None,
                 output_template = f"{self.output_path}/%(id)s_%(title)s.%(ext)s",
                 cookies_file = random_cookie_file("instagram"),
+                extra_opts = {
+                    'http_headers': {
+                        'User-Agent': 'Mozilla/5.0 (Linux; Android 13; SM-S901B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36',
+                        'Sec-Ch-Ua-Platform': 'Android',
+                    },
+                    'merge_output_format': 'mp4',
+                },
                 _queue_name='heavy'
             )
 
@@ -206,8 +156,8 @@ class InstagramService(BaseService):
             info = result['info']
 
             title = info.get("title") or ""
-            uploader = info.get("uploader")  # Имя автора (Display Name)
-            description = (info.get("description") or "").strip()
+            uploader = info.get("uploader")
+            description = escape_html((info.get("description") or "").strip())
 
             username = title.split()[-1].strip(" @.") if title else None
 

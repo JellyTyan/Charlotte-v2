@@ -37,6 +37,8 @@ class MediaSender:
             media_items, audio_items, gif_items, caption = self._parse_media(content)
             logger.info(f"Sending media: {len(media_items)} media, {len(audio_items)} audio, {len(gif_items)} gif")
 
+            print(media_items)
+
             chat_id = message.chat.id
             if chat_id < 0:
                 settings = await get_chat_settings(chat_id)
@@ -151,8 +153,10 @@ class MediaSender:
                     message="File is too large for Telegram",
                     is_logged=True
                 )
-
-            logger.debug(f"Sent media group {i // 10 + 1}/{total_groups}")
+            except Exception as e:
+                raise BotError(code=ErrorCode.SEND_ERROR, message=f"Failed to send media group: {e}", is_logged=True, critical=True)
+            finally:
+                logger.debug(f"Sent media group {i // 10 + 1}/{total_groups}")
 
 
     async def _send_audio(self, message: types.Message, audio: MediaContent,
