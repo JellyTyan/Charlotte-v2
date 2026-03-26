@@ -9,10 +9,10 @@ fluentogram==1.2.1
 alembic==1.17.2
 translators~=6.0.1
 ytmusicapi==1.11.0
-instaloader
 arq==0.27.0
 Pillow==12.1.0
 pillow-heif==1.2.0
 aiofiles
 curl_cffi
 yt_dlp
+aiofiles
