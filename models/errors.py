@@ -18,6 +18,7 @@ class ErrorCode(Enum):
     NOT_FOUND = "E404"
     NOT_ALLOWED = "E403"
     INTERNAL_ERROR = "E500"
+    ACCOUNT_BANNED = "E503"
 
 @dataclass
 class BotError(Exception):

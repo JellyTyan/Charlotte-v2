@@ -1,89 +1,118 @@
+import asyncio
 import json
+import logging
+import os
+import random
+import re
 
 import aiofiles
 from curl_cffi.requests import AsyncSession
-import re
+
 from models.errors import BotError, ErrorCode
 from models.service_list import Services
-from utils import random_cookie_file
+from storage.cache.redis_client import cache_get, cache_set
+from .account_manager import get_available_account, record_request, mark_account_banned
 
+logger = logging.getLogger(__name__)
 
-async def get_cookies():
-    """
-    Netscape cookies parsing
-    """
+# ── Constants ──────────────────────────────────────────────────────────────────
+
+POST_CACHE_TTL = 86400          # 24 hours
+MAX_ACCOUNT_RETRIES = 3         # how many different accounts to try per request
+
+# Headers that a real Chrome 131 on Android generates
+_CHROME131_ANDROID_UA = (
+    "Mozilla/5.0 (Linux; Android 13; SM-S901B) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/131.0.0.0 Mobile Safari/537.36"
+)
+_SEC_CH_UA = '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"'
+_SEC_CH_UA_MOBILE = "?1"
+_SEC_CH_UA_PLATFORM = '"Android"'
+
+# ── Cookie helpers ─────────────────────────────────────────────────────────────
+
+async def get_cookies(cookie_file: str):
+    """Parse a Netscape-format cookie file and return (dict, filepath)."""
     cookies_dict = {}
-
-    file_path = random_cookie_file("instagram")
-
-    async with aiofiles.open(file_path, mode='r', encoding='utf-8') as f:
+    async with aiofiles.open(cookie_file, mode="r", encoding="utf-8") as f:
         async for line in f:
-            if not line.strip() or line.startswith('#'):
+            if not line.strip() or line.startswith("#"):
                 continue
-
-            parts = line.strip().split('\t')
-
+            parts = line.strip().split("\t")
             if len(parts) >= 7:
                 name = parts[5]
                 value = parts[6].strip('"')
-
                 cookies_dict[name] = value
-
-    return cookies_dict, file_path
+    return cookies_dict, cookie_file
 
 
 async def update_cookie_in_file(file_path: str, cookie_name: str, new_value: str):
-    async with aiofiles.open(file_path, mode='r', encoding='utf-8') as f:
+    async with aiofiles.open(file_path, mode="r", encoding="utf-8") as f:
         lines = await f.readlines()
 
     updated_lines = []
     is_updated = False
-
     for line in lines:
-        if not line.strip() or line.startswith('#'):
+        if not line.strip() or line.startswith("#"):
             updated_lines.append(line)
             continue
-
-        parts = line.split('\t')
-
+        parts = line.split("\t")
         if len(parts) >= 7 and parts[5] == cookie_name:
             parts[6] = f"{new_value}\n"
-            updated_lines.append('\t'.join(parts))
+            updated_lines.append("\t".join(parts))
             is_updated = True
         else:
             updated_lines.append(line)
 
     if is_updated:
-        async with aiofiles.open(file_path, mode='w', encoding='utf-8') as f:
+        async with aiofiles.open(file_path, mode="w", encoding="utf-8") as f:
             await f.writelines(updated_lines)
 
 
-async def get_start_page_tokens(session: AsyncSession, cookies: dict = None):
-    url = 'https://www.instagram.com/?deoia=1'
+# ── Start-page token extraction ────────────────────────────────────────────────
+
+async def get_start_page_tokens(session: AsyncSession, cookies: dict | None = None):
+    url = "https://www.instagram.com/?deoia=1"
 
     headers = {
-        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-        'accept-language': 'ru-RU,ru;q=0.9',
-        'dnt': '1',
-        'dpr': '2',
-        'priority': 'u=0, i',
-        'referer': 'https://www.instagram.com/accounts/login/?next=%2F&source=mobile_nav',
-        'viewport-width': '374'
+        "accept": (
+            "text/html,application/xhtml+xml,application/xml;"
+            "q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,"
+            "application/signed-exchange;v=b3;q=0.7"
+        ),
+        "accept-language": "en-US,en;q=0.9",
+        "dnt": "1",
+        "dpr": "2",
+        "priority": "u=0, i",
+        "referer": "https://www.instagram.com/accounts/login/?next=%2F&source=mobile_nav",
+        "sec-ch-ua": _SEC_CH_UA,
+        "sec-ch-ua-mobile": _SEC_CH_UA_MOBILE,
+        "sec-ch-ua-platform": _SEC_CH_UA_PLATFORM,
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "same-origin",
+        "user-agent": _CHROME131_ANDROID_UA,
+        "viewport-width": "412",
     }
+
+    # Small random delay before hitting Instagram
+    await asyncio.sleep(random.uniform(0.3, 0.8))
 
     response = await session.get(url, headers=headers, cookies=cookies)
 
     if response.status_code == 200:
         html = response.text
 
-        fb_dtsg_match = re.search(r'"dtsg"\s*:\s*\{\s*"token"\s*:\s*"([^"]+)"', html)
-        jazoest_match = re.search(r'jazoest=(\d+)', html)
-        lsd_match = re.search(r'"LSD"\s*,\s*\[\s*\]\s*,\s*\{\s*"token"\s*:\s*"([^"]+)"\s*\}', html)
-        spin_r_match = re.search(r'"__spin_r"\s*:\s*(\d+)', html)
-        spin_t_match = re.search(r'"__spin_t"\s*:\s*(\d+)', html)
-        bloks_match = re.search(
+        fb_dtsg_match  = re.search(r'"dtsg"\s*:\s*\{\s*"token"\s*:\s*"([^"]+)"', html)
+        jazoest_match  = re.search(r"jazoest=(\d+)", html)
+        lsd_match      = re.search(r'"LSD"\s*,\s*\[\s*\]\s*,\s*\{\s*"token"\s*:\s*"([^"]+)"\s*\}', html)
+        spin_r_match   = re.search(r'"__spin_r"\s*:\s*(\d+)', html)
+        spin_t_match   = re.search(r'"__spin_t"\s*:\s*(\d+)', html)
+        bloks_match    = re.search(
             r'"WebBloksVersioningID"\s*,\s*\[\s*\]\s*,\s*\{\s*"versioningID"\s*:\s*"([^"]+)"\s*\}',
-            html)
+            html,
+        )
 
         if not all([fb_dtsg_match, jazoest_match, lsd_match, spin_r_match, spin_t_match]):
             raise BotError(
@@ -91,17 +120,18 @@ async def get_start_page_tokens(session: AsyncSession, cookies: dict = None):
                 message=f"Failed to fetch Instagram dynamic tokens: {response.status_code}",
                 service=Services.INSTAGRAM,
                 critical=True,
-                is_logged=True
+                is_logged=True,
             )
 
+        assert fb_dtsg_match and jazoest_match and lsd_match and spin_r_match and spin_t_match
         return {
-            'fb_dtsg': fb_dtsg_match.group(1),
-            'jazoest': jazoest_match.group(1),
-            'lsd': lsd_match.group(1),
-            '__spin_r': spin_r_match.group(1),
-            '__spin_t': spin_t_match.group(1),
-            'x-bloks-version-id': bloks_match.group(
-                1) if bloks_match else 'd58190474cbf5a8ccd5ad03b16977e54f06642ba80140d245d37db165770bbf1'
+            "fb_dtsg":            fb_dtsg_match.group(1),
+            "jazoest":            jazoest_match.group(1),
+            "lsd":                lsd_match.group(1),
+            "__spin_r":           spin_r_match.group(1),
+            "__spin_t":           spin_t_match.group(1),
+            "x-bloks-version-id": bloks_match.group(1) if bloks_match
+                                  else "d58190474cbf5a8ccd5ad03b16977e54f06642ba80140d245d37db165770bbf1",
         }
     else:
         raise BotError(
@@ -109,15 +139,40 @@ async def get_start_page_tokens(session: AsyncSession, cookies: dict = None):
             message=f"Failed to fetch Instagram page: {response.status_code}",
             service=Services.INSTAGRAM,
             critical=True,
-            is_logged=True
+            is_logged=True,
         )
 
 
+def _detect_ban_response(response) -> bool:
+    """
+    Return True if Instagram is telling us the account is blocked/limited.
+    Covers HTTP status codes and JSON challenge flags.
+    """
+    if response.status_code in (401, 403):
+        return True
+
+    # Some bans come back as 200 with a login/checkpoint body
+    try:
+        body = response.text
+        if any(signal in body for signal in (
+            '"checkpoint_url"',
+            "login_required",
+            '"spam"',
+            "Please wait a few minutes",
+        )):
+            return True
+    except Exception:
+        pass
+
+    return False
+
+
+# ── Main public function ───────────────────────────────────────────────────────
+
 async def get_post_data(url: str):
-    graphql_url = 'https://www.instagram.com/graphql/query'
+    graphql_url = "https://www.instagram.com/graphql/query"
 
     match = re.search(r"instagram\.com/p/([\w-]+)", url)
-
     if not match:
         raise BotError(
             code=ErrorCode.INVALID_URL,
@@ -125,124 +180,200 @@ async def get_post_data(url: str):
             message="Invalid Instagram URL",
             critical=True,
             is_logged=True,
-            url=url
+            url=url,
         )
     shortcode = match.group(1)
 
-    cookies, file_path = await get_cookies()
+    # ── 1. Redis cache hit ────────────────────────────────────────────────────
+    cache_key = f"ig:post:{shortcode}"
+    cached = await cache_get(cache_key)
+    if cached:
+        logger.info("Instagram post cache hit: %s", shortcode)
+        return cached
+
+    # ── 2. Try accounts with retry ────────────────────────────────────────────
+    last_error = None
+    for attempt in range(MAX_ACCOUNT_RETRIES):
+        cookie_file = await get_available_account()
+        if not cookie_file:
+            raise BotError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message="No available Instagram accounts (all banned or rate-limited)",
+                service=Services.INSTAGRAM,
+                critical=True,
+                is_logged=True,
+                url=url,
+            )
+
+        try:
+            post_data = await _fetch_post_data(
+                graphql_url, url, shortcode, cookie_file
+            )
+            # ── 3. Store in Redis ─────────────────────────────────────────────
+            await cache_set(cache_key, post_data, ttl=POST_CACHE_TTL)
+            logger.info("Instagram post cached: %s", shortcode)
+            return post_data
+
+        except BotError as e:
+            if e.code == ErrorCode.ACCOUNT_BANNED:
+                await mark_account_banned(cookie_file)
+                last_error = e
+                logger.warning(
+                    "Account %s banned, retrying (attempt %d/%d)…",
+                    os.path.basename(cookie_file), attempt + 1, MAX_ACCOUNT_RETRIES
+                )
+                continue
+            raise
+
+    # All attempts failed
+    raise last_error or BotError(
+        code=ErrorCode.INTERNAL_ERROR,
+        message="All Instagram accounts failed",
+        service=Services.INSTAGRAM,
+        critical=True,
+        is_logged=True,
+        url=url,
+    )
+
+
+async def _fetch_post_data(graphql_url: str, url: str, shortcode: str, cookie_file: str) -> dict:
+    """Make the actual Instagram GraphQL request using a given cookie file."""
+    cookies, file_path = await get_cookies(cookie_file)
+
+    # Record the request for rate-limiting
+    await record_request(file_path)
 
     async with AsyncSession(impersonate="chrome131_android") as session:
         dynamic_vars = await get_start_page_tokens(session, cookies)
 
-        csrf_token = session.cookies.get('csrftoken', cookies['csrftoken'])
-
-        if csrf_token != cookies['csrftoken']:
+        csrf_token = session.cookies.get("csrftoken", cookies.get("csrftoken", ""))
+        if csrf_token and csrf_token != cookies.get("csrftoken"):
             await update_cookie_in_file(file_path, "csrftoken", csrf_token)
-            cookies['csrftoken'] = csrf_token
+            cookies["csrftoken"] = csrf_token
 
         post_headers = {
-            'accept': '*/*',
-            'accept-language': 'ru-RU,ru;q=0.9',
-            'content-type': 'application/x-www-form-urlencoded',
-            'origin': 'https://www.instagram.com',
-            'referer': f'https://www.instagram.com/p/{shortcode}/',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'same-origin',
-            'x-asbd-id': '129477',  # Обычно статика
-            'x-csrftoken': cookies["csrftoken"],
-            'x-ig-app-id': '1217981644879628',  # Статика для Web Instagram
-            'x-fb-friendly-name': 'PolarisPostRootQuery',
-            'x-fb-lsd': dynamic_vars['lsd'],
-            'x-bloks-version-id': dynamic_vars['x-bloks-version-id'],
+            "accept": "*/*",
+            "accept-language": "en-US,en;q=0.9",
+            "content-type": "application/x-www-form-urlencoded",
+            "dnt": "1",
+            "origin": "https://www.instagram.com",
+            "referer": f"https://www.instagram.com/p/{shortcode}/",
+            "sec-ch-ua": _SEC_CH_UA,
+            "sec-ch-ua-mobile": _SEC_CH_UA_MOBILE,
+            "sec-ch-ua-platform": _SEC_CH_UA_PLATFORM,
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-origin",
+            "user-agent": _CHROME131_ANDROID_UA,
+            "x-asbd-id": "129477",
+            "x-csrftoken": cookies.get("csrftoken", ""),
+            "x-ig-app-id": "1217981644879628",
+            "x-fb-friendly-name": "PolarisPostRootQuery",
+            "x-fb-lsd": dynamic_vars["lsd"],
+            "x-bloks-version-id": dynamic_vars["x-bloks-version-id"],
         }
 
         data = {
-            'av': cookies['ds_user_id'],
-            '__d': 'www',
-            '__user': '0',
-            '__a': '1',
-            '__req': '1',  # Начинаем с 1
-            'fb_dtsg': dynamic_vars['fb_dtsg'],
-            'jazoest': dynamic_vars['jazoest'],
-            'lsd': dynamic_vars['lsd'],
-            '__spin_r': dynamic_vars['__spin_r'],
-            '__spin_b': 'trunk',
-            '__spin_t': dynamic_vars['__spin_t'],
-            'fb_api_caller_class': 'RelayModern',
-            'fb_api_req_friendly_name': 'PolarisPostRootQuery',
-            'server_timestamps': 'true',
-            'doc_id': '25951076901259180',
-            'variables': json.dumps({"shortcode": shortcode}),
-            '__hs': '20537.HYP:instagram_web_pkg.2.1...0',
+            "av":                  cookies.get("ds_user_id", "0"),
+            "__d":                 "www",
+            "__user":              "0",
+            "__a":                 "1",
+            "__req":               "1",
+            "fb_dtsg":             dynamic_vars["fb_dtsg"],
+            "jazoest":             dynamic_vars["jazoest"],
+            "lsd":                 dynamic_vars["lsd"],
+            "__spin_r":            dynamic_vars["__spin_r"],
+            "__spin_b":            "trunk",
+            "__spin_t":            dynamic_vars["__spin_t"],
+            "fb_api_caller_class": "RelayModern",
+            "fb_api_req_friendly_name": "PolarisPostRootQuery",
+            "server_timestamps":   "true",
+            "doc_id":              "25951076901259180",
+            "variables":           json.dumps({"shortcode": shortcode}),
+            "__hs":                "20537.HYP:instagram_web_pkg.2.1...0",
         }
+
+        # Throttle before sending
+        await asyncio.sleep(random.uniform(0.5, 1.5))
 
         response_post = await session.post(graphql_url, headers=post_headers, data=data)
 
-        post_data = {
-            "shortcode": shortcode,
-            "full_name": None,
-            "username": None,
-            "caption": None,
-            "images": []
-        }
+        # ── Ban detection ─────────────────────────────────────────────────────
+        if _detect_ban_response(response_post):
+            raise BotError(
+                code=ErrorCode.ACCOUNT_BANNED,
+                message="Instagram account is banned or rate-limited",
+                service=Services.INSTAGRAM,
+                is_logged=True,
+                url=url,
+            )
 
-        if response_post.status_code == 200:
-            json_data = response_post.json()
+        if response_post.status_code == 429:
+            raise BotError(
+                code=ErrorCode.ACCOUNT_BANNED,
+                message="Instagram rate-limited (429)",
+                service=Services.INSTAGRAM,
+                is_logged=True,
+                url=url,
+            )
 
-            items = json_data.get("data", {}) \
-                .get("xdt_api__v1__media__shortcode__web_info", {}) \
-                .get("items", [])
-
-            if not items:
-                raise BotError(
-                    code=ErrorCode.METADATA_ERROR,
-                    message=f"Failed to fetch metadata for Instagram: {response_post.status_code}",
-                    service=Services.INSTAGRAM,
-                    critical=True,
-                    is_logged=True,
-                    url=url
-                )
-
-            item = items[0]
-
-            user_info = item.get("user") or {}
-            post_data["full_name"] = user_info.get("full_name")
-            post_data["username"] = user_info.get("username")
-
-            caption_info = item.get("caption") or {}
-            post_data["caption"] = caption_info.get("text")
-
-            post_data["media"] = []
-
-            carousel_media = item.get("carousel_media")
-
-            if carousel_media:
-                for media in carousel_media:
-                    video_versions = media.get("video_versions")
-                    if video_versions:
-                        post_data["media"].append(video_versions[0].get("url"))
-                    else:
-                        candidates = media.get("image_versions2", {}).get("candidates", [])
-                        if candidates:
-                            post_data["media"].append(candidates[0].get("url"))
-            else:
-                video_versions = item.get("video_versions")
-                if video_versions:
-                    post_data["media"].append(video_versions[0].get("url"))
-                else:
-                    candidates = item.get("image_versions2", {}).get("candidates", [])
-                    if candidates:
-                        post_data["media"].append(candidates[0].get("url"))
-
-            return post_data
-
-        else:
+        if response_post.status_code != 200:
             raise BotError(
                 code=ErrorCode.INTERNAL_ERROR,
                 message=f"Failed to fetch Instagram post data: {response_post.status_code}",
                 service=Services.INSTAGRAM,
                 critical=True,
                 is_logged=True,
-                url=url
+                url=url,
             )
+
+        json_data = response_post.json()
+        items = (
+            json_data.get("data", {})
+            .get("xdt_api__v1__media__shortcode__web_info", {})
+            .get("items", [])
+        )
+
+        if not items:
+            raise BotError(
+                code=ErrorCode.METADATA_ERROR,
+                message="Failed to fetch metadata for Instagram post",
+                service=Services.INSTAGRAM,
+                critical=True,
+                is_logged=True,
+                url=url,
+            )
+
+        item = items[0]
+
+        user_info  = item.get("user") or {}
+        caption_info = item.get("caption") or {}
+
+        post_data: dict = {
+            "shortcode": shortcode,
+            "full_name": user_info.get("full_name"),
+            "username":  user_info.get("username"),
+            "caption":   caption_info.get("text"),
+            "media":     [],
+        }
+
+        carousel_media = item.get("carousel_media")
+        if carousel_media:
+            for media in carousel_media:
+                video_versions = media.get("video_versions")
+                if video_versions:
+                    post_data["media"].append(video_versions[0].get("url"))
+                else:
+                    candidates = media.get("image_versions2", {}).get("candidates", [])
+                    if candidates:
+                        post_data["media"].append(candidates[0].get("url"))
+        else:
+            video_versions = item.get("video_versions")
+            if video_versions:
+                post_data["media"].append(video_versions[0].get("url"))
+            else:
+                candidates = item.get("image_versions2", {}).get("candidates", [])
+                if candidates:
+                    post_data["media"].append(candidates[0].get("url"))
+
+        return post_data
