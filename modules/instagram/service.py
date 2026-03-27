@@ -9,9 +9,10 @@ from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
 from modules.base_service import BaseService
-from utils import truncate_string, random_cookie_file, process_video_for_telegram, escape_html
+from utils import truncate_string, process_video_for_telegram, escape_html
 from models.service_list import Services
 from .utils import get_post_data
+from .account_manager import get_available_account, record_request, mark_account_banned
 
 logger = logging.getLogger(__name__)
 
@@ -134,17 +135,27 @@ class InstagramService(BaseService):
             )
 
         try:
+            cookie_file = await get_available_account()
+            if cookie_file:
+                await record_request(cookie_file)
+
             job = await self.arq.enqueue_job(
                 "universal_ytdlp_extract",
                 url,
                 extract_only = False,
                 format_selector = None,
                 output_template = f"{self.output_path}/%(id)s_%(title)s.%(ext)s",
-                cookies_file = random_cookie_file("instagram"),
+                cookies_file = cookie_file,
                 extra_opts = {
                     'http_headers': {
-                        'User-Agent': 'Mozilla/5.0 (Linux; Android 13; SM-S901B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36',
-                        'Sec-Ch-Ua-Platform': 'Android',
+                        'User-Agent': (
+                            'Mozilla/5.0 (Linux; Android 13; SM-S901B) '
+                            'AppleWebKit/537.36 (KHTML, like Gecko) '
+                            'Chrome/131.0.0.0 Mobile Safari/537.36'
+                        ),
+                        'Sec-Ch-Ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+                        'Sec-Ch-Ua-Mobile': '?1',
+                        'Sec-Ch-Ua-Platform': '"Android"',
                     },
                     'merge_output_format': 'mp4',
                 },
