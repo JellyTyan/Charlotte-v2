@@ -58,6 +58,8 @@ class MediaSender:
                     disable_notification=not settings.profile.notifications
                 )
                 self._files_to_cleanup.append(gif.path)
+                if gif.cover: self._files_to_cleanup.append(gif.cover)
+                if gif.full_cover: self._files_to_cleanup.append(gif.full_cover)
 
             logger.info(f"Successfully sent all media to chat {message.chat.id}")
 
@@ -135,6 +137,10 @@ class MediaSender:
                     )
                 if item.path:
                     self._files_to_cleanup.append(item.path)
+                if item.cover:
+                    self._files_to_cleanup.append(item.cover)
+                if item.full_cover:
+                    self._files_to_cleanup.append(item.full_cover)
 
             if message.bot:
                 should_send_as_doc = getattr(service_settings, 'raw', False) and any(item.type in (MediaType.PHOTO, MediaType.VIDEO) for item in group_items)
