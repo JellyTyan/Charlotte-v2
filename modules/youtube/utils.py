@@ -1,5 +1,7 @@
 from utils import random_cookie_file
+import logging
 
+logger = logging.getLogger(__name__)
 def get_ytdlp_options():
     return {
         # "outtmpl": f"temp/%(id)s_{sanitize_filename('%(title)s')}.%(ext)s",
@@ -21,103 +23,102 @@ def get_ytdlp_options():
     }
 
 
-async def  get_video_info(info_dict: dict, max_size_mb: int = 50) -> dict:
-        import logging
-        logger = logging.getLogger(__name__)
+async def get_video_info(info_dict: dict, max_size_mb: int = 50) -> dict:
+    title = info_dict.get("title", "Unknown Title")
+    uploader = info_dict.get("uploader", "Unknown Uploader")
+    thumbnail = info_dict.get("thumbnail", None)
+    formats = info_dict.get("formats", [])
 
-        title = info_dict.get("title", "Unknown Title")
-        uploader = info_dict.get("uploader", "Unknown Uploader")
-        thumbnail = info_dict.get("thumbnail", None)
-        formats = info_dict.get("formats", [])
+    video_formats = []
+    audio_formats = []
 
-        allowed_resolutions = ["2160p", "2160p60", "1440p", "1440p60", "1080p", "1080p60", "720p", "720p60", "480p", "360p", "240p", "144p"]
+    for f in formats:
+        ext = f.get("ext", "")
+        vcodec = f.get("vcodec", "") or "none"
+        acodec = f.get("acodec", "") or "none"
+        format_id = f.get("format_id", "")
+        height = f.get("height", 0)
 
-        video_formats = []
-        audio_formats = []
-        for f in formats:
-            ext = f.get("ext", "")
-            vcodec = f.get("vcodec", "") or ""
-            acodec = f.get("acodec", "") or ""
-            format_note = f.get("format_note") or ""
+        if vcodec.startswith("avc1") and ext == "mp4" and acodec == "none" and height:
+            video_formats.append(f)
 
-            if not format_note and f.get("height"):
-                format_note = f["height"] and f"{f['height']}p"
+        if vcodec == "none" and ext == "m4a" and acodec != "none":
+            if "-drc" not in format_id.lower():
+                audio_formats.append(f)
 
-            if format_note in allowed_resolutions \
-                    and vcodec.startswith("avc1") and ext == "mp4" and acodec == "none":
-                video_formats.append(f)
+    def is_original_audio(fmt: dict) -> bool:
+        search_string = f"{fmt.get('format_note', '')} {fmt.get('format', '')} {fmt.get('language', '')}".lower()
+        return "original" in search_string
 
-            # Select all m4a audio formats, skip DRC
-            if vcodec == "none" and acodec and ext == "m4a":
-                format_id = f.get("format_id", "")
-                if "-drc" not in format_id.lower():
-                    audio_formats.append(f)
+    explicit_original = [f for f in audio_formats if is_original_audio(f)]
+    if explicit_original:
+        audio_formats = explicit_original
+        logger.info(f"Found {len(audio_formats)} explicit 'original' audio tracks.")
 
-        logger.info(f"Available audio formats: {[a.get('format_id') for a in audio_formats]}")
+    video_formats.sort(key=lambda x: x.get("height", 0), reverse=True)
+    audio_formats.sort(key=lambda x: x.get("abr", 0), reverse=True)
 
-        explicit_original = [
-            f for f in audio_formats
-            if "original" in (f.get('format_note') or '').lower()
-        ]
+    max_bytes = max_size_mb * 1024 * 1024
+    all_pairs = []
+    added_resolutions = set()
 
-        if explicit_original:
-            audio_formats = explicit_original
-            logger.info(f"Found {len(audio_formats)} explicit 'original' audio tracks. Using only them.")
-        else:
-            logger.info(f"No explicit 'original' tag found. Using all {len(audio_formats)} audio candidates.")
+    for v in video_formats:
+        height = v.get("height")
+        resolution = f"{height}p"
 
-        max_bytes = max_size_mb * 1024 * 1024
-        all_pairs = []
-        added_resolutions = set()
+        if resolution in added_resolutions:
+            continue
 
-        for v in video_formats:
-            resolution = v.get("format_note") or f"{v.get('height')}p"
-            if resolution in added_resolutions:
-                continue
-            v_size = v.get('filesize') or v.get('filesize_approx') or 0
-
-            for a in audio_formats:
-                a_size = a.get('filesize') or a.get('filesize_approx') or 0
-                total = v_size + a_size
-                if total <= max_bytes:
-                    all_pairs.append({
-                        "video_format_id": v["format_id"],
-                        "audio_format_id": a["format_id"],
-                        "resolution": resolution,
-                        "total_size_mb": round(total / (1024*1024), 2)
-                    })
-                    added_resolutions.add(resolution)
-                    break
-
-        best_audio = None
-        best_audio_score = -1
+        v_size = v.get('filesize') or v.get('filesize_approx')
 
         for a in audio_formats:
-            a_size = a.get('filesize') or a.get('filesize_approx') or 0
-            size_mb = a_size / (1024 * 1024)
-            if size_mb > max_size_mb:
+            a_size = a.get('filesize') or a.get('filesize_approx')
+
+            if v_size is None or a_size is None:
+                logger.warning(f"Skipping pair v:{v.get('format_id')} a:{a.get('format_id')} due to unknown filesize.")
                 continue
 
-            abr = a.get("abr", 0)
-            is_original = 'original' in (a.get('format_note') or '').lower()
-            score = (is_original, abr)
+            total_bytes = v_size + a_size
 
-            if score > (best_audio_score > -1, best_audio_score):
-                best_audio_score = abr
+            if total_bytes <= max_bytes:
+                all_pairs.append({
+                    "video_format_id": v["format_id"],
+                    "audio_format_id": a["format_id"],
+                    "resolution": resolution,
+                    "total_size_mb": round(total_bytes / (1024 * 1024), 2)
+                })
+                added_resolutions.add(resolution)
+                break
+
+    best_audio = None
+    if audio_formats:
+        for a in audio_formats:
+            a_size = a.get('filesize') or a.get('filesize_approx')
+            if a_size and (a_size <= max_bytes):
                 best_audio = a
+                break
 
-        result = {
-            "title": title,
-            "uploader": uploader,
-            "thumbnail": thumbnail,
-            "formats": all_pairs,
-            "best_audio": None
+    all_pairs.sort(
+        key=lambda x: (
+            int(x["resolution"].replace("p", "")),
+            -x["total_size_mb"]
+        ),
+        reverse=False
+    )
+
+    result = {
+        "title": title,
+        "uploader": uploader,
+        "thumbnail": thumbnail,
+        "formats": all_pairs,
+        "best_audio": None
+    }
+
+    if best_audio:
+        a_size = best_audio.get('filesize') or best_audio.get('filesize_approx') or 0
+        result["best_audio"] = {
+            "format_id": best_audio["format_id"],
+            "filesize": round(a_size / (1024 * 1024), 2)
         }
 
-        if best_audio:
-            result["best_audio"] = {
-                "format_id": best_audio["format_id"],
-                "filesize": round((best_audio.get("filesize") or best_audio.get("filesize_approx") or 0)  / (1024 * 1024), 2)
-            }
-
-        return result
+    return result
