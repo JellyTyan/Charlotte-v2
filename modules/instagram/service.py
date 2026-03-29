@@ -75,7 +75,16 @@ class InstagramService(BaseService):
             download_tasks.append(
                 await self.arq.enqueue_job('universal_download', url=link, destination=filepath, _queue_name='light'))
 
-        results = await asyncio.gather(*[job.result() for job in download_tasks], return_exceptions=True)
+        try:
+            results = await asyncio.gather(*[job.result() for job in download_tasks], return_exceptions=True)
+        except Exception as e:
+            raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                service=Services.INSTAGRAM,
+                message=f"Failed to gather download results: {e}",
+                url=url,
+                is_logged=True
+            )
 
         description = escape_html((caption or "").strip())
 
@@ -162,7 +171,17 @@ class InstagramService(BaseService):
                 _queue_name='heavy'
             )
 
-            result = await job.result()
+            try:
+                result = await job.result()
+            except Exception as e:
+                raise BotError(
+                    code=ErrorCode.DOWNLOAD_FAILED,
+                    service=Services.INSTAGRAM,
+                    message=f"Failed to download video: {e}",
+                    url=url,
+                    critical=True,
+                    is_logged=True
+                )
             path = Path(result['filepath'])
             info = result['info']
 

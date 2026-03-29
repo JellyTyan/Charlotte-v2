@@ -37,8 +37,6 @@ class MediaSender:
             media_items, audio_items, gif_items, caption = self._parse_media(content)
             logger.info(f"Sending media: {len(media_items)} media, {len(audio_items)} audio, {len(gif_items)} gif")
 
-            print(media_items)
-
             chat_id = message.chat.id
             if chat_id < 0:
                 settings = await get_chat_settings(chat_id)

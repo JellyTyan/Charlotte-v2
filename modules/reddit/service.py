@@ -197,7 +197,16 @@ class RedditService(BaseService):
                     )
                     download_tasks.append(job)
 
-                results = await asyncio.gather(*[job.result() for job in download_tasks], return_exceptions=True)
+                try:
+                    results = await asyncio.gather(*[job.result() for job in download_tasks], return_exceptions=True)
+                except Exception as e:
+                    raise BotError(
+                        code=ErrorCode.DOWNLOAD_FAILED,
+                        service=Services.REDDIT,
+                        message=f"Failed to gather Reddit collection results: {e}",
+                        url=meta.url,
+                        is_logged=True
+                    )
 
                 media_contents = []
                 for i, res in enumerate(results):
@@ -227,7 +236,17 @@ class RedditService(BaseService):
                     output_template=os.path.join(self.output_path, f"{uuid.uuid4()}.%(ext)s"),
                     _queue_name='heavy'
                 )
-                result_data = await job.result()
+                try:
+                    result_data = await job.result()
+                except Exception as e:
+                    raise BotError(
+                        code=ErrorCode.DOWNLOAD_FAILED,
+                        service=Services.REDDIT,
+                        message=f"Failed to download Reddit video: {e}",
+                        url=meta.url,
+                        critical=True,
+                        is_logged=True
+                    )
                 downloaded_path = result_data.get("filepath")
                 fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(self.arq, downloaded_path)
 
@@ -238,7 +257,7 @@ class RedditService(BaseService):
                     width=width,
                     height=height,
                     is_blurred=meta.extra.get('spoiler', False),
-                    cover=Path(thumbnail),
+                    cover=Path(thumbnail) if thumbnail else None,
                     duration=int(duration)
                 )]
 
@@ -252,7 +271,17 @@ class RedditService(BaseService):
                     headers={"Accept": "image/avif,image/apng,image/svg+xml,image/*,*/*;q=0.8"},
                     _queue_name='light'
                 )
-                result = await job.result()
+                try:
+                    result = await job.result()
+                except Exception as e:
+                    raise BotError(
+                        code=ErrorCode.DOWNLOAD_FAILED,
+                        service=Services.REDDIT,
+                        message=f"Failed to download Reddit media: {e}",
+                        url=meta.url,
+                        critical=True,
+                        is_logged=True
+                    )
 
                 if not result or not os.path.exists(str(result)):
                     raise BotError(ErrorCode.DOWNLOAD_FAILED, message="Failed to download media file", url=meta.url, is_logged=True)

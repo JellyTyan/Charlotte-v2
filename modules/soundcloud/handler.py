@@ -113,7 +113,11 @@ async def process_soundcloud_url(message: Message, config: Config, i18n: Transla
             destination=f"storage/temp/{media_metadata.performer} - {media_metadata.title}.jpg",
             _queue_name='light'
         )
-        album_cover = await job.result()
+        try:
+            album_cover = await job.result()
+        except Exception as e:
+            logger.warning(f"Failed to download album cover: {e}")
+            album_cover = None
         if album_cover:
             await message.answer_photo(
                 photo=FSInputFile(album_cover),

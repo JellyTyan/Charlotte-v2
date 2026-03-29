@@ -206,7 +206,16 @@ class TwitterService(BaseService):
                             is_blurred=sensitive
                         ))
 
-                await asyncio.gather(*[job.result() for job in tasks], return_exceptions=True)
+                try:
+                    await asyncio.gather(*[job.result() for job in tasks], return_exceptions=True)
+                except Exception as e:
+                    raise BotError(
+                        code=ErrorCode.DOWNLOAD_FAILED,
+                        service=Services.TWITTER,
+                        message=f"Failed to gather Twitter download results: {e}",
+                        url=url,
+                        is_logged=True
+                    )
 
                 return result
 

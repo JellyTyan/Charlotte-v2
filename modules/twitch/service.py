@@ -51,7 +51,17 @@ class TwitchService(BaseService):
             output_template=output_template,
             _queue_name="heavy",
         )
-        result = await job.result()
+        try:
+            result = await job.result()
+        except Exception as e:
+            raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                service=Services.TWITCH,
+                message=f"Failed to download Twitch clip: {e}",
+                url=url,
+                critical=True,
+                is_logged=True
+            )
 
         clean_info = result.get("info")
         filepath = result.get("filepath")

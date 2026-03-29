@@ -84,7 +84,16 @@ class TiktokService(BaseService):
                 extract_only=True,
                 _queue_name='heavy'
             )
-            result = await job.result()
+            try:
+                result = await job.result()
+            except Exception as e:
+                raise BotError(
+                    code=ErrorCode.METADATA_ERROR,
+                    service=Services.TIKTOK,
+                    message=f"Failed to fetch metadata with gallery-dl: {e}",
+                    url=resolved_url,
+                    is_logged=True
+                )
             return result.get("items", [None])[0]
 
         tikwm_info, gallery_data = await asyncio.gather(
@@ -230,7 +239,17 @@ class TiktokService(BaseService):
         download_url = await self._resolve_url(download_url)
 
         job = await self.arq.enqueue_job("universal_download", download_url, filepath)
-        video_path = await job.result()
+        try:
+            video_path = await job.result()
+        except Exception as e:
+            raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                service=Services.TIKTOK,
+                message=f"Failed to download video: {e}",
+                url=metadata.url,
+                critical=True,
+                is_logged=True
+            )
 
         fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(self.arq, video_path)
 
@@ -253,7 +272,7 @@ class TiktokService(BaseService):
                 width=width,
                 height=height,
                 duration=int(duration),
-                cover=Path(thumbnail)
+                cover=Path(thumbnail) if thumbnail else None
             )
         ]
 
@@ -307,7 +326,16 @@ class TiktokService(BaseService):
         if music_cover_task:
             tasks.append(music_cover_task)
 
-        results = await asyncio.gather(*[job.result() for job in tasks], return_exceptions=True)
+        try:
+            results = await asyncio.gather(*[job.result() for job in tasks], return_exceptions=True)
+        except Exception as e:
+            raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                service=Services.TIKTOK,
+                message=f"Failed to gather photo/music results: {e}",
+                url=metadata.url,
+                is_logged=True
+            )
 
         media_contents = []
         num_images = len(image_tasks)
@@ -353,7 +381,11 @@ class TiktokService(BaseService):
                     cover_file=str(final_cover_file) if final_cover_file else None,
                     _queue_name='heavy'
                 )
-                await job.result()
+                try:
+                    await job.result()
+                except Exception as e:
+                    logger.error(f"Failed to update music metadata: {e}")
+                    # Not critical since the file is already downloaded
 
                 media_contents.append(
                     MediaContent(
