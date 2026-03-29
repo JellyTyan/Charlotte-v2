@@ -110,9 +110,18 @@ class PixivService(BaseService):
                         title=escape_html(title),
                     ))
 
-                # Wait for all downloads to complete
-                logger.debug(f"Waiting for {len(download_jobs)} download(s) to complete")
-                await asyncio.gather(*[job.result() for job in download_jobs])
+                try:
+                    # Wait for all downloads to complete
+                    logger.debug(f"Waiting for {len(download_jobs)} download(s) to complete")
+                    await asyncio.gather(*[job.result() for job in download_jobs])
+                except Exception as e:
+                    raise BotError(
+                        code=ErrorCode.DOWNLOAD_FAILED,
+                        service=Services.PIXIV,
+                        message=f"Failed to gather Pixiv download results: {e}",
+                        url=url,
+                        is_logged=True
+                    )
 
                 logger.debug(f"Pixiv download completed: {len(result)} images")
                 return result

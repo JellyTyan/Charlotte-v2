@@ -44,7 +44,17 @@ class NicoVideoService(BaseService):
             extract_only=True,
             _queue_name="heavy",
         )
-        result = await job.result()
+        try:
+            result = await job.result()
+        except Exception as e:
+            raise BotError(
+                code=ErrorCode.METADATA_ERROR,
+                service=Services.NICOVIDEO,
+                message=f"Failed to fetch NicoVideo info: {e}",
+                url=url,
+                critical=True,
+                is_logged=True
+            )
         clean_info = result.get("info")
 
         if not clean_info:
@@ -196,7 +206,17 @@ class NicoVideoService(BaseService):
             output_template=output_template,
             _queue_name="heavy",
         )
-        result = await job.result()
+        try:
+            result = await job.result()
+        except Exception as e:
+            raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                service=Services.NICOVIDEO,
+                message=f"Failed to download NicoVideo: {e}",
+                url=url,
+                critical=True,
+                is_logged=True
+            )
 
         clean_info = result.get("info")
         filepath = result.get("filepath")
@@ -257,7 +277,17 @@ class NicoVideoService(BaseService):
             extract_audio=True,
             _queue_name="heavy",
         )
-        result = await job.result()
+        try:
+            result = await job.result()
+        except Exception as e:
+            raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                service=Services.NICOVIDEO,
+                message=f"Failed to download NicoVideo audio: {e}",
+                url=url,
+                critical=True,
+                is_logged=True
+            )
 
         clean_info = result.get("info")
         filepath = result.get("filepath")
@@ -295,7 +325,12 @@ class NicoVideoService(BaseService):
             cover_file=thumbnail_path,
             _queue_name="heavy",
         )
-        await job.result()
+        try:
+            await job.result()
+        except Exception as e:
+            logger.error(f"Failed to update metadata: {e}")
+            # Not critical since the file is already downloaded
+            # But let's log it
 
         return [
             MediaContent(

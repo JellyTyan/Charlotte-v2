@@ -35,7 +35,16 @@ class SoundCloudService(BaseService):
             )
 
         job = await self.arq.enqueue_job("universal_http_request", url = url, method="GET")
-        response = await job.result()
+        try:
+            response = await job.result()
+        except Exception as e:
+            raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                service=Services.SOUNDCLOUD,
+                message=f"Failed to fetch SoundCloud page: {e}",
+                url=url,
+                is_logged=True
+            )
 
         status_code = response["status_code"]
         if status_code != 200:
@@ -58,7 +67,17 @@ class SoundCloudService(BaseService):
             extract_type="attr",
             attribute="content",
         )
-        result = await job.result()
+        try:
+            result = await job.result()
+        except Exception as e:
+            raise BotError(
+                code=ErrorCode.METADATA_ERROR,
+                service=Services.SOUNDCLOUD,
+                message=f"Failed to parse SoundCloud HTML: {e}",
+                url=url,
+                critical=True,
+                is_logged=True
+            )
 
         raw_link_list = result.get("track_id")
 
@@ -111,7 +130,17 @@ class SoundCloudService(BaseService):
                 extract_audio = True,
                 _queue_name='heavy'
             )
-            result = await job.result()
+            try:
+                result = await job.result()
+            except Exception as e:
+                raise BotError(
+                    code=ErrorCode.DOWNLOAD_FAILED,
+                    service=Services.SOUNDCLOUD,
+                    message=f"Failed to download audio: {e}",
+                    url=meta.url,
+                    critical=True,
+                    is_logged=True
+                )
             info_dict = result["info"]
             filepath = result["filepath"]
 
@@ -119,15 +148,15 @@ class SoundCloudService(BaseService):
             cover_url = get_cover_url(info_dict)
 
             if cover_url:
+                cover_path = f"{self.output_path}/{transliterate(meta.title or str(uuid.uuid4()))}.jpg"
+                logger.debug(f"Downloading cover: {cover_url}")
+                job = await self.arq.enqueue_job(
+                    "universal_download",
+                    url=cover_url,
+                    destination=cover_path,
+                    _queue_name='light'
+                )
                 try:
-                    cover_path = f"{self.output_path}/{transliterate(meta.title or str(uuid.uuid4()))}.jpg"
-                    logger.debug(f"Downloading cover: {cover_url}")
-                    job = await self.arq.enqueue_job(
-                        "universal_download",
-                        url=cover_url,
-                        destination=cover_path,
-                        _queue_name='light'
-                    )
                     await job.result()
                 except Exception as e:
                     logger.warning(f"Failed to download cover: {e}")
@@ -142,7 +171,11 @@ class SoundCloudService(BaseService):
                 cover_file=cover_path,
                 _queue_name='heavy'
             )
-            await job.result()
+            try:
+                await job.result()
+            except Exception as e:
+                logger.error(f"Failed to update metadata: {e}")
+                # Not critical since the file is already downloaded
 
             if await aios.path.exists(filepath):
                 logger.debug(f"Download completed: {filepath}")

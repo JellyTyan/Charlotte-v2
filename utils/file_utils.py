@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, Optional
 
 import aiofiles.os as aios
 
@@ -33,7 +33,7 @@ async def delete_files(files=None):
     return deleted_files
 
 
-async def process_video_for_telegram(arq, video_path: str) -> Tuple[str, str, int, int, float]:
+async def process_video_for_telegram(arq, video_path: str) -> Tuple[str, Optional[str], int, int, float]:
     """
     Process video for Telegram: fix encoding, create thumbnail, get metadata.
 
@@ -59,7 +59,13 @@ async def process_video_for_telegram(arq, video_path: str) -> Tuple[str, str, in
         options={'create_thumbnail': True, 'thumbnail_path': thumb_path},
         _queue_name='heavy'
     )
-    result = await fix_job.result()
+    try:
+        result = await fix_job.result()
+    except Exception as e:
+        logger.error(f"Failed to process video with ffmpeg: {e}")
+        # Return original video if processing fails, so at least something is sent.
+        # We return 0/None for metadata as we couldn't extract it.
+        return video_path, None, 0, 0, 0.0
 
     width = result.get('width', 0)
     height = result.get('height', 0)

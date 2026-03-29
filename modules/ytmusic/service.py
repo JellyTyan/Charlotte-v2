@@ -68,7 +68,17 @@ class YTMusicService(BaseService):
                             cookies_file=random_cookie_file("youtube"),
                             _queue_name='light'
                         )
-                        info = await job.result()
+                        try:
+                            info = await job.result()
+                        except Exception as e:
+                            raise BotError(
+                                code=ErrorCode.METADATA_ERROR,
+                                service=Services.YTMUSIC,
+                                message=f"Failed to fetch YTMusic info via yt-dlp: {e}",
+                                url=url,
+                                critical=True,
+                                is_logged=True
+                            )
                         if info:
                             return MediaMetadata(
                                 type=MetadataType.METADATA,
@@ -124,7 +134,11 @@ class YTMusicService(BaseService):
 
                 job = await self.arq.enqueue_job('universal_download', url=cover_url, destination=f"{self.output_path}ytmusic_playlist_{playlist_id}.jpg", _queue_name='light')
 
-                cover_result = await job.result()
+                try:
+                    cover_result = await job.result()
+                except Exception as e:
+                    logger.warning(f"Failed to download YTMusic playlist cover: {e}")
+                    cover_result = None
 
                 cover = str(cover_result) if cover_result else None
 
@@ -176,7 +190,17 @@ class YTMusicService(BaseService):
                 extra_opts=get_extra_audio_options(),
                 _queue_name='heavy'
             )
-            result = await job.result()
+            try:
+                result = await job.result()
+            except Exception as e:
+                raise BotError(
+                    code=ErrorCode.DOWNLOAD_FAILED,
+                    service=Services.YTMUSIC,
+                    message=f"Failed to download YTMusic audio: {e}",
+                    url=url,
+                    critical=True,
+                    is_logged=True
+                )
             clean_info = result["info"]
             filepath = result["filepath"]
 
@@ -215,7 +239,11 @@ class YTMusicService(BaseService):
                     logger.debug(f"Downloading cover: {thumbnail_url}")
                     job = await self.arq.enqueue_job('universal_download', url=thumbnail_url, destination=cover_path, _queue_name='light')
 
-                    await job.result()
+                    try:
+                        await job.result()
+                    except Exception as e:
+                        logger.warning(f"Failed to download YTMusic cover: {e}")
+                        cover_path = None
                 except Exception as e:
                     logger.warning(f"Failed to download cover: {e}")
                     cover_path = None
@@ -230,7 +258,11 @@ class YTMusicService(BaseService):
                 _queue_name='heavy'
             )
 
-            await job.result()
+            try:
+                await job.result()
+            except Exception as e:
+                logger.error(f"Failed to update YTMusic metadata: {e}")
+                # Not critical since the file is already downloaded
 
             if await aios.path.exists(filepath):
                 logger.debug(f"Download completed: {filepath}")

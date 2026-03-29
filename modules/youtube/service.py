@@ -74,7 +74,17 @@ class YouTubeService(BaseService):
             extra_opts=get_ytdlp_options(),
             _queue_name='heavy'
         )
-        result = await job.result()
+        try:
+            result = await job.result()
+        except Exception as e:
+            raise BotError(
+                code=ErrorCode.METADATA_ERROR,
+                message=f"Failed to extract video info: {e}",
+                url=url,
+                service=Services.YOUTUBE,
+                critical=True,
+                is_logged=True
+            )
         clean_info = result["info"]
 
         if not clean_info:
@@ -117,7 +127,9 @@ class YouTubeService(BaseService):
         thumbnail_url = clean_info.get("thumbnail", None)
         if thumbnail_url:
             try:
-                await self.arq.enqueue_job('universal_download', url=thumbnail_url, destination=thumbnail_path, _queue_name='light')
+                job = await self.arq.enqueue_job('universal_download', url=thumbnail_url, destination=thumbnail_path, _queue_name='light')
+                # Wait for thumbnail download
+                await job.result()
             except Exception as e:
                 logger.warning(f"Failed to download thumbnail: {e}")
 
@@ -216,7 +228,17 @@ class YouTubeService(BaseService):
                 extra_opts=get_ytdlp_options(),
                 _queue_name='heavy'
             )
-            result = await job.result()
+            try:
+                result = await job.result()
+            except Exception as e:
+                raise BotError(
+                    code=ErrorCode.DOWNLOAD_FAILED,
+                    service=Services.YOUTUBE,
+                    message=f"Failed to download YouTube video: {e}",
+                    url=url,
+                    critical=True,
+                    is_logged=True
+                )
             clean_info = result["info"]
             filepath = result["filepath"]
 
@@ -240,7 +262,7 @@ class YouTubeService(BaseService):
                     height=height,
                     duration=int(duration),
                     title=clean_info.get("title", "video"),
-                    cover=Path(thumbnail)
+                    cover=Path(thumbnail) if thumbnail else None
                 )
             ]
         except BotError as ebot:
@@ -277,7 +299,17 @@ class YouTubeService(BaseService):
                 extract_audio=True,
                 _queue_name='heavy'
             )
-            result = await job.result()
+            try:
+                result = await job.result()
+            except Exception as e:
+                raise BotError(
+                    code=ErrorCode.DOWNLOAD_FAILED,
+                    service=Services.YOUTUBE,
+                    message=f"Failed to download YouTube audio: {e}",
+                    url=url,
+                    critical=True,
+                    is_logged=True
+                )
             clean_info = result["info"]
             filepath = result["filepath"]
 
@@ -297,7 +329,8 @@ class YouTubeService(BaseService):
             thumbnail_url = clean_info.get("thumbnail", None)
             if thumbnail_url:
                 try:
-                    await self.arq.enqueue_job('universal_download', url=thumbnail_url, destination=thumbnail_path, _queue_name='light')
+                    job = await self.arq.enqueue_job('universal_download', url=thumbnail_url, destination=thumbnail_path, _queue_name='light')
+                    await job.result()
                 except Exception as e:
                     logger.warning(f"Failed to download thumbnail: {e}")
 
@@ -310,7 +343,10 @@ class YouTubeService(BaseService):
                 _queue_name='heavy'
             )
 
-            await job.result()
+            try:
+                await job.result()
+            except Exception as e:
+                logger.error(f"Failed to update YouTube audio metadata: {e}")
 
             return [MediaContent(
                 type=MediaType.AUDIO,

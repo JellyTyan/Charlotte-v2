@@ -75,7 +75,7 @@ class SpotifyService(BaseService):
             logger.debug(f"Extracting track info for ID: {track_id}")
             try:
                 track_info = await get_spotify_author(track_id, token)
-                logger.debug(f"Track info: {track_info["artist"]} - {track_info["title"]}")
+                logger.debug(f"Track info: {track_info['artist']} - {track_info['title']}")
             except Exception as e:
                 logger.error(f"Failed to get track info: {e}", exc_info=True)
                 raise
@@ -171,7 +171,11 @@ class SpotifyService(BaseService):
                     try:
                         cover_path = f"{base_path}.jpg"
                         job = await self.arq.enqueue_job("universal_download", cover_url, cover_path)
-                        await job.result()
+                        try:
+                            await job.result()
+                        except Exception as e:
+                            logger.warning(f"Failed to download Tidal cover: {e}")
+                            cover_path = None
                     except Exception as e:
                         logger.warning(f"Failed to download cover: {e}")
                         cover_path = None
@@ -188,7 +192,10 @@ class SpotifyService(BaseService):
                         date=date,
                         _queue_name='heavy'
                     )
-                    await job.result()
+                    try:
+                        await job.result()
+                    except Exception as e:
+                        logger.warning(f"Failed to update Tidal metadata: {e}")
                 except Exception as e:
                     logger.warning(f"Failed to update Tidal metadata: {e}")
 
@@ -227,7 +234,17 @@ class SpotifyService(BaseService):
                 extra_opts=get_extra_audio_options(),
                 _queue_name='heavy'
             )
-            result = await job.result()
+            try:
+                result = await job.result()
+            except Exception as e:
+                raise BotError(
+                    code=ErrorCode.DOWNLOAD_FAILED,
+                    service=Services.SPOTIFY,
+                    message=f"Failed to download YouTube audio for Spotify: {e}",
+                    url=video_link,
+                    critical=True,
+                    is_logged=True
+                )
             info_dict = result.get("info")
             audio_path = result.get("filepath")
             audio_path = os.path.splitext(audio_path)[0] + ".mp3"
@@ -258,7 +275,11 @@ class SpotifyService(BaseService):
                     cover_path = f"{base_path}.jpg"
                     logger.debug(f"Downloading cover: {cover_url}")
                     job = await self.arq.enqueue_job("universal_download", cover_url, cover_path)
-                    await job.result()
+                    try:
+                        await job.result()
+                    except Exception as e:
+                        logger.warning(f"Failed to download YouTube cover for Spotify: {e}")
+                        cover_path = None
                 except Exception as e:
                     logger.warning(f"Failed to download cover: {e}")
                     cover_path = None
@@ -275,7 +296,11 @@ class SpotifyService(BaseService):
                 date=date,
                 _queue_name='heavy'
             )
-            await job.result()
+            try:
+                await job.result()
+            except Exception as e:
+                logger.error(f"Failed to update YouTube audio metadata for Spotify: {e}")
+                # Not critical since the file is already downloaded
 
             if await aios.path.exists(audio_path):
                 logger.debug(f"Download completed: {audio_path}")

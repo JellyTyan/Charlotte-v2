@@ -79,7 +79,16 @@ class BlueSkyService(BaseService):
                         ))
                     
                     if tasks:
-                        await asyncio.gather(*[job.result() for job in tasks], return_exceptions=True)
+                        try:
+                            await asyncio.gather(*[job.result() for job in tasks], return_exceptions=True)
+                        except Exception as e:
+                            raise BotError(
+                                code=ErrorCode.DOWNLOAD_FAILED,
+                                service=Services.BLUESKY,
+                                message=f"Failed to gather photo results: {e}",
+                                url=url,
+                                is_logged=True
+                            )
                 elif embed.get("$type") == "app.bsky.embed.video#view":
                     video_url = embed.get("playlist")
                     safe_filename = sanitize_filename(os.path.basename(f"{username}_{post_id}"))
@@ -89,7 +98,17 @@ class BlueSkyService(BaseService):
                         raise BotError(ErrorCode.INVALID_URL, message="Invalid file path")
 
                     job = await self.arq.enqueue_job('universal_ytdlp_extract', url=video_url, output_template=filename,extract_only=False, _queue_name='heavy')
-                    job_result = await job.result()
+                    try:
+                        job_result = await job.result()
+                    except Exception as e:
+                        raise BotError(
+                            code=ErrorCode.DOWNLOAD_FAILED,
+                            service=Services.BLUESKY,
+                            message=f"Failed to download video: {e}",
+                            url=url,
+                            critical=True,
+                            is_logged=True
+                        )
 
                     fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(self.arq, job_result['filepath'])
 

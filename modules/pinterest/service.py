@@ -18,6 +18,7 @@ from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
 from modules.base_service import BaseService
+from models.service_list import Services
 
 from .utils import get_pin_info
 from utils import escape_html, process_video_for_telegram
@@ -113,7 +114,17 @@ class PinterestService(BaseService):
                         output_template=filepath,
                         _queue_name='heavy'
                     )
-                    result_data = await job.result()
+                    try:
+                        result_data = await job.result()
+                    except Exception as e:
+                        raise BotError(
+                            code=ErrorCode.DOWNLOAD_FAILED,
+                            service=Services.PINTEREST,
+                            message=f"Failed to download Pinterest video stream: {e}",
+                            url=url,
+                            critical=True,
+                            is_logged=True
+                        )
                     downloaded_path = result_data.get("filepath")
                 else:
                     # Direct download for regular mp4
@@ -124,7 +135,17 @@ class PinterestService(BaseService):
                         filepath,
                         _queue_name='light'
                     )
-                    downloaded_path = await job.result()
+                    try:
+                        downloaded_path = await job.result()
+                    except Exception as e:
+                        raise BotError(
+                            code=ErrorCode.DOWNLOAD_FAILED,
+                            service=Services.PINTEREST,
+                            message=f"Failed to download Pinterest video: {e}",
+                            url=url,
+                            critical=True,
+                            is_logged=True
+                        )
 
                 if downloaded_path and await aios.path.exists(downloaded_path):
                     fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(self.arq, downloaded_path)
@@ -133,7 +154,7 @@ class PinterestService(BaseService):
                         type=MediaType.VIDEO,
                         path=Path(fixed_video),
                         title=escape_html(title),
-                        cover=Path(thumbnail),
+                        cover=Path(thumbnail) if thumbnail else None,
                         width=width,
                         height=height,
                         duration=int(duration)
@@ -143,6 +164,7 @@ class PinterestService(BaseService):
                         code=ErrorCode.DOWNLOAD_FAILED,
                         message="Video file not found after download",
                         url=url,
+                        service=Services.PINTEREST,
                         is_logged=True
                     )
 
@@ -169,7 +191,11 @@ class PinterestService(BaseService):
                             filepath,
                             _queue_name='light'
                         )
-                        downloaded_path = await job.result()
+                        try:
+                            downloaded_path = await job.result()
+                        except Exception as e:
+                            logger.warning(f"Original quality download failed for Pinterest carousel item {i}: {e}")
+                            downloaded_path = None
 
                         if downloaded_path and await aios.path.exists(downloaded_path):
                             logger.debug(f"Carousel item {i} downloaded (original): {downloaded_path}")
@@ -197,7 +223,11 @@ class PinterestService(BaseService):
                                 filepath,
                                 _queue_name='light'
                             )
-                            downloaded_path = await job.result()
+                            try:
+                                downloaded_path = await job.result()
+                            except Exception as e:
+                                logger.error(f"Standard quality download failed for Pinterest carousel item {i}: {e}")
+                                downloaded_path = None
 
                             if downloaded_path and await aios.path.exists(downloaded_path):
                                 logger.debug(f"Carousel item {i} downloaded (standard): {downloaded_path}")
@@ -231,7 +261,17 @@ class PinterestService(BaseService):
                         filepath,
                         _queue_name='light'
                     )
-                    downloaded_path = await job.result()
+                    try:
+                        downloaded_path = await job.result()
+                    except Exception as e:
+                        raise BotError(
+                            code=ErrorCode.DOWNLOAD_FAILED,
+                            service=Services.PINTEREST,
+                            message=f"Failed to download Pinterest GIF: {e}",
+                            url=url,
+                            critical=True,
+                            is_logged=True
+                        )
 
                     if downloaded_path and await aios.path.exists(downloaded_path):
                         logger.debug(f"GIF downloaded successfully: {downloaded_path}")
@@ -257,7 +297,11 @@ class PinterestService(BaseService):
                             filepath,
                             _queue_name='light'
                         )
-                        downloaded_path = await job.result()
+                        try:
+                            downloaded_path = await job.result()
+                        except Exception as e:
+                            logger.warning(f"Original quality photo download failed for Pinterest: {e}")
+                            downloaded_path = None
 
                         if downloaded_path and await aios.path.exists(downloaded_path):
                             logger.debug(f"Photo downloaded successfully (original): {downloaded_path}")
@@ -284,7 +328,17 @@ class PinterestService(BaseService):
                             filepath,
                             _queue_name='light'
                         )
-                        downloaded_path = await job.result()
+                        try:
+                            downloaded_path = await job.result()
+                        except Exception as e:
+                            raise BotError(
+                                code=ErrorCode.DOWNLOAD_FAILED,
+                                service=Services.PINTEREST,
+                                message=f"Failed to download Pinterest photo: {e}",
+                                url=url,
+                                critical=True,
+                                is_logged=True
+                            )
 
                         if downloaded_path and await aios.path.exists(downloaded_path):
                             logger.debug(f"Photo downloaded successfully (standard): {downloaded_path}")
@@ -305,6 +359,7 @@ class PinterestService(BaseService):
                     code=ErrorCode.DOWNLOAD_FAILED,
                     message=f"Unsupported file type: {ext}",
                     url=url,
+                    service=Services.PINTEREST,
                     is_logged=True
                 )
 
@@ -313,6 +368,7 @@ class PinterestService(BaseService):
                     code=ErrorCode.DOWNLOAD_FAILED,
                     message="Failed to download any media files",
                     url=url,
+                    service=Services.PINTEREST,
                     is_logged=True
                 )
 
@@ -327,6 +383,7 @@ class PinterestService(BaseService):
                 code=ErrorCode.DOWNLOAD_FAILED,
                 message=f"Pinterest download error: {str(e)}",
                 url=url,
+                service=Services.PINTEREST,
                 is_logged=True
             )
 
