@@ -1,4 +1,4 @@
-from .file_utils import delete_files, process_video_for_telegram
+from .file_utils import delete_files, process_video_for_telegram, sanitize_filename
 from .download_utils import download_file
 from .hash_utils import url_hash
 from .url_cache import store_url, get_url
@@ -27,4 +27,5 @@ __all__ = [
     "get_audio_options",
     "get_extra_audio_options",
     "transliterate",
+    "sanitize_filename"
 ]

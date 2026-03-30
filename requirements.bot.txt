@@ -14,5 +14,4 @@ Pillow==12.1.0
 pillow-heif==1.2.0
 aiofiles
 curl_cffi
-yt_dlp
 aiofiles

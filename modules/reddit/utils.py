@@ -6,11 +6,6 @@ from models.service_list import Services
 
 logger = logging.getLogger(__name__)
 
-
-def sanitize_filename(filename: str) -> str:
-    """Sanitize filename by removing invalid characters."""
-    return re.sub(r'[<>:"/\\|?*\x00-\x1F]', "_", filename)
-
 async def get_post_info(url: str):
     """Get post information from URL."""
     async with AsyncSession(impersonate="chrome136") as session:

@@ -9,9 +9,7 @@ from typing import Optional
 
 from curl_cffi.requests import AsyncSession
 
-from utils.user_agents import get_user_agent
-from yt_dlp.utils import sanitize_filename
-from yt_dlp.networking.impersonate import ImpersonateTarget
+from utils import get_user_agent, sanitize_filename
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +37,6 @@ def get_ytdlp_options():
         "cookiefile": cookie_file,
         "retries": 10,
         "restrictfilenames": True,
-        'impersonate': ImpersonateTarget(client='chrome'),
         'referer': 'https://www.tiktok.com/',
         "user_agent": get_user_agent(),
     }

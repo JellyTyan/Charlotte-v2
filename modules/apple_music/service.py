@@ -14,10 +14,9 @@ from models.service_list import Services
 from modules.base_service import BaseService
 
 from .utils import get_album_info, get_track_info, get_playlist_info
-from utils import search_music, transliterate, random_cookie_file, get_extra_audio_options
+from utils import search_music, transliterate, random_cookie_file, get_extra_audio_options, sanitize_filename
 
 from utils.tidal import TidalUtil
-from yt_dlp.utils import sanitize_filename
 
 logger = logging.getLogger(__name__)
 

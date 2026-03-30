@@ -1,7 +1,3 @@
-import re
-import asyncio
-import yt_dlp
-
 from curl_cffi.requests import AsyncSession
 from concurrent.futures import ThreadPoolExecutor
 from models.errors import BotError, ErrorCode
@@ -31,8 +27,3 @@ async def get_post_info(post_id: str, author_username: str, client: AsyncSession
             url=str(encoded_uri),
             critical=True,
         )
-
-
-def sanitize_filename(filename: str) -> str:
-    """Sanitize filename by removing invalid characters."""
-    return re.sub(r'[<>:"/\\|?*\x00-\x1F]', "_", filename)

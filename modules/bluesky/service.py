@@ -11,8 +11,8 @@ from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
 from modules.base_service import BaseService
-from utils import truncate_string, process_video_for_telegram
-from .utils import get_post_info, sanitize_filename
+from utils import truncate_string, process_video_for_telegram, sanitize_filename
+from .utils import get_post_info
 from models.service_list import Services
 
 logger = logging.getLogger(__name__)

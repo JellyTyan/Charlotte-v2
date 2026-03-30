@@ -1,6 +1,8 @@
 import logging
 from pathlib import Path
 from typing import Tuple, Optional
+import re
+import unicodedata
 
 import aiofiles.os as aios
 
@@ -76,3 +78,23 @@ async def process_video_for_telegram(arq, video_path: str) -> Tuple[str, Optiona
         await aios.remove(video_path)
 
     return fixed_path, thumb_path, width, height, duration
+
+
+def sanitize_filename(s: str, restricted: bool = False, is_id: bool = False) -> str:
+    if not s:
+        return ""
+
+    s = unicodedata.normalize('NFKC', str(s))
+
+    if restricted:
+        s = re.sub(r'[^\w\s\-\.]', '_', s)
+    else:
+        s = re.sub(r'[\<\>\:\"\/\\\|\?\*\0-\x1f]', '_', s)
+
+    s = re.sub(r'[\r\n\t]+', ' ', s)
+
+    if not is_id:
+        s = re.sub(r'[_ ]+', ' ', s)
+        s = s.strip(' _.-')
+
+    return s if s else "_"

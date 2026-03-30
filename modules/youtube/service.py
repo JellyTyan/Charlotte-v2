@@ -5,13 +5,12 @@ from typing import List
 
 from aiogram.types import InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from yt_dlp.utils import sanitize_filename
 
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from modules.base_service import BaseService
-from utils import store_url, url_hash, process_video_for_telegram
+from utils import store_url, url_hash, process_video_for_telegram, sanitize_filename
 from models.service_list import Services
 
 from .models import YoutubeCallback

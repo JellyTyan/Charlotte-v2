@@ -12,8 +12,8 @@ from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
 from modules.base_service import BaseService
-from utils import truncate_string
-from .utils import get_guest_token, get_tweet_info, sanitize_filename
+from utils import truncate_string, sanitize_filename
+from .utils import get_guest_token, get_tweet_info
 from models.service_list import Services
 
 logger = logging.getLogger(__name__)
