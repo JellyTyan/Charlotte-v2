@@ -8,14 +8,13 @@ import time
 from urllib.parse import urlparse, urlunparse
 
 from curl_cffi.requests import AsyncSession
-from yt_dlp.utils import sanitize_filename
 
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from models.service_list import Services
 from modules.base_service import BaseService
-from utils import truncate_string, escape_html, process_video_for_telegram
+from utils import truncate_string, escape_html, process_video_for_telegram, sanitize_filename
 
 from .utils import get_tikwm_info
 

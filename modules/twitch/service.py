@@ -3,14 +3,12 @@ import os
 from pathlib import Path
 from typing import List, Union
 
-from yt_dlp.utils import sanitize_filename
-
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from models.service_list import Services
 from modules.base_service import BaseService
-from utils import process_video_for_telegram, escape_html, truncate_string
+from utils import process_video_for_telegram, escape_html, truncate_string, sanitize_filename
 
 logger = logging.getLogger(__name__)
 

@@ -1,5 +1,4 @@
 import logging
-import re
 
 from curl_cffi.requests import AsyncSession
 
@@ -91,8 +90,3 @@ async def get_tweet_info(
             return await get_tweet_info(tweet_id, auth, new_guest_token, client, retry=False, csrf_token=csrf_token, auth_token=auth_token)
         else:
             raise
-
-
-def sanitize_filename(filename: str) -> str:
-    """Sanitize filename by removing invalid characters."""
-    return re.sub(r'[<>:"/\\|?*\x00-\x1F]', "_", filename)

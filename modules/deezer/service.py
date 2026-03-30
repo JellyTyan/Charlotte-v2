@@ -6,7 +6,6 @@ import pathlib
 from typing import List, Optional
 from curl_cffi.requests import AsyncSession
 
-from yt_dlp.utils import sanitize_filename
 from aiofiles import os as aios
 
 from models.errors import BotError, ErrorCode
@@ -14,7 +13,7 @@ from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
 from models.service_list import Services
 from modules.base_service import BaseService
-from utils import search_music, transliterate, random_cookie_file, get_extra_audio_options
+from utils import search_music, transliterate, random_cookie_file, get_extra_audio_options, sanitize_filename
 from utils.tidal import TidalUtil
 
 from .utils import (

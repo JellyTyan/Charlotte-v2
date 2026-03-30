@@ -6,14 +6,13 @@ from typing import List
 
 from aiofiles import os as aios
 from ytmusicapi import YTMusic
-from yt_dlp.utils import sanitize_filename
 
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from modules.base_service import BaseService
 from models.service_list import Services
-from utils import random_cookie_file, get_extra_audio_options
+from utils import random_cookie_file, get_extra_audio_options, sanitize_filename
 
 logger = logging.getLogger(__name__)
 
