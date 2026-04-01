@@ -151,34 +151,41 @@ async def get_start_page_tokens(session: AsyncSession, cookies: dict | None = No
                 ", ".join(k for k, v in token_status.items() if v) or "<none>",
             )
 
-            _SIGNALS = {
-                "login_required":   "login_required",
-                "checkpoint_url":   '"checkpoint_url"',
-                "consent_page":     "ConsentPage",
-                "age_gate":         "ageGate",
-                "rate_limited":     "Please wait a few minutes",
-                "spam_signal":      '"spam"',
-                "not_logged_in":    "not_logged_in",
-                "onetap_login":     "OneTapLoginPage",
+            _BAN_SIGNALS = {
+                "login_required":  "login_required",
+                "checkpoint_url":  '"checkpoint_url"',
+                "not_logged_in":   "not_logged_in",
+                "onetap_login":    "OneTapLoginPage",
+                "spam_signal":     '"spam"',
+                "rate_limited":    "Please wait a few minutes",
+                "consent_page":    "ConsentPage",
+                "age_gate":        "ageGate",
             }
-            detected = [label for label, signal in _SIGNALS.items() if signal in html]
+            detected = [label for label, signal in _BAN_SIGNALS.items() if signal in html]
             if detected:
-                logger.warning(
-                    "Instagram start-page response contains suspicious signals: %s",
+                logger.error(
+                    "Instagram account appears banned/logged-out — signals detected: %s. "
+                    "Will mark account as banned and rotate to next cookie.",
                     ", ".join(detected),
+                )
+                raise BotError(
+                    code=ErrorCode.ACCOUNT_BANNED,
+                    message=f"Instagram account banned/logged-out: {', '.join(detected)}",
+                    service=Services.INSTAGRAM,
+                    is_logged=True,
                 )
             else:
                 logger.warning(
-                    "Instagram start-page response: no known signals detected (page structure may have changed)"
+                    "Instagram start-page: tokens missing but no ban signals detected — "
+                    "page structure may have changed."
                 )
-
-            raise BotError(
-                code=ErrorCode.INTERNAL_ERROR,
-                message=f"Failed to fetch Instagram dynamic tokens: {response.status_code}",
-                service=Services.INSTAGRAM,
-                critical=True,
-                is_logged=True,
-            )
+                raise BotError(
+                    code=ErrorCode.INTERNAL_ERROR,
+                    message=f"Failed to fetch Instagram dynamic tokens: {response.status_code}",
+                    service=Services.INSTAGRAM,
+                    critical=True,
+                    is_logged=True,
+                )
 
         assert fb_dtsg_match and jazoest_match and lsd_match and spin_r_match and spin_t_match
         return {
@@ -250,9 +257,17 @@ async def get_post_data(url: str):
 
     # ── 2. Try accounts with retry ────────────────────────────────────────────
     last_error = None
+    tried: list[str] = []
+
     for attempt in range(MAX_ACCOUNT_RETRIES):
         cookie_file = await get_available_account()
         if not cookie_file:
+            logger.error(
+                "No available Instagram accounts after %d attempt(s). "
+                "Tried: %s",
+                attempt,
+                ", ".join(tried) if tried else "<none>",
+            )
             raise BotError(
                 code=ErrorCode.INTERNAL_ERROR,
                 message="No available Instagram accounts (all banned or rate-limited)",
@@ -261,6 +276,13 @@ async def get_post_data(url: str):
                 is_logged=True,
                 url=url,
             )
+
+        account_name = os.path.basename(cookie_file)
+        tried.append(account_name)
+        logger.info(
+            "[attempt %d/%d] Using account: %s",
+            attempt + 1, MAX_ACCOUNT_RETRIES, account_name,
+        )
 
         try:
             post_data = await _fetch_post_data(
@@ -273,16 +295,21 @@ async def get_post_data(url: str):
 
         except BotError as e:
             if e.code == ErrorCode.ACCOUNT_BANNED:
+                logger.error(
+                    "[%s] Account banned/rate-limited — reason: %s. "
+                    "Marking as banned and rotating (attempt %d/%d).",
+                    account_name, e.message, attempt + 1, MAX_ACCOUNT_RETRIES,
+                )
                 await mark_account_banned(cookie_file)
                 last_error = e
-                logger.warning(
-                    "Account %s banned, retrying (attempt %d/%d)…",
-                    os.path.basename(cookie_file), attempt + 1, MAX_ACCOUNT_RETRIES
-                )
                 continue
             raise
 
-    # All attempts failed
+    # All attempts exhausted
+    logger.error(
+        "All %d Instagram account(s) failed for shortcode=%s. Tried: %s",
+        MAX_ACCOUNT_RETRIES, shortcode, ", ".join(tried),
+    )
     raise last_error or BotError(
         code=ErrorCode.INTERNAL_ERROR,
         message="All Instagram accounts failed",
