@@ -44,6 +44,24 @@ async def get_cookies(cookie_file: str):
                 name = parts[5]
                 value = parts[6].strip('"')
                 cookies_dict[name] = value
+
+    account_name = os.path.basename(cookie_file)
+    logger.debug(
+        "[%s] Loaded %d cookies from file: %s",
+        account_name,
+        len(cookies_dict),
+        ", ".join(cookies_dict.keys()) if cookies_dict else "<none>",
+    )
+
+    _KEY_COOKIES = ("sessionid", "csrftoken", "ds_user_id", "rur", "mid")
+    for name in _KEY_COOKIES:
+        if name in cookies_dict:
+            val = cookies_dict[name]
+            masked = val[:4] + "*" * max(0, len(val) - 8) + val[-4:] if len(val) > 8 else "****"
+            logger.debug("[%s] Cookie %-12s = %s", account_name, name, masked)
+        else:
+            logger.debug("[%s] Cookie %-12s = <missing>", account_name, name)
+
     return cookies_dict, cookie_file
 
 
@@ -104,7 +122,11 @@ async def get_start_page_tokens(session: AsyncSession, cookies: dict | None = No
     if response.status_code == 200:
         html = response.text
 
-        fb_dtsg_match  = re.search(r'"dtsg"\s*:\s*\{\s*"token"\s*:\s*"([^"]+)"', html)
+        fb_dtsg_match  = (
+            re.search(r'"DTSGInitialData"\s*,\s*\[\]\s*,\s*\{"token"\s*:\s*"([^"]+)"', html)
+            or re.search(r'"DTSGInitData"\s*,\s*\[\]\s*,\s*\{"token"\s*:\s*"([^"]+)"', html)
+            or re.search(r'"dtsg"\s*:\s*\{\s*"token"\s*:\s*"([^"]+)"', html)  # legacy fallback
+        )
         jazoest_match  = re.search(r"jazoest=(\d+)", html)
         lsd_match      = re.search(r'"LSD"\s*,\s*\[\s*\]\s*,\s*\{\s*"token"\s*:\s*"([^"]+)"\s*\}', html)
         spin_r_match   = re.search(r'"__spin_r"\s*:\s*(\d+)', html)
@@ -115,6 +137,41 @@ async def get_start_page_tokens(session: AsyncSession, cookies: dict | None = No
         )
 
         if not all([fb_dtsg_match, jazoest_match, lsd_match, spin_r_match, spin_t_match]):
+            token_status = {
+                "fb_dtsg":   bool(fb_dtsg_match),
+                "jazoest":   bool(jazoest_match),
+                "lsd":       bool(lsd_match),
+                "__spin_r":  bool(spin_r_match),
+                "__spin_t":  bool(spin_t_match),
+            }
+            missing_tokens = [k for k, v in token_status.items() if not v]
+            logger.error(
+                "Failed to extract Instagram tokens. Missing: %s | Found: %s",
+                ", ".join(missing_tokens),
+                ", ".join(k for k, v in token_status.items() if v) or "<none>",
+            )
+
+            _SIGNALS = {
+                "login_required":   "login_required",
+                "checkpoint_url":   '"checkpoint_url"',
+                "consent_page":     "ConsentPage",
+                "age_gate":         "ageGate",
+                "rate_limited":     "Please wait a few minutes",
+                "spam_signal":      '"spam"',
+                "not_logged_in":    "not_logged_in",
+                "onetap_login":     "OneTapLoginPage",
+            }
+            detected = [label for label, signal in _SIGNALS.items() if signal in html]
+            if detected:
+                logger.warning(
+                    "Instagram start-page response contains suspicious signals: %s",
+                    ", ".join(detected),
+                )
+            else:
+                logger.warning(
+                    "Instagram start-page response: no known signals detected (page structure may have changed)"
+                )
+
             raise BotError(
                 code=ErrorCode.INTERNAL_ERROR,
                 message=f"Failed to fetch Instagram dynamic tokens: {response.status_code}",
@@ -238,18 +295,51 @@ async def get_post_data(url: str):
 
 async def _fetch_post_data(graphql_url: str, url: str, shortcode: str, cookie_file: str) -> dict:
     """Make the actual Instagram GraphQL request using a given cookie file."""
+    account_name = os.path.basename(cookie_file)
+    logger.info("[%s] Starting fetch for shortcode=%s", account_name, shortcode)
+
     cookies, file_path = await get_cookies(cookie_file)
+
+    _REQUIRED = ("sessionid", "csrftoken")
+    missing = [c for c in _REQUIRED if not cookies.get(c)]
+    if missing:
+        logger.warning(
+            "[%s] Missing required cookies before request: %s",
+            account_name, ", ".join(missing),
+        )
+    else:
+        logger.debug(
+            "[%s] All required cookies present (%s)",
+            account_name, ", ".join(_REQUIRED),
+        )
 
     # Record the request for rate-limiting
     await record_request(file_path)
 
     async with AsyncSession(impersonate="chrome131_android") as session:
         dynamic_vars = await get_start_page_tokens(session, cookies)
+        logger.debug(
+            "[%s] Dynamic tokens obtained: lsd=%s, fb_dtsg=%s…",
+            account_name,
+            dynamic_vars.get("lsd", "?"),
+            dynamic_vars.get("fb_dtsg", "?")[:8] + "…" if dynamic_vars.get("fb_dtsg") else "?",
+        )
 
         csrf_token = session.cookies.get("csrftoken", cookies.get("csrftoken", ""))
         if csrf_token and csrf_token != cookies.get("csrftoken"):
+            old_masked = (cookies.get("csrftoken") or "")[:6] + "…"
+            new_masked = csrf_token[:6] + "…"
+            logger.info(
+                "[%s] csrftoken refreshed by session: %s -> %s (persisting to file)",
+                account_name, old_masked, new_masked,
+            )
             await update_cookie_in_file(file_path, "csrftoken", csrf_token)
             cookies["csrftoken"] = csrf_token
+        else:
+            logger.debug(
+                "[%s] csrftoken unchanged, no file update needed",
+                account_name,
+            )
 
         post_headers = {
             "accept": "*/*",
