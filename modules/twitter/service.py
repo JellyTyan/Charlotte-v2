@@ -28,6 +28,27 @@ class TwitterService(BaseService):
         self.auth = "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
         self.arq = arq
 
+    async def _check_video_size(self, video_url: str, premium: bool) -> None:
+        """Check video size before downloading"""
+        max_size_mb = 1024 if premium else 100
+        try:
+            async with AsyncSession(impersonate="chrome136") as client:
+                response = await client.head(video_url, timeout=10)
+                content_length = response.headers.get('content-length')
+                if content_length:
+                    size_mb = int(content_length) / (1024 * 1024)
+                    if size_mb > max_size_mb:
+                        raise BotError(
+                            code=ErrorCode.LARGE_FILE,
+                            message=f"Video size {size_mb:.2f} MB exceeds limit of {max_size_mb} MB",
+                            is_logged=False,
+                            critical=False
+                        )
+        except BotError:
+            raise
+        except Exception as e:
+            logger.warning(f"Failed to check video size: {e}")
+
     async def download(self, url: str, premium: bool = False, config: Optional[Config] = None, allow_nsfw: Optional[bool] = True) -> List[MediaContent]:
         match = re.search(r"status/(\d+)", url)
         if not match:
@@ -176,6 +197,8 @@ class TwitterService(BaseService):
 
                         video_url = video_with_highest_bitrate["url"]
 
+                        await self._check_video_size(video_url, premium)
+
                         match_video = re.search(r"([^/]+\.mp4)", video_url)
                         if not match_video:
                             continue
@@ -192,6 +215,8 @@ class TwitterService(BaseService):
                     elif media["type"] == "animated_gif":
                         variant = media["video_info"]["variants"][0]
                         video_url = variant["url"]
+
+                        await self._check_video_size(video_url, premium)
 
                         match_gif = re.search(r"([^/]+\.mp4)", video_url)
                         if not match_gif:

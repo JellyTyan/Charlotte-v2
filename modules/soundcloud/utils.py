@@ -85,7 +85,8 @@ async def get_song_info(id: int):
             description=data.get('description'),
             duration=data.get('full_duration', 0) // 1000,
             cover=data.get('artwork_url'),
-            performer=data.get('publisher_metadata', {}).get('artist'),
+            performer=data.get('publisher_metadata', {}).get('artist') or data.get(
+'user', {}).get('username'),
             performer_url=data.get('user', {}).get('permalink_url'),
             media_type='track'
         )
