@@ -109,6 +109,15 @@ class SoundCloudService(BaseService):
             return await get_song_info(int(sc_id))
         elif sc_type == "playlists":
             return await get_playlist_info(int(sc_id))
+        else:
+            raise BotError(
+                code=ErrorCode.NOT_FOUND,
+                url=url,
+                message="Unsupported SoundCloud type",
+                service=Services.SOUNDCLOUD,
+                critical=False,
+                is_logged=True
+            )
 
     async def download(self, meta: MediaMetadata) -> List[MediaContent]:
         logger.debug(f"Starting download for: {meta.url}")

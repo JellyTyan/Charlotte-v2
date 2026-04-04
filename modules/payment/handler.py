@@ -36,9 +36,6 @@ async def support_command(message: Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="☕ Buy Me a Coffee", url="https://buymeacoffee.com/jellytyan"),
-            InlineKeyboardButton(text="💖 Ko-fi", url="https://ko-fi.com/jellytyan")
-        ],
-        [
             InlineKeyboardButton(text="⭐ Support via Stars", callback_data="support_stars")
         ],
         [

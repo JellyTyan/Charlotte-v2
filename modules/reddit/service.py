@@ -157,6 +157,8 @@ class RedditService(BaseService):
                     "spoiler": has_spoiler or is_over18
                 }
             )
+        else:
+            raise BotError(ErrorCode.NOT_FOUND, message="Unsupported media type", service=Services.REDDIT, url=url, is_logged=False)
 
         return None
 
