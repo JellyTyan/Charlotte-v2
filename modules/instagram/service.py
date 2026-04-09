@@ -133,6 +133,7 @@ class InstagramService(BaseService):
 
         return media_contents
 
+    _YTDLP_BAN_SIGNALS = (
         "login required",
         "checkpoint required",
         "not logged in",
