@@ -85,8 +85,7 @@ async def get_song_info(id: int):
             description=data.get('description'),
             duration=data.get('full_duration', 0) // 1000,
             cover=data.get('artwork_url'),
-            performer=data.get('publisher_metadata', {}).get('artist') or data.get(
-'user', {}).get('username'),
+            performer=(data.get('publisher_metadata') or {}).get('artist') or (data.get('user') or {}).get('username'),
             performer_url=data.get('user', {}).get('permalink_url'),
             media_type='track'
         )
@@ -111,7 +110,7 @@ async def get_playlist_info(id: int):
                     title=track.get('title'),
                     duration=track.get('full_duration', 0) // 1000,
                     cover=track.get('artwork_url'),
-                    performer=data.get('publisher_metadata', {}).get('artist'),
+                    performer=(data.get('publisher_metadata') or {}).get('artist'),
                     media_type='track'
                 ))
         return MediaMetadata(
