@@ -614,7 +614,7 @@ async def universal_metadata_update(
                         data=cover_data
                     ))
 
-                tags.save(audio_file, v2_version=4)
+                tags.save(audio_file, v2_version=3)
 
             # --- M4A / MP4 ---
             elif ext in ["m4a", "mp4"]:
