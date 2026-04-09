@@ -133,74 +133,118 @@ class InstagramService(BaseService):
 
         return media_contents
 
+        "login required",
+        "checkpoint required",
+        "not logged in",
+        "rate-limited",
+        "please wait",
+        "challenge required",
+        "account suspended",
+        "403",
+        "401",
+    )
+
     async def _download_video(self, url: str) -> List[MediaContent]:
-        logger.info(f"Fallback processing with yt-dlp: {url}")
+        from .account_manager import MAX_REQUESTS_PER_MINUTE  # local import to avoid circular
+        MAX_RETRIES = 3
+
+        logger.info("yt-dlp reels download started: %s", url)
         if not self.arq:
             raise BotError(
                 code=ErrorCode.INTERNAL_ERROR,
                 message="ARQ pool is required",
                 critical=True,
-                is_logged=True
+                is_logged=True,
             )
 
-        try:
+        last_error: Exception | None = None
+        tried: list[str] = []
+
+        for attempt in range(MAX_RETRIES):
             cookie_file = await get_available_account()
-            if cookie_file:
-                await record_request(cookie_file)
+            account_name = os.path.basename(cookie_file) if cookie_file else "<no account>"
 
-            job = await self.arq.enqueue_job(
-                "universal_ytdlp_extract",
-                url,
-                extract_only = False,
-                format_selector = None,
-                output_template = f"{self.output_path}/%(id)s_%(title)s.%(ext)s",
-                cookies_file = cookie_file,
-                extra_opts = {
-                    'http_headers': {
-                        'User-Agent': (
-                            'Mozilla/5.0 (Linux; Android 13; SM-S901B) '
-                            'AppleWebKit/537.36 (KHTML, like Gecko) '
-                            'Chrome/131.0.0.0 Mobile Safari/537.36'
-                        ),
-                        'Sec-Ch-Ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
-                        'Sec-Ch-Ua-Mobile': '?1',
-                        'Sec-Ch-Ua-Platform': '"Android"',
-                    },
-                    'merge_output_format': 'mp4',
-                },
-                _queue_name='heavy'
-            )
+            if cookie_file:
+                tried.append(account_name)
+                await record_request(cookie_file)
+                logger.info(
+                    "[yt-dlp] [attempt %d/%d] Using account: %s",
+                    attempt + 1, MAX_RETRIES, account_name,
+                )
+            else:
+                logger.error(
+                    "[yt-dlp] No available Instagram accounts after %d attempt(s). Tried: %s",
+                    attempt, ", ".join(tried) if tried else "<none>",
+                )
+                break
 
             try:
+                job = await self.arq.enqueue_job(
+                    "universal_ytdlp_extract",
+                    url,
+                    extract_only=False,
+                    format_selector=None,
+                    output_template=f"{self.output_path}/%(id)s_%(title)s.%(ext)s",
+                    cookies_file=cookie_file,
+                    extra_opts={
+                        "http_headers": {
+                            "User-Agent": (
+                                "Mozilla/5.0 (Linux; Android 13; SM-S901B) "
+                                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                "Chrome/131.0.0.0 Mobile Safari/537.36"
+                            ),
+                            "Sec-Ch-Ua": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+                            "Sec-Ch-Ua-Mobile": "?1",
+                            "Sec-Ch-Ua-Platform": '"Android"',
+                        },
+                        "merge_output_format": "mp4",
+                    },
+                    _queue_name="heavy",
+                )
                 result = await job.result()
+
             except Exception as e:
+                err_lower = str(e).lower()
+                if any(sig in err_lower for sig in self._YTDLP_BAN_SIGNALS):
+                    logger.error(
+                        "[yt-dlp] [%s] Ban/auth signal detected in error: %s. "
+                        "Marking account as banned and rotating (attempt %d/%d).",
+                        account_name, e, attempt + 1, MAX_RETRIES,
+                    )
+                    await mark_account_banned(cookie_file)
+                    last_error = e
+                    continue
+
+                # Non-ban error — fail immediately
                 raise BotError(
                     code=ErrorCode.DOWNLOAD_FAILED,
                     service=Services.INSTAGRAM,
-                    message=f"Failed to download video: {e}",
+                    message=f"yt-dlp download failed: {e}",
                     url=url,
                     critical=True,
-                    is_logged=True
+                    is_logged=True,
                 )
-            path = Path(result['filepath'])
-            info = result['info']
+
+            # ── Successful download ───────────────────────────────────────────
+            path = Path(result["filepath"])
+            info = result["info"]
 
             title = info.get("title") or ""
             uploader = info.get("uploader")
             description = escape_html((info.get("description") or "").strip())
-
             username = title.split()[-1].strip(" @.") if title else None
-
             display_name = uploader or username
-            author_link = f"<a href='https://www.instagram.com/{username}/'>{display_name}</a>" if username else ""
-
+            author_link = (
+                f"<a href='https://www.instagram.com/{username}/'>{display_name}</a>"
+                if username else ""
+            )
             parts = [p for p in [author_link, description] if p]
             caption = " - ".join(parts)
 
-            # Process video for Telegram compatibility
-            if info.get('ext') == 'mp4':
+            if info.get("ext") == "mp4":
                 fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(
-                    self.arq, str(path))
+                    self.arq, str(path)
+                )
                 return [
                     MediaContent(
                         type=MediaType.VIDEO,
@@ -210,7 +254,7 @@ class InstagramService(BaseService):
                         cover=Path(thumbnail) if thumbnail and os.path.exists(thumbnail) else None,
                         width=width,
                         height=height,
-                        duration=int(duration)
+                        duration=int(duration),
                     )
                 ]
             else:
@@ -219,18 +263,23 @@ class InstagramService(BaseService):
                         type=MediaType.PHOTO,
                         path=path,
                         title=caption,
-                        performer=username
+                        performer=username,
                     )
                 ]
-        except Exception as e:
-            raise BotError(
-                ErrorCode.DOWNLOAD_FAILED,
-                service=Services.INSTAGRAM,
-                message=f"All methods failed. yt-dlp error: {e}",
-                url=url,
-                critical=True,
-                is_logged=True
-            )
+
+        # All retries exhausted
+        logger.error(
+            "[yt-dlp] All %d account(s) failed for URL: %s. Tried: %s",
+            MAX_RETRIES, url, ", ".join(tried),
+        )
+        raise BotError(
+            code=ErrorCode.DOWNLOAD_FAILED,
+            service=Services.INSTAGRAM,
+            message=f"All Instagram accounts failed for yt-dlp download: {last_error}",
+            url=url,
+            critical=True,
+            is_logged=True,
+        )
 
     async def get_info(self, url: str) -> Optional[MediaMetadata]:
         return None
