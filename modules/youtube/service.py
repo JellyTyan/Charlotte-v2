@@ -76,6 +76,15 @@ class YouTubeService(BaseService):
         try:
             result = await job.result()
         except Exception as e:
+            err_str = str(e).lower()
+            if "age" in err_str or "verify your age" in err_str or "age-restricted" in err_str:
+                raise BotError(
+                    code=ErrorCode.AGE_RESTRICTED,
+                    message=f"Age-restricted content: {e}",
+                    url=url,
+                    service=Services.YOUTUBE,
+                    is_logged=False
+                )
             raise BotError(
                 code=ErrorCode.METADATA_ERROR,
                 message=f"Failed to extract video info: {e}",
@@ -230,6 +239,15 @@ class YouTubeService(BaseService):
             try:
                 result = await job.result()
             except Exception as e:
+                err_str = str(e).lower()
+                if "age" in err_str or "verify your age" in err_str or "age-restricted" in err_str:
+                    raise BotError(
+                        code=ErrorCode.AGE_RESTRICTED,
+                        message=f"Age-restricted content: {e}",
+                        url=url,
+                        service=Services.YOUTUBE,
+                        is_logged=False
+                    )
                 raise BotError(
                     code=ErrorCode.DOWNLOAD_FAILED,
                     service=Services.YOUTUBE,
@@ -301,6 +319,15 @@ class YouTubeService(BaseService):
             try:
                 result = await job.result()
             except Exception as e:
+                err_str = str(e).lower()
+                if "age" in err_str or "verify your age" in err_str or "age-restricted" in err_str:
+                    raise BotError(
+                        code=ErrorCode.AGE_RESTRICTED,
+                        message=f"Age-restricted content: {e}",
+                        url=url,
+                        service=Services.YOUTUBE,
+                        is_logged=False
+                    )
                 raise BotError(
                     code=ErrorCode.DOWNLOAD_FAILED,
                     service=Services.YOUTUBE,
