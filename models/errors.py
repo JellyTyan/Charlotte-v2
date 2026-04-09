@@ -19,6 +19,7 @@ class ErrorCode(Enum):
     NOT_ALLOWED = "E403"
     INTERNAL_ERROR = "E500"
     ACCOUNT_BANNED = "E503"
+    AGE_RESTRICTED = "E010"
 
 @dataclass
 class BotError(Exception):

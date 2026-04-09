@@ -8,3 +8,4 @@ error-metadata = Nie znalazłam metadanych. Strasznie to dziwne! 👻
 error-no-found = Przepraszam, szukałam wszędzie, ale nic nie znalazłam. 🔍
 error-internal = O nie, coś we mnie pękło! Spróbujesz później? 🧡
 error-generic = ❌ Coś poszło nie tak. Przepraszam!
+error-age-restricted = 🔞 Ups, to treść 18+ i niestety tam nie sięgam! 😳

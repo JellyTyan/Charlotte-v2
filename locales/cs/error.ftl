@@ -8,3 +8,4 @@ error-metadata = Nenašla jsem metadata. To je záhada! 👻
 error-no-found = Promiň, hledala jsem všude, ale nic jsem nenašla. 🔍
 error-internal = Jejda, něco se ve mně pokazilo! Zkusíš to později? 🧡
 error-generic = ❌ Něco se pokazilo. Omlouvám se!
+error-age-restricted = 🔞 Jejda, to je obsah 18+ a já se tam prostě nedostanu! 😳
