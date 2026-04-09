@@ -8,3 +8,4 @@ error-metadata = Keine Metadaten gefunden. Gruselig! 👻
 error-no-found = Sorry, hab überall gesucht aber nichts gefunden. 🔍
 error-internal = Oh nein, in mir ist was kaputt gegangen! Später nochmal? 🧡
 error-generic = ❌ Ein Fehler ist aufgetreten. Sorry!
+error-age-restricted = 🔞 Hoppla, das ist 18+ Inhalt und da komm ich leider nicht ran! 😳

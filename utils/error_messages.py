@@ -22,6 +22,8 @@ def get_i18n_error_message(code: ErrorCode, i18n: TranslatorRunner) -> str | Non
             return i18n.error.no.found()
         case ErrorCode.NOT_ALLOWED:
             return i18n.error.no.allowed()
+        case ErrorCode.AGE_RESTRICTED:
+            return i18n.error.age.restricted()
         case ErrorCode.INTERNAL_ERROR:
             return i18n.error.internal()
         case _:
