@@ -56,6 +56,8 @@ async def search_music(performer: str, title: str) -> Optional[str]:
             is_logged=True
         )
 
+    except BotError:
+        raise
     except Exception as e:
         raise BotError(
             code=ErrorCode.INTERNAL_ERROR,
