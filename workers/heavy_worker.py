@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import mimetypes
 import os
 import shutil
 import subprocess
@@ -16,6 +15,8 @@ from mutagen.id3._frames import TIT2, TPE1, TALB, TPE2, TRCK, TCON, APIC, TDRC
 from mutagen.id3._util import ID3NoHeaderError
 from mutagen.mp3 import HeaderNotFoundError
 from mutagen.mp4 import MP4, MP4Cover
+from PIL import Image
+from io import BytesIO
 
 logger = logging.getLogger(__name__)
 
@@ -576,14 +577,13 @@ async def universal_metadata_update(
 
         if cover_file:
             if os.path.exists(cover_file):
-                mime_type, _ = mimetypes.guess_type(cover_file)
-                if not mime_type: mime_type = "image/jpeg"
+                with Image.open(cover_file) as img:
+                    img = img.convert("RGB")
+                    buffer = BytesIO()
+                    img.save(buffer, format="JPEG", quality=90)
+                    cover_data = buffer.getvalue()
 
-                try:
-                    with open(cover_file, "rb") as img:
-                        cover_data = img.read()
-                except Exception as e:
-                    logger.error(f"Failed to read cover: {e}")
+                mime_type = "image/jpeg"
             else:
                 logger.error(f"Cover file not found: {cover_file}")
 
@@ -591,7 +591,7 @@ async def universal_metadata_update(
             # --- MP3 ---
             if ext == "mp3":
                 try:
-                    tags = ID3(audio_file)
+                    tags = ID3()
                 except (HeaderNotFoundError, ID3NoHeaderError):
                     tags = ID3()
 
@@ -610,7 +610,7 @@ async def universal_metadata_update(
                         encoding=3,
                         mime=mime_type,
                         type=3,
-                        desc=u"Cover",
+                        desc="",
                         data=cover_data
                     ))
 
@@ -652,7 +652,7 @@ async def universal_metadata_update(
                     image = Picture()
                     image.type = 3
                     image.mime = mime_type
-                    image.desc = "Cover"
+                    image.desc = ""
                     image.data = cover_data
 
                     # Удаляем старые картинки перед добавлением новой
