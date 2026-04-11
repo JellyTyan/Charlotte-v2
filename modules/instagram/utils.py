@@ -1,4 +1,5 @@
 import asyncio
+import html
 import json
 import logging
 import os
@@ -7,6 +8,7 @@ import re
 
 import aiofiles
 from curl_cffi.requests import AsyncSession
+from curl_cffi.requests.exceptions import TooManyRedirects
 
 from models.errors import BotError, ErrorCode
 from models.service_list import Services
@@ -43,6 +45,7 @@ async def get_cookies(cookie_file: str):
             if len(parts) >= 7:
                 name = parts[5]
                 value = parts[6].strip('"')
+                value = html.unescape(value)
                 cookies_dict[name] = value
 
     account_name = os.path.basename(cookie_file)
@@ -117,7 +120,19 @@ async def get_start_page_tokens(session: AsyncSession, cookies: dict | None = No
     # Small random delay before hitting Instagram
     await asyncio.sleep(random.uniform(0.3, 0.8))
 
-    response = await session.get(url, headers=headers, cookies=cookies)
+    try:
+        response = await session.get(url, headers=headers, cookies=cookies, max_redirects=10)
+    except TooManyRedirects:
+        logger.error(
+            "Instagram returned too many redirects — account likely banned/logged-out. "
+            "Will mark account as banned and rotate to next cookie."
+        )
+        raise BotError(
+            code=ErrorCode.ACCOUNT_BANNED,
+            message="Instagram account banned/logged-out: too many redirects",
+            service=Services.INSTAGRAM,
+            is_logged=True,
+        )
 
     if response.status_code == 200:
         html = response.text
@@ -330,9 +345,15 @@ async def _fetch_post_data(graphql_url: str, url: str, shortcode: str, cookie_fi
     _REQUIRED = ("sessionid", "csrftoken")
     missing = [c for c in _REQUIRED if not cookies.get(c)]
     if missing:
-        logger.warning(
-            "[%s] Missing required cookies before request: %s",
+        logger.error(
+            "[%s] Missing required cookies: %s. Account is invalid/logged-out.",
             account_name, ", ".join(missing),
+        )
+        raise BotError(
+            code=ErrorCode.ACCOUNT_BANNED,
+            message=f"Instagram account missing required cookies: {', '.join(missing)}",
+            service=Services.INSTAGRAM,
+            is_logged=True,
         )
     else:
         logger.debug(
