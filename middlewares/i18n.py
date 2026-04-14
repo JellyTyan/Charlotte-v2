@@ -13,18 +13,20 @@ class TranslatorRunnerMiddleware(BaseMiddleware):
     ) -> Any:
         user: User = data.get("event_from_user")
         chat: Chat = data.get("event_chat")
+        session = data.get("db_session")
 
         lang = "en"
 
-        if chat and chat.type != "private":
-            settings = await get_chat_settings(chat.id)
-            if settings:
-                lang = settings.profile.language
+        if session:
+            if chat and chat.type != "private":
+                settings = await get_chat_settings(session, chat.id)
+                if settings:
+                    lang = settings.profile.language
 
-        elif user:
-            settings = await get_user_settings(user.id)
-            if settings:
-                lang = settings.profile.language
+            elif user:
+                settings = await get_user_settings(session, user.id)
+                if settings:
+                    lang = settings.profile.language
 
         hub: TranslatorHub = data.get("_translator_hub")
 

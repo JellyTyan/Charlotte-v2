@@ -7,7 +7,7 @@ requires-python = ">=3.14"
 dependencies = [
     "aiofiles",
     "arq==0.27.0",
-    "curl_cffi"
+    "curl_cffi==0.15.0"
 ]
 
 # Specific
@@ -24,13 +24,10 @@ bot = [
     "alembic==1.18.4",
     "translators~=6.0.1",
     "ytmusicapi==1.11.0",
-    "Pillow==12.1.0",
-    "pillow-heif==1.2.0",
 ]
 worker = [
     "Pillow==12.1.0",
     "pillow-heif==1.2.0",
-    "curl_cffi",
     "beautifulsoup4==4.14.3",
     "mutagen==1.47.0",
     "gallery-dl",

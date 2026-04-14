@@ -4,6 +4,7 @@ from aiofiles import os as aios
 from aiogram import F
 from aiogram.types import CallbackQuery, FSInputFile, Message
 from fluentogram import TranslatorRunner
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.errors import BotError, ErrorCode
 from models.service_list import Services
@@ -27,7 +28,7 @@ NICOVIDEO_REGEX = r"https?://(?:www\.)?nicovideo\.jp/watch/\S+"
 
 
 @router.message(F.text.regexp(NICOVIDEO_REGEX))
-async def nicovideo_handler(message: Message, i18n: TranslatorRunner):
+async def nicovideo_handler(message: Message, i18n: TranslatorRunner, db_session: AsyncSession):
     if not message.text or not message.from_user:
         return
 
@@ -40,7 +41,7 @@ async def nicovideo_handler(message: Message, i18n: TranslatorRunner):
     )
 
 
-async def process_nicovideo_url(message: Message, i18n: TranslatorRunner):
+async def process_nicovideo_url(message: Message, i18n: TranslatorRunner, db_session: AsyncSession):
     """Fetch NicoVideo metadata and show format-selection keyboard."""
     if not message.bot or not message.text:
         return None

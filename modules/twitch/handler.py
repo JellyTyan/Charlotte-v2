@@ -1,5 +1,6 @@
 from aiogram import F
 from aiogram.types import Message
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.errors import BotError, ErrorCode
 from models.service_list import Services
@@ -21,7 +22,7 @@ TWITCH_REGEX = (
 
 
 @router.message(F.text.regexp(TWITCH_REGEX))
-async def twitch_handler(message: Message):
+async def twitch_handler(message: Message, db_session: AsyncSession):
     if not message.text or not message.from_user:
         return
 
@@ -29,7 +30,7 @@ async def twitch_handler(message: Message):
 
     download_task = await task_manager.add_task(
         user_id,
-        download_coro=process_twitch_url(message),
+        download_coro=process_twitch_url(message, db_session),
         message=message,
     )
 
@@ -39,14 +40,14 @@ async def twitch_handler(message: Message):
                 media_content = await download_task
                 if media_content:
                     sender = MediaSender()
-                    await sender.send(message, media_content, service="twitch")
+                    await sender.send(message, media_content, service="twitch", db_session=db_session)
             except Exception:
                 pass
 
         await task_manager.add_send_task(user_id, send_when_ready())
 
 
-async def process_twitch_url(message: Message):
+async def process_twitch_url(message: Message, db_session: AsyncSession):
     """Download a Twitch clip and return MediaContent list."""
     if not message.bot or not message.text:
         return None
@@ -61,6 +62,6 @@ async def process_twitch_url(message: Message):
 
     media_content = await service.download(message.text)
 
-    await log_download_event(user_id, Services.TWITCH, "success")
+    await log_download_event(db_session, user_id, Services.TWITCH, "success")
 
     return media_content

@@ -51,15 +51,16 @@ async def global_error_handler(event: ErrorEvent):
 
     lang = "en"
 
-    if chat and chat.type != "private":
-        settings = await get_chat_settings(chat.id)
-        if settings:
-            lang = settings.profile.language
-    elif user:
-        from storage.db.crud import get_user_settings
-        settings = await get_user_settings(user.id)
-        if settings:
-            lang = settings.profile.language
+    session = data.get("db_session")
+    if session:
+        if chat and chat.type != "private":
+            settings = await get_chat_settings(session, chat.id)
+            if settings:
+                lang = settings.profile.language
+        elif user:
+            settings = await get_user_settings(session, user.id)
+            if settings:
+                lang = settings.profile.language
 
     i18n: TranslatorRunner = hub.get_translator_by_locale(lang)
 

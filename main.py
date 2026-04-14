@@ -1,5 +1,4 @@
 from dotenv import load_dotenv
-load_dotenv()
 import os
 
 from core.config import Config
@@ -7,6 +6,8 @@ from core.logger import setup_logger
 from core.bot_commands import set_default_commands
 from utils.i18n import create_translator_hub
 from middlewares.i18n import TranslatorRunnerMiddleware
+
+load_dotenv()
 
 
 async def main():
@@ -40,6 +41,10 @@ async def main():
     dp.workflow_data.update(config=config, logger=logger)
 
     logger.info("⚙️ Setting up translation...")
+
+    from middlewares.db import DbSessionMiddleware
+    dp.update.middleware(DbSessionMiddleware(database_manager.async_session))
+
     translator_hub = create_translator_hub()
 
     dp["_translator_hub"] = translator_hub
@@ -80,6 +85,7 @@ async def main():
     await set_default_commands()
     logger.info("✅ Default commands set")
 
+    # todo maybe use webhooks instead :)
     logger.info("🎉 Bot successfully started and ready to receive messages!")
     await dp.start_polling(bot, skip_updates=True)
 

@@ -13,7 +13,7 @@ Selecting the metadata received from the service.
 
 The METADATA type indicates that the data requires further processing on our side.
 
-The AUTODOWNLOAD type signifies that the service has already downloaded the content and it can be sent immediately without any post-processing.
+The AUTODOWNLOAD type signifies that the service has already downloaded the content, and it can be sent immediately without any post-processing.
 
 The ERROR type indicates that an error has occurred and must be handled accordingly.
     """

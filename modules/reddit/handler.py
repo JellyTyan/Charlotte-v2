@@ -2,6 +2,7 @@ import logging
 
 from aiogram import F
 from aiogram.types import Message
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.errors import BotError, ErrorCode
 from models.service_list import Services
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 REDDIT_REGEX = r"https?:\/\/(?:www\.|old\.|new\.)?reddit\.com\/(?:r\/[A-Za-z0-9_]+\/)?(?:comments\/[A-Za-z0-9]+(?:\/[^\/\s?]+)?|s\/[A-Za-z0-9]+|gallery\/[A-Za-z0-9]+)(?:\/)?"
 
 @router.message(F.text.regexp(REDDIT_REGEX))
-async def reddit_handler(message: Message):
+async def reddit_handler(message: Message, db_session: AsyncSession):
     if not message.text or not message.from_user:
         return
 
@@ -28,7 +29,7 @@ async def reddit_handler(message: Message):
     # Start download task
     download_task = await task_manager.add_task(
         user_id,
-        download_coro=process_reddit_url(message),
+        download_coro=process_reddit_url(message, db_session),
         message=message
     )
 
@@ -39,7 +40,7 @@ async def reddit_handler(message: Message):
                 media_content = await download_task
                 if media_content:
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, service="reddit")
+                    await send_manager.send(message, media_content, service="reddit", db_session=db_session)
             except Exception:
                 # Error already logged in download task
                 pass
@@ -47,7 +48,7 @@ async def reddit_handler(message: Message):
         await task_manager.add_send_task(user_id, send_when_ready())
 
 
-async def process_reddit_url(message: Message):
+async def process_reddit_url(message: Message, db_session: AsyncSession):
     """Download Reddit media and return content"""
     if not message.bot or not message.text:
         return None
@@ -56,7 +57,7 @@ async def process_reddit_url(message: Message):
     allow_nsfw = True
 
     if message.chat.id < 0:
-        settings = await get_chat_settings(message.chat.id)
+        settings = await get_chat_settings(db_session, message.chat.id)
         allow_nsfw = settings.profile.allow_nsfw
 
     # Get ARQ pool
@@ -84,7 +85,7 @@ async def process_reddit_url(message: Message):
         media_content = await service.download(reddit_info, allow_nsfw=allow_nsfw)
 
         # Log success
-        await log_download_event(user_id, Services.REDDIT, 'success')
+        await log_download_event(db_session, user_id, Services.REDDIT, 'success')
 
         return media_content
 

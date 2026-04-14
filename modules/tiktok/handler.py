@@ -1,5 +1,6 @@
 from aiogram import F
 from aiogram.types import Message
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.errors import BotError, ErrorCode
 from models.service_list import Services
@@ -14,7 +15,7 @@ from .service import TiktokService
 TIKTOK_REGEX = r"https?://(?:www\.)?(?:tiktok\.com/.*|(vm|vt)\.tiktok\.com/.+)"
 
 @router.message(F.text.regexp(TIKTOK_REGEX))
-async def tiktok_handler(message: Message):
+async def tiktok_handler(message: Message, db_session: AsyncSession):
     if not message.text or not message.from_user:
         return
 
@@ -23,7 +24,7 @@ async def tiktok_handler(message: Message):
     # Start download task
     download_task = await task_manager.add_task(
         user_id,
-        download_coro=process_tiktok_url(message),
+        download_coro=process_tiktok_url(message, db_session),
         message=message
     )
 
@@ -34,7 +35,7 @@ async def tiktok_handler(message: Message):
                 media_content = await download_task
                 if media_content:
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, service="tiktok")
+                    await send_manager.send(message, media_content, service="tiktok", db_session=db_session)
             except Exception:
                 # Error already logged in download task
                 pass
@@ -42,7 +43,7 @@ async def tiktok_handler(message: Message):
         await task_manager.add_send_task(user_id, send_when_ready())
 
 
-async def process_tiktok_url(message: Message):
+async def process_tiktok_url(message: Message, db_session: AsyncSession):
     """Download TikTok media and return content"""
     if not message.bot or not message.text:
         return None
@@ -73,6 +74,6 @@ async def process_tiktok_url(message: Message):
     media_content = await service.download(metadata)
 
     # Log success
-    await log_download_event(user_id, Services.TIKTOK, 'success')
+    await log_download_event(db_session, user_id, Services.TIKTOK, 'success')
 
     return media_content

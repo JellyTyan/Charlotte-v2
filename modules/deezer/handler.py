@@ -4,6 +4,7 @@ from aiogram import F
 from aiogram.enums import ParseMode
 from aiogram.types import FSInputFile, Message
 from fluentogram import TranslatorRunner
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import Config
 from models.errors import BotError, ErrorCode
@@ -23,14 +24,14 @@ logger = logging.getLogger(__name__)
 DEEZER_REGEX = r"^https?:\/\/(?:www\.deezer\.com\/[a-z]{2}\/(track|album|playlist)\/\d+|link\.deezer\.com\/s\/[A-Za-z0-9]+)$"
 
 @router.message(F.text.regexp(DEEZER_REGEX))
-async def deezer_handler(message: Message, config: Config, i18n: TranslatorRunner):
+async def deezer_handler(message: Message, config: Config, i18n: TranslatorRunner, db_session: AsyncSession):
     if not message.text or not message.from_user:
         return
 
     user_id = message.from_user.id
     download_task = await task_manager.add_task(
         user_id,
-        download_coro=process_deezer_url(message, config, i18n),
+        download_coro=process_deezer_url(message, config, i18n, db_session),
         message=message
     )
 
@@ -40,13 +41,13 @@ async def deezer_handler(message: Message, config: Config, i18n: TranslatorRunne
                 media_content = await download_task
                 if media_content:
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, service="deezer")
+                    await send_manager.send(message, media_content, service=\"deezer\", db_session=db_session)
             except Exception:
                 pass
         await task_manager.add_send_task(user_id, send_when_ready())
 
 
-async def process_deezer_url(message: Message, config: Config, i18n: TranslatorRunner):
+async def process_deezer_url(message: Message, config: Config, i18n: TranslatorRunner, db_session: AsyncSession):
     if not message.text:
         return None
     chat_id = message.chat.id
@@ -59,9 +60,9 @@ async def process_deezer_url(message: Message, config: Config, i18n: TranslatorR
 
     # Get user settings for lossless mode
     if chat_id < 0:
-        settings = await get_chat_settings(chat_id)
+        settings = await get_chat_settings(db_session, chat_id)
     else:
-        settings = await get_user_settings(chat_id)
+        settings = await get_user_settings(db_session, chat_id)
     lossless_mode = settings.services.deezer.lossless if settings else False
 
     media_metadata = await service.get_info(message.text, config=config)
@@ -90,7 +91,7 @@ async def process_deezer_url(message: Message, config: Config, i18n: TranslatorR
             lossless_mode=lossless_mode
         )
 
-        await log_download_event(user.id, Services.DEEZER, 'success')
+        await log_download_event(db_session, user.id, Services.DEEZER, 'success')
         return track
 
     elif media_metadata.media_type == "album" or media_metadata.media_type == "playlist":
@@ -139,7 +140,7 @@ async def process_deezer_url(message: Message, config: Config, i18n: TranslatorR
                     try:
                         track_content = await task
                         if track_content:
-                            await send_manager.send(message, track_content, skip_reaction=True, service="spotify")
+                            await send_manager.send(message, track_content, skip_reaction=True, service=\"spotify\", db_session=db_session)
                             return True
                         return False
                     except Exception:
@@ -147,5 +148,5 @@ async def process_deezer_url(message: Message, config: Config, i18n: TranslatorR
 
                 await task_manager.add_send_task(user.id, send_track_logic(track_download_task))
 
-        await log_download_event(user.id, Services.DEEZER, 'success')
+        await log_download_event(db_session, user.id, Services.DEEZER, 'success')
         return None

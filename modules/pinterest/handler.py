@@ -2,6 +2,7 @@ import logging
 
 from aiogram import F
 from aiogram.types import Message
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.service_list import Services
 from modules.router import service_router as router
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 PINTEREST_REGEX = r"https?://(?:www\.)?(?:pinterest\.com/[\w/-]+|pin\.it/[A-Za-z0-9]+)"
 
 @router.message(F.text.regexp(PINTEREST_REGEX))
-async def pinterest_handler(message: Message):
+async def pinterest_handler(message: Message, db_session: AsyncSession):
     if not message.text or not message.from_user:
         return
 
@@ -26,7 +27,7 @@ async def pinterest_handler(message: Message):
     # Start download task
     download_task = await task_manager.add_task(
         user_id,
-        download_coro=process_pinterest_url(message),
+        download_coro=process_pinterest_url(message, db_session),
         message=message
     )
 
@@ -37,7 +38,7 @@ async def pinterest_handler(message: Message):
                 media_content = await download_task
                 if media_content:
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, service="pinterest")
+                    await send_manager.send(message, media_content, service="pinterest", db_session=db_session)
             except Exception:
                 # Error already logged in download task
                 pass
@@ -45,7 +46,7 @@ async def pinterest_handler(message: Message):
         await task_manager.add_send_task(user_id, send_when_ready())
 
 
-async def process_pinterest_url(message: Message):
+async def process_pinterest_url(message: Message, db_session: AsyncSession):
     """Download Pinterest media and return content"""
     if not message.bot or not message.text:
         return None
@@ -65,7 +66,7 @@ async def process_pinterest_url(message: Message):
         media_content = await service.download(message.text)
 
         # Log success
-        await log_download_event(user_id, Services.PINTEREST, 'success')
+        await log_download_event(db_session, user_id, Services.PINTEREST, 'success')
 
         return media_content
 

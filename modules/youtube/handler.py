@@ -4,6 +4,7 @@ from aiofiles import os as aios
 from aiogram import F
 from aiogram.types import CallbackQuery, FSInputFile, Message
 from fluentogram import TranslatorRunner
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.errors import BotError, ErrorCode
 from models.service_list import Services
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 YOUTUBE_REGEX = r"https?://(?:www\.)?(?:m\.)?(?:youtu\.be/|youtube\.com/(?:shorts/|watch\?v=))([\w-]+)"
 
 @router.message(F.text.regexp(YOUTUBE_REGEX))
-async def youtube_handler(message: Message, i18n: TranslatorRunner):
+async def youtube_handler(message: Message, i18n: TranslatorRunner, db_session: AsyncSession):
     if not message.text or not message.from_user:
         return
 
@@ -38,7 +39,7 @@ async def youtube_handler(message: Message, i18n: TranslatorRunner):
     )
 
 
-async def process_youtube_url(message: Message, i18n: TranslatorRunner):
+async def process_youtube_url(message: Message, i18n: TranslatorRunner, db_session: AsyncSession):
     """Get YouTube metadata and display format selection UI"""
     if not message.bot or not message.text:
         return None
@@ -86,7 +87,7 @@ async def process_youtube_url(message: Message, i18n: TranslatorRunner):
 
 
 @router.callback_query(YoutubeCallback.filter())
-async def format_choice_handler(callback_query: CallbackQuery, callback_data: YoutubeCallback, i18n: TranslatorRunner):
+async def format_choice_handler(callback_query: CallbackQuery, callback_data: YoutubeCallback, i18n: TranslatorRunner, db_session: AsyncSession):
     user_id = callback_query.from_user.id
     message = callback_query.message
     if not isinstance(message, Message):

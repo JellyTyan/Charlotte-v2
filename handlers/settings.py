@@ -19,9 +19,10 @@ from models.service_list import Services
 from storage.db.crud import update_user_settings, update_chat_settings, get_user_settings, get_chat_settings, create_user, create_chat
 from middlewares.button_owner import register_message_owner
 from core.loader import dp
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
-
+# todo Try to use aiogram-dialog for this shit :)
 LANGUAGES = [
     { "code": "en", "name": "English", "flag": "🇺🇲" },
     { "code": "uk", "name": "Українська", "flag": "🇺🇦" },
@@ -70,27 +71,27 @@ def get_desc(key: str, i18n: TranslatorRunner) -> str:
     mapped = str(DESC_MAPPING.get(key, key))
     return i18n.get(f"desc-{mapped.replace('_', '-')}")
 
-async def get_settings_obj(chat_id: int, user_id: int) -> tuple[UserSettingsJson | ChatSettingsJson, bool]:
+async def get_settings_obj(db_session: AsyncSession, chat_id: int, user_id: int) -> tuple[UserSettingsJson | ChatSettingsJson, bool]:
     is_group = chat_id < 0
     if is_group:
-        settings = await get_chat_settings(chat_id)
+        settings = await get_chat_settings(db_session, chat_id)
         if not settings:
-            await create_chat(chat_id, user_id)
-            settings = await get_chat_settings(chat_id)
+            await create_chat(db_session, chat_id, user_id)
+            settings = await get_chat_settings(db_session, chat_id)
         return settings, True
     else:
-        settings = await get_user_settings(user_id)
+        settings = await get_user_settings(db_session, user_id)
         if not settings:
-            await create_user(user_id)
-            settings = await get_user_settings(user_id)
+            await create_user(db_session, user_id)
+            settings = await get_user_settings(db_session, user_id)
         return settings, False
 
-async def save_settings_obj(chat_id: int, user_id: int, settings):
+async def save_settings_obj(db_session: AsyncSession, chat_id: int, user_id: int, settings):
     is_group = chat_id < 0
     if is_group:
-        await update_chat_settings(chat_id, settings)
+        await update_chat_settings(db_session, chat_id, settings)
     else:
-        await update_user_settings(user_id, settings)
+        await update_user_settings(db_session, user_id, settings)
 
 
 def build_main_keyboard(settings, i18n: TranslatorRunner, is_group: bool = False) -> InlineKeyboardMarkup:
@@ -240,7 +241,7 @@ async def safe_edit_text(callback: CallbackQuery, text: str, reply_markup: Inlin
 
 # Main settings
 @dp.message(Command("settings"))
-async def settings_command(message: Message, i18n: TranslatorRunner) -> None:
+async def settings_command(message: Message, i18n: TranslatorRunner, db_session: AsyncSession) -> None:
     chat = message.chat
     if message.bot is None or message.from_user is None:
         return
@@ -251,11 +252,11 @@ async def settings_command(message: Message, i18n: TranslatorRunner) -> None:
             return
         admins = await message.bot.get_chat_administrators(chat.id)
         owner_id = next((admin.user.id for admin in admins if admin.status == "creator"), message.from_user.id)
-        await create_chat(chat.id, owner_id)
+        await create_chat(db_session, chat.id, owner_id)
     else:
-        await create_user(message.from_user.id)
+        await create_user(db_session, message.from_user.id)
 
-    settings, is_group = await get_settings_obj(chat.id, message.from_user.id)
+    settings, is_group = await get_settings_obj(db_session, chat.id, message.from_user.id)
     sent = await message.answer(
         i18n.settings.welcome(),
         reply_markup=build_main_keyboard(settings, i18n, is_group)
@@ -265,9 +266,9 @@ async def settings_command(message: Message, i18n: TranslatorRunner) -> None:
 
 # Comeback
 @dp.callback_query(lambda c: c.data == "settings_main")
-async def settings_main(callback: CallbackQuery, i18n: TranslatorRunner):
+async def settings_main(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
     if callback.message is None: return
-    settings, is_group = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
+    settings, is_group = await get_settings_obj(db_session, callback.message.chat.id, callback.from_user.id)
     await safe_edit_text(callback, i18n.settings.welcome(), build_main_keyboard(settings, i18n, is_group), ParseMode.HTML)
     await callback.answer()
 
@@ -281,22 +282,22 @@ async def settings_services_menu(callback: CallbackQuery, i18n: TranslatorRunner
 
 # Service settings
 @dp.callback_query(lambda c: c.data.startswith("settings_svc_"))
-async def settings_svc_menu(callback: CallbackQuery, i18n: TranslatorRunner):
+async def settings_svc_menu(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
     if callback.message is None: return
     if callback.data is None: return
     service = callback.data.replace("settings_svc_", "")
-    settings, is_group = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
+    settings, is_group = await get_settings_obj(db_session, callback.message.chat.id, callback.from_user.id)
     name = service.replace("_", " ").title()
     text = i18n.settings.service.title(name=name)
     await safe_edit_text(callback, text, build_service_settings_keyboard(settings, service, i18n))
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data.startswith("menu_profile_"))
-async def menu_profile_setting(callback: CallbackQuery, i18n: TranslatorRunner):
+async def menu_profile_setting(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
     if callback.message is None: return
     if callback.data is None: return
     key = callback.data.replace("menu_profile_", "")
-    settings, is_group = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
+    settings, is_group = await get_settings_obj(db_session, callback.message.chat.id, callback.from_user.id)
     current_value = getattr(settings.profile, key)
 
     new_value = not current_value
@@ -319,7 +320,7 @@ async def menu_profile_setting(callback: CallbackQuery, i18n: TranslatorRunner):
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data.startswith("menu_service_"))
-async def menu_service_setting(callback: CallbackQuery, i18n: TranslatorRunner):
+async def menu_service_setting(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
     if callback.message is None or callback.data is None: return
     parts = callback.data.replace("menu_service_", "").split("_")
 
@@ -332,7 +333,7 @@ async def menu_service_setting(callback: CallbackQuery, i18n: TranslatorRunner):
     if not target_service: return
 
     key = callback.data.replace(f"menu_service_{target_service}_", "")
-    settings, is_group = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
+    settings, is_group = await get_settings_obj(db_session, callback.message.chat.id, callback.from_user.id)
 
     svc_settings = getattr(settings.services, target_service)
     current_value = getattr(svc_settings, key)
@@ -358,12 +359,12 @@ async def menu_service_setting(callback: CallbackQuery, i18n: TranslatorRunner):
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data.startswith("block_svc_"))
-async def menu_service_block(callback: CallbackQuery, i18n: TranslatorRunner):
+async def menu_service_block(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
     if callback.message is None or callback.data is None: return
 
     service = callback.data.replace("block_svc_", "")
 
-    settings, is_group = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
+    settings, is_group = await get_settings_obj(db_session, callback.message.chat.id, callback.from_user.id)
     if not isinstance(settings, ChatSettingsJson):
         logger.error(f"Not a chat settings: {type(settings)}")
         return
@@ -373,7 +374,7 @@ async def menu_service_block(callback: CallbackQuery, i18n: TranslatorRunner):
     else:
         settings.profile.blocked_services.add(service)
 
-    await save_settings_obj(callback.message.chat.id, callback.from_user.id, settings)
+    await save_settings_obj(db_session, callback.message.chat.id, callback.from_user.id, settings)
 
     name = service.replace("_", " ").title()
     text = i18n.settings.service.title(name=name)
@@ -382,7 +383,7 @@ async def menu_service_block(callback: CallbackQuery, i18n: TranslatorRunner):
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data.startswith("toggle_profile_"))
-async def apply_profile_setting(callback: CallbackQuery, i18n: TranslatorRunner):
+async def apply_profile_setting(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
     if callback.message is None or callback.data is None: return
     data = callback.data.replace("toggle_profile_", "")
     last_uscores = data.rfind("_")
@@ -390,9 +391,9 @@ async def apply_profile_setting(callback: CallbackQuery, i18n: TranslatorRunner)
     new_value = data[last_uscores+1:] == "True"
 
     chat_id = callback.message.chat.id
-    settings, is_group = await get_settings_obj(chat_id, callback.from_user.id)
+    settings, is_group = await get_settings_obj(db_session, chat_id, callback.from_user.id)
     setattr(settings.profile, key, new_value)
-    await save_settings_obj(chat_id, callback.from_user.id, settings)
+    await save_settings_obj(db_session, chat_id, callback.from_user.id, settings)
 
     status_text = i18n.get('enabled') if new_value else i18n.get('disabled')
     text = i18n.get('setting-changed', setting=key.replace('_', ' '), status=status_text)
@@ -400,7 +401,7 @@ async def apply_profile_setting(callback: CallbackQuery, i18n: TranslatorRunner)
     await callback.answer(i18n.get('setting-updated'))
 
 @dp.callback_query(lambda c: c.data.startswith("toggle_service_"))
-async def apply_service_setting(callback: CallbackQuery, i18n: TranslatorRunner):
+async def apply_service_setting(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
     if callback.message is None or callback.data is None: return
 
     service_map = {s.value.lower(): s.value.lower() for s in Services}
@@ -417,10 +418,10 @@ async def apply_service_setting(callback: CallbackQuery, i18n: TranslatorRunner)
     new_value = data[last_uscores+1:] == "True"
 
     chat_id = callback.message.chat.id
-    settings, is_group = await get_settings_obj(chat_id, callback.from_user.id)
+    settings, is_group = await get_settings_obj(db_session, chat_id, callback.from_user.id)
     svc_settings = getattr(settings.services, target_service)
     setattr(svc_settings, key, new_value)
-    await save_settings_obj(chat_id, callback.from_user.id, settings)
+    await save_settings_obj(db_session, chat_id, callback.from_user.id, settings)
 
     status_text = i18n.get('enabled') if new_value else i18n.get('disabled')
     text = i18n.get('setting-changed', setting=key.replace('_', ' '), status=status_text)
@@ -429,9 +430,9 @@ async def apply_service_setting(callback: CallbackQuery, i18n: TranslatorRunner)
 
 
 @dp.callback_query(lambda c: c.data == "settings_lang")
-async def settings_lang_menu(callback: CallbackQuery, i18n: TranslatorRunner):
+async def settings_lang_menu(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
     if callback.message is None: return
-    settings, _ = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
+    settings, _ = await get_settings_obj(db_session, callback.message.chat.id, callback.from_user.id)
     current_lang = settings.profile.language
 
     lang_buttons = [
@@ -456,12 +457,12 @@ async def settings_lang_menu(callback: CallbackQuery, i18n: TranslatorRunner):
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data.startswith("settings_lang_set_"))
-async def settings_lang_set(callback: CallbackQuery, state: FSMContext, i18n: TranslatorRunner):
+async def settings_lang_set(callback: CallbackQuery, state: FSMContext, i18n: TranslatorRunner, db_session: AsyncSession):
     if callback.message is None or callback.data is None: return
     lang = callback.data.replace("settings_lang_set_", "")
-    settings, is_group = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
+    settings, is_group = await get_settings_obj(db_session, callback.message.chat.id, callback.from_user.id)
     settings.profile.language = lang
-    await save_settings_obj(callback.message.chat.id, callback.from_user.id, settings)
+    await save_settings_obj(db_session, callback.message.chat.id, callback.from_user.id, settings)
 
     await state.clear()
     text = i18n.get('language-changed', language=lang.upper())
@@ -470,9 +471,9 @@ async def settings_lang_set(callback: CallbackQuery, state: FSMContext, i18n: Tr
 
 
 @dp.callback_query(lambda c: c.data == "settings_title_language")
-async def settings_title_language_menu(callback: CallbackQuery, i18n: TranslatorRunner):
+async def settings_title_language_menu(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
     if callback.message is None: return
-    settings, _ = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
+    settings, _ = await get_settings_obj(db_session, callback.message.chat.id, callback.from_user.id)
     current_title_lang = settings.profile.title_language
 
     buttons = []
@@ -495,16 +496,16 @@ async def settings_title_language_menu(callback: CallbackQuery, i18n: Translator
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data.startswith("settings_title_lang_set_"))
-async def settings_title_language_set(callback: CallbackQuery, i18n: TranslatorRunner):
+async def settings_title_language_set(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
     if callback.message is None or callback.data is None: return
     lang = callback.data.replace("settings_title_lang_set_", "")
 
-    settings, is_group = await get_settings_obj(callback.message.chat.id, callback.from_user.id)
+    settings, is_group = await get_settings_obj(db_session, callback.message.chat.id, callback.from_user.id)
 
     if hasattr(settings.profile, 'title_language'):
         settings.profile.title_language = lang
 
-    await save_settings_obj(callback.message.chat.id, callback.from_user.id, settings)
+    await save_settings_obj(db_session, callback.message.chat.id, callback.from_user.id, settings)
 
     text = i18n.get('title-language-changed', language=lang.upper())
     await safe_edit_text(callback, text, build_back_keyboard(i18n, "settings_main"))
