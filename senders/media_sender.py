@@ -6,6 +6,7 @@ from typing import List, Optional, Tuple, Union
 from aiogram import Bot, types
 from aiogram.utils.media_group import MediaGroupBuilder
 from aiogram.exceptions import TelegramEntityTooLarge
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from utils import delete_files, truncate_string
 from models.media import MediaContent, MediaType
@@ -29,7 +30,7 @@ class MediaSender:
     def __init__(self):
         self._files_to_cleanup: List[Path] = []
 
-    async def send(self, message: types.Message, content: List[MediaContent], skip_reaction: bool = False, service: Optional[str] = None) -> None:
+    async def send(self, message: types.Message, content: List[MediaContent], skip_reaction: bool = False, service: Optional[str] = None, db_session: Optional[AsyncSession] = None) -> None:
         if not message.bot:
             raise BotError(code=ErrorCode.INTERNAL_ERROR, message="Bot instance not available", is_logged=True)
 
@@ -38,10 +39,15 @@ class MediaSender:
             logger.info(f"Sending media: {len(media_items)} media, {len(audio_items)} audio, {len(gif_items)} gif")
 
             chat_id = message.chat.id
-            if chat_id < 0:
-                settings = await get_chat_settings(chat_id)
+            if db_session:
+                if chat_id < 0:
+                    settings = await get_chat_settings(db_session, chat_id)
+                else:
+                    settings = await get_user_settings(db_session, chat_id)
             else:
-                settings = await get_user_settings(chat_id)
+                # Fallback to default settings if no session provided
+                from models.settings import UserSettingsJson
+                settings = UserSettingsJson()
 
             if media_items:
                 await self._send_media_group(message, media_items, caption, settings, service)

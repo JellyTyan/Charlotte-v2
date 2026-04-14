@@ -40,8 +40,10 @@ class ServiceBlockMiddleware(BaseMiddleware):
         if event.chat.id < 0:
             service = detect_service(event.text)
             if service:
-                settings = await get_chat_settings(event.chat.id)
-                if isinstance(settings, ChatSettingsJson) and service in settings.profile.blocked_services:
-                    return
+                session = data.get("db_session")
+                if session:
+                    settings = await get_chat_settings(session, event.chat.id)
+                    if isinstance(settings, ChatSettingsJson) and service in settings.profile.blocked_services:
+                        return
         
         return await handler(event, data)

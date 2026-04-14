@@ -54,7 +54,7 @@ def get_video_formats(formats_dict: dict, max_size_mb: int = 50, duration: int =
                 "total_size_mb": round(total / (1024*1024), 2) if total > 0 else 0
             })
 
-    # Find best standalone audio
+    # Find the best standalone audio
     best_audio = None
     best_audio_score = -1
 

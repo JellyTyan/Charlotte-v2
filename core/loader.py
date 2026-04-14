@@ -1,10 +1,13 @@
 import os
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
+from aiogram.fsm.storage.redis import RedisStorage
+from aiogram.fsm.storage.redis import DefaultKeyBuilder
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.client.telegram import TelegramAPIServer
+from storage.cache.redis_client import redis_client
 
 from core.config import Config
 
@@ -27,7 +30,10 @@ bot = Bot(
 )
 
 # Initialize memory storage for the dispatcher
-storage = MemoryStorage()
+if redis_client is not None:
+    storage = RedisStorage(redis=redis_client, key_builder=DefaultKeyBuilder(with_destiny=True))
+else:
+    storage = MemoryStorage()
 
 # Initialize the dispatcher with the memory storage
 dp = Dispatcher(storage=storage)

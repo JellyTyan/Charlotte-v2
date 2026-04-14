@@ -47,7 +47,7 @@ class RedditService(BaseService):
                     "spoiler": has_spoiler or is_over18
                 }
             )
-        # If post is Gallery with photo and gif
+        # If post is Gallery with photo and GIF
         elif info.get("is_gallery") == True or info.get("media_metadata"):
             media_type = "gallery"
             media_metadata = info.get("media_metadata", {})
@@ -110,7 +110,7 @@ class RedditService(BaseService):
             img_url = None
             width = height = None
 
-            # Try to get highest quality from preview
+            # Try to get the highest quality from preview
             if preview and "images" in preview and preview["images"]:
                 resolutions = preview["images"][0].get("resolutions", [])
                 if resolutions:

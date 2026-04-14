@@ -1,6 +1,7 @@
 from aiogram import F
 from aiogram.types import Message
 from fluentogram import TranslatorRunner
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import Config
 from models.service_list import Services
@@ -16,7 +17,7 @@ from .service import BlueSkyService
 BLUESKY_REGEX = r"https:\/\/bsky\.app\/profile\/[^\/]+\/post\/[a-z0-9]+"
 
 @router.message(F.text.regexp(BLUESKY_REGEX))
-async def bluesky_handler(message: Message, config: Config, i18n: TranslatorRunner):
+async def bluesky_handler(message: Message, config: Config, i18n: TranslatorRunner, db_session: AsyncSession):
     if not message.text or not message.from_user:
         return
 
@@ -25,7 +26,7 @@ async def bluesky_handler(message: Message, config: Config, i18n: TranslatorRunn
     # Start download task
     download_task = await task_manager.add_task(
         user_id,
-        download_coro=process_bluesky_url(message, config, i18n),
+        download_coro=process_bluesky_url(message, config, i18n, db_session),
         message=message,
         url=message.text
     )
@@ -37,7 +38,7 @@ async def bluesky_handler(message: Message, config: Config, i18n: TranslatorRunn
                 media_content = await download_task
                 if media_content:
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, service="bluesky")
+                    await send_manager.send(message, media_content, service=\"bluesky\", db_session=db_session)
             except Exception:
                 # Error already logged in download task
                 pass
@@ -45,7 +46,7 @@ async def bluesky_handler(message: Message, config: Config, i18n: TranslatorRunn
         await task_manager.add_send_task(user_id, send_when_ready())
 
 
-async def process_bluesky_url(message: Message, config: Config, i18n: TranslatorRunner):
+async def process_bluesky_url(message: Message, config: Config, i18n: TranslatorRunner, db_session: AsyncSession):
     """Download BlueSky media and return content"""
     if not message.bot or not message.text:
         return None
@@ -55,7 +56,7 @@ async def process_bluesky_url(message: Message, config: Config, i18n: Translator
     allow_nsfw = True
 
     if message.chat.id < 0:
-        settings = await get_chat_settings(message.chat.id)
+        settings = await get_chat_settings(db_session, message.chat.id)
         allow_nsfw = settings.profile.allow_nsfw
 
     arq = await get_arq_pool('light')

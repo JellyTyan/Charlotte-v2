@@ -186,7 +186,6 @@ class TidalUtil:
                         segments.append(current_time)
                         current_time += duration
             else:
-                # Fallback if no timeline (shouldn not happen for Tidal)
                 pass
 
             # Download media segments

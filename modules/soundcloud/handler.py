@@ -4,6 +4,7 @@ from aiogram import F
 from aiogram.enums import ParseMode
 from aiogram.types import FSInputFile, Message
 from fluentogram import TranslatorRunner
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import Config
 from models.errors import BotError, ErrorCode
@@ -23,14 +24,14 @@ logger = logging.getLogger(__name__)
 SOUNDCLOUD_REGEX = r"^https:\/\/(?:on\.soundcloud\.com\/[a-zA-Z0-9]+|soundcloud\.com\/[^\/]+\/(sets\/[^\/]+|[^\/\?\s]+))(?:\?.*)?$"
 
 @router.message(F.text.regexp(SOUNDCLOUD_REGEX))
-async def soundcloud_handler(message: Message, config: Config, i18n: TranslatorRunner):
+async def soundcloud_handler(message: Message, config: Config, i18n: TranslatorRunner, db_session: AsyncSession):
     if not message.text or not message.from_user:
         return
 
     user_id = message.from_user.id
     download_task = await task_manager.add_task(
         user_id,
-        download_coro=process_soundcloud_url(message, config, i18n),
+        download_coro=process_soundcloud_url(message, config, i18n, db_session),
         message=message
     )
 
@@ -40,13 +41,13 @@ async def soundcloud_handler(message: Message, config: Config, i18n: TranslatorR
                 media_content = await download_task
                 if media_content:
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, service="soundcloud")
+                    await send_manager.send(message, media_content, service=\"soundcloud\", db_session=db_session)
             except Exception:
                 pass
         await task_manager.add_send_task(user_id, send_when_ready())
 
 
-async def process_soundcloud_url(message: Message, config: Config, i18n: TranslatorRunner):
+async def process_soundcloud_url(message: Message, config: Config, i18n: TranslatorRunner, db_session: AsyncSession):
     if not message.text:
         return None
 
@@ -74,9 +75,9 @@ async def process_soundcloud_url(message: Message, config: Config, i18n: Transla
         )
 
     if chat_id < 0:
-        settings = await get_chat_settings(chat_id)
+        settings = await get_chat_settings(db_session, chat_id)
     else:
-        settings = await get_user_settings(chat_id)
+        settings = await get_user_settings(db_session, chat_id)
 
     if media_metadata.media_type == "track":
         if not media_metadata.performer or not media_metadata.title:
@@ -93,7 +94,7 @@ async def process_soundcloud_url(message: Message, config: Config, i18n: Transla
             media_metadata
         )
 
-        await log_download_event(user.id, Services.SOUNDCLOUD, 'success')
+        await log_download_event(db_session, user.id, Services.SOUNDCLOUD, 'success')
         return track
 
     elif media_metadata.media_type == "album" or media_metadata.media_type == "playlist":
@@ -147,7 +148,7 @@ async def process_soundcloud_url(message: Message, config: Config, i18n: Transla
                     try:
                         track_content = await task
                         if track_content:
-                            await send_manager.send(message, track_content, skip_reaction=True, service="soundcloud")
+                            await send_manager.send(message, track_content, skip_reaction=True, service=\"soundcloud\", db_session=db_session)
                             return True
                         return False
                     except Exception:
@@ -155,5 +156,5 @@ async def process_soundcloud_url(message: Message, config: Config, i18n: Transla
 
                 await task_manager.add_send_task(user.id, send_track())
 
-        await log_download_event(user.id, Services.SOUNDCLOUD, 'success')
+        await log_download_event(db_session, user.id, Services.SOUNDCLOUD, 'success')
         return None

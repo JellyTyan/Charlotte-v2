@@ -2,6 +2,7 @@ import logging
 
 from aiogram import F
 from aiogram.types import Message
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.service_list import Services
 from modules.router import service_router as router
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 INSTAGRAM_REGEX = r"https?://(?:www\.)?instagram\.com/(?:p|reels?|tv)/[\w-]+/?"
 
 @router.message(F.text.regexp(INSTAGRAM_REGEX))
-async def instagram_handler(message: Message):
+async def instagram_handler(message: Message, db_session: AsyncSession):
     if not message.text or not message.from_user:
         return
 
@@ -26,7 +27,7 @@ async def instagram_handler(message: Message):
     # Start download task
     download_task = await task_manager.add_task(
         user_id,
-        download_coro=process_instagram_url(message),
+        download_coro=process_instagram_url(message, db_session),
         message=message
     )
 
@@ -37,7 +38,7 @@ async def instagram_handler(message: Message):
                 media_content = await download_task
                 if media_content:
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, service="instagram")
+                    await send_manager.send(message, media_content, service="instagram", db_session=db_session)
             except Exception:
                 # Error already logged in download task
                 pass
@@ -45,7 +46,7 @@ async def instagram_handler(message: Message):
         await task_manager.add_send_task(user_id, send_when_ready())
 
 
-async def process_instagram_url(message: Message):
+async def process_instagram_url(message: Message, db_session: AsyncSession):
     """Download Instagram media and return content"""
     if not message.bot or not message.text:
         return None
@@ -62,7 +63,7 @@ async def process_instagram_url(message: Message):
         media_content = await InstagramService(arq=arq).download(message.text)
 
         # Log success
-        await log_download_event(user_id, Services.INSTAGRAM, 'success')
+        await log_download_event(db_session, user_id, Services.INSTAGRAM, 'success')
 
         return media_content
 

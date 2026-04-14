@@ -29,7 +29,7 @@ async def cleanup_old_statistics():
         except Exception as e:
             logger.error(f"Failed to clean old statistics: {e}")
 
-
+# todo files 24+ hours cleanup
 def start_scheduled_tasks():
     """Start all scheduled background tasks"""
     asyncio.create_task(cleanup_old_statistics())

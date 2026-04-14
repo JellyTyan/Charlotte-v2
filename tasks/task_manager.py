@@ -99,6 +99,7 @@ class TaskManager:
         from core.config import Config
         from aiogram.enums import ParseMode
         from models.errors import ErrorCode
+        from storage.db import database_manager
 
         config = Config()
         hub = dp.workflow_data.get("_translator_hub")
@@ -108,8 +109,10 @@ class TaskManager:
 
         # Get user settings for locale
         from storage.db.crud import get_user_settings
-        settings = await get_user_settings(user_id)
-        lang = settings.profile.language if settings else "en"
+        async with database_manager.async_session() as session:
+            settings = await get_user_settings(session, user_id)
+            lang = settings.profile.language if settings else "en"
+        
         i18n = hub.get_translator_by_locale(lang)
 
         # Get error message
@@ -123,7 +126,8 @@ class TaskManager:
         if hasattr(exception, 'service') and exception.service:
             if hasattr(exception, 'is_logged') and exception.is_logged:
                 from utils.statistics_helper import log_download_event
-                await log_download_event(user_id, exception.service, 'failed')
+                async with database_manager.async_session() as session:
+                    await log_download_event(session, user_id, exception.service, 'failed')
 
         # Send to admin if critical
         if exception.critical and config.ADMIN_ID:

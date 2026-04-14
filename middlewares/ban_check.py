@@ -19,8 +19,9 @@ class BanCheckMiddleware(BaseMiddleware):
             if event.message and event.message.chat:
                 chat_id = event.message.chat.id
 
-        if user_id:
-            user = await get_user(user_id)
+        session = data.get("db_session")
+        if session and user_id:
+            user = await get_user(session, user_id)
             if user and user.is_banned:
                 if isinstance(event, CallbackQuery):
                     await event.answer("🚫 You are globally banned.", show_alert=True)
@@ -28,7 +29,7 @@ class BanCheckMiddleware(BaseMiddleware):
 
             # Check for group bans
             if chat_id and chat_id < 0:
-                chat_settings = await get_chat_settings(chat_id)
+                chat_settings = await get_chat_settings(session, chat_id)
                 if chat_settings and user_id in chat_settings.profile.banned_users:
                     if isinstance(event, CallbackQuery):
                         await event.answer("🚫 You are banned in this chat.", show_alert=True)

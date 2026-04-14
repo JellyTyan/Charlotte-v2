@@ -2,7 +2,7 @@
 
 import os
 from dataclasses import dataclass
-
+# todo pydantic settings
 @dataclass
 class Config:
     DATABASE_URL: str = os.getenv("DATABASE_URL", os.getenv("DB_URL", "sqlite:///charlotte.db"))

@@ -5,6 +5,7 @@ from aiogram.enums import ParseMode, parse_mode
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, PreCheckoutQuery, ContentType, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import Config
 from storage.db.crud import get_user
@@ -47,12 +48,12 @@ async def support_command(message: Message):
 
 
 @payment_router.callback_query(F.data == "view_supporters")
-async def view_supporters_callback(callback: CallbackQuery, bot: Bot):
+async def view_supporters_callback(callback: CallbackQuery, bot: Bot, db_session: AsyncSession):
     """Show list of supporters"""
     await callback.answer()
 
     from storage.db.crud import get_global_settings
-    settings = await get_global_settings()
+    settings = await get_global_settings(db_session)
     supporters = settings.get("supporters", [])
 
     if not supporters:
@@ -83,7 +84,7 @@ async def back_to_support_callback(callback: CallbackQuery):
 
 
 @payment_router.message(Command("add_supporter"))
-async def add_supporter_command(message: Message):
+async def add_supporter_command(message: Message, db_session: AsyncSession):
     """Admin command to add supporter to the list"""
     if message.from_user.id != Config.ADMIN_ID:
         return
@@ -96,7 +97,7 @@ async def add_supporter_command(message: Message):
     supporter_name = args[1].strip()
 
     from storage.db.crud import get_global_settings, update_global_settings
-    settings = await get_global_settings()
+    settings = await get_global_settings(db_session)
     supporters = settings.get("supporters", [])
 
     if supporter_name in supporters:
@@ -104,13 +105,13 @@ async def add_supporter_command(message: Message):
         return
 
     supporters.append(supporter_name)
-    await update_global_settings("supporters", supporters)
+    await update_global_settings(db_session, "supporters", supporters)
 
     await message.answer(f"✅ Added {supporter_name} to supporters list!")
 
 
 @payment_router.message(Command("remove_supporter"))
-async def remove_supporter_command(message: Message):
+async def remove_supporter_command(message: Message, db_session: AsyncSession):
     """Admin command to remove supporter from the list"""
     if message.from_user.id != Config.ADMIN_ID:
         return
@@ -123,7 +124,7 @@ async def remove_supporter_command(message: Message):
     supporter_name = args[1].strip()
 
     from storage.db.crud import get_global_settings, update_global_settings
-    settings = await get_global_settings()
+    settings = await get_global_settings(db_session)
     supporters = settings.get("supporters", [])
 
     if supporter_name not in supporters:
@@ -131,19 +132,19 @@ async def remove_supporter_command(message: Message):
         return
 
     supporters.remove(supporter_name)
-    await update_global_settings("supporters", supporters)
+    await update_global_settings(db_session, "supporters", supporters)
 
     await message.answer(f"✅ Removed {supporter_name} from supporters list!")
 
 
 @payment_router.message(Command("list_supporters"))
-async def list_supporters_command(message: Message):
+async def list_supporters_command(message: Message, db_session: AsyncSession):
     """Admin command to list all supporters"""
     if message.from_user.id != Config.ADMIN_ID:
         return
 
     from storage.db.crud import get_global_settings
-    settings = await get_global_settings()
+    settings = await get_global_settings(db_session)
     supporters = settings.get("supporters", [])
 
     if not supporters:
@@ -243,7 +244,7 @@ async def process_custom_amount(message: Message, bot: Bot, state: FSMContext):
 
 
 @payment_router.message(Command("refund"))
-async def refund_command(message: Message, bot: Bot):
+async def refund_command(message: Message, bot: Bot, db_session: AsyncSession):
     """Admin command to refund payment by transaction ID"""
     if message.from_user.id != Config.ADMIN_ID:
         return
@@ -255,8 +256,8 @@ async def refund_command(message: Message, bot: Bot):
 
     charge_id = args[1].strip()
 
-    from storage.db import get_payment_by_charge_id
-    payment = await get_payment_by_charge_id(charge_id)
+    from storage.db.crud import get_payment_by_charge_id, update_payment_status
+    payment = await get_payment_by_charge_id(db_session, charge_id)
 
     if not payment:
         await message.answer("❌ Payment not found")
@@ -272,8 +273,7 @@ async def refund_command(message: Message, bot: Bot):
             telegram_payment_charge_id=charge_id
         )
 
-        from storage.db import update_payment_status
-        await update_payment_status(charge_id, "refunded")
+        await update_payment_status(db_session, charge_id, "refunded")
 
         await message.answer(f"✅ Refunded {payment.amount} {payment.currency} to user {payment.user_id}")
     except Exception as e:
@@ -287,15 +287,16 @@ async def pre_checkout_handler(pre_checkout_query: PreCheckoutQuery):
 
 
 @payment_router.message(F.successful_payment)
-async def successful_payment_handler(message: Message, bot: Bot):
+async def successful_payment_handler(message: Message, bot: Bot, db_session: AsyncSession):
     payment = message.successful_payment
     payload = payment.invoice_payload
 
     logger.info(f"Successful payment: {payment.total_amount} {payment.currency} from {message.from_user.id}")
 
     # Log payment to database
-    from storage.db import create_payment_log
+    from storage.db.crud import create_payment_log, update_payment_status
     await create_payment_log(
+        session=db_session,
         user_id=message.from_user.id,
         amount=payment.total_amount,
         currency=payment.currency,
@@ -316,8 +317,7 @@ async def successful_payment_handler(message: Message, bot: Bot):
                     message.from_user.id,
                     telegram_payment_charge_id=payment.telegram_payment_charge_id
                 )
-                from storage.db import update_payment_status
-                await update_payment_status(payment.telegram_payment_charge_id, "refunded")
+                await update_payment_status(db_session, payment.telegram_payment_charge_id, "refunded")
                 return
 
             _, url_hash, format_choice = parts
@@ -330,8 +330,7 @@ async def successful_payment_handler(message: Message, bot: Bot):
                     message.from_user.id,
                     telegram_payment_charge_id=payment.telegram_payment_charge_id
                 )
-                from storage.db import update_payment_status
-                await update_payment_status(payment.telegram_payment_charge_id, "refunded")
+                await update_payment_status(db_session, payment.telegram_payment_charge_id, "refunded")
                 return
 
             url = get_url(url_hash)
@@ -342,8 +341,7 @@ async def successful_payment_handler(message: Message, bot: Bot):
                     message.from_user.id,
                     telegram_payment_charge_id=payment.telegram_payment_charge_id
                 )
-                from storage.db import update_payment_status
-                await update_payment_status(payment.telegram_payment_charge_id, "refunded")
+                await update_payment_status(db_session, payment.telegram_payment_charge_id, "refunded")
                 return
 
             await message.answer("✅ Thank you for supporting Charlotte! Starting download...")
@@ -371,8 +369,7 @@ async def successful_payment_handler(message: Message, bot: Bot):
                     message.from_user.id,
                     telegram_payment_charge_id=payment.telegram_payment_charge_id
                 )
-                from storage.db import update_payment_status
-                await update_payment_status(payment.telegram_payment_charge_id, "refunded")
+                await update_payment_status(db_session, payment.telegram_payment_charge_id, "refunded")
             except Exception as refund_error:
                 logger.error(f"Refund failed: {refund_error}")
 

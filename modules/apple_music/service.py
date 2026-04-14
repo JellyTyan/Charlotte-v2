@@ -1,9 +1,10 @@
 import re
 from typing import List, Optional
-import os
 from pathlib import Path
 import logging
 import pathlib
+import asyncio
+import os
 
 from aiofiles import os as aios
 
@@ -165,38 +166,22 @@ class AppleMusicService(BaseService):
                 logger.error(f"Tidal download failed: {e}. Falling back to standard method.")
 
             if tidal_downloaded_path and tidal_item:
-                # Download covers
-                cover_path = None
-                full_cover_path = None
                 base_path = os.path.join(self.output_path, pathlib.Path(tidal_downloaded_path).stem)
+                full_cover_path = f"{base_path}_full.png"
+                cover_path = f"{base_path}.jpg"
 
                 # 1. Download standard cover (for Telegram preview & embedding)
+                download_tasks = []
                 if cover_url:
-                    try:
-                        cover_path = f"{base_path}.jpg"
-                        job = await self.arq.enqueue_job("universal_download", cover_url, cover_path)
-                        try:
-                            await job.result()
-                        except Exception as e:
-                            logger.warning(f"Failed to download Tidal cover: {e}")
-                            cover_path = None
-                    except Exception as e:
-                        logger.warning(f"Failed to download cover: {e}")
-                        cover_path = None
+                    download_tasks.append(
+                        await self.arq.enqueue_job("universal_download", cover_url, cover_path))
 
                 # 2. Download full cover (for sending as document)
                 if full_cover_url:
-                    try:
-                        full_cover_path = f"{base_path}_full.png"
-                        job = await self.arq.enqueue_job("universal_download", full_cover_url, full_cover_path)
-                        try:
-                            await job.result()
-                        except Exception as e:
-                            logger.warning(f"Failed to download Tidal full cover: {e}")
-                            full_cover_path = None
-                    except Exception as e:
-                        logger.warning(f"Failed to download full cover: {e}")
-                        full_cover_path = None
+                    download_tasks.append(
+                        await self.arq.enqueue_job("universal_download", full_cover_url, full_cover_path))
+
+                results = await asyncio.gather(*[job.result() for job in download_tasks])
 
                 # 3. Update Metadata
                 try:
@@ -274,40 +259,22 @@ class AppleMusicService(BaseService):
             logger.debug(f"Audio path: {audio_path}")
 
             # Download cover (prefer provided cover over YouTube thumbnail)
-            cover_path = None
-            full_cover_path = None
+            full_cover_path = f"{base_path}_full.png"
+            cover_path = f"{base_path}.jpg"
 
             if not cover_url:
                 cover_url = info_dict.get("thumbnail")
 
+            download_tasks = []
             if cover_url:
-                try:
-                    cover_path = f"{base_path}.jpg"
-                    logger.debug(f"Downloading cover: {cover_url}")
-                    job = await self.arq.enqueue_job("universal_download", cover_url, cover_path)
-                    try:
-                        await job.result()
-                    except Exception as e:
-                        logger.warning(f"Failed to download cover from YouTube fallback: {e}")
-                        cover_path = None
-                except Exception as e:
-                    logger.warning(f"Failed to download cover: {e}")
-                    cover_path = None
+                download_tasks.append(
+                    await self.arq.enqueue_job("universal_download", cover_url, cover_path))
 
-            # Download full size cover if available
             if full_cover_url:
-                try:
-                    full_cover_path = f"{base_path}_full.png"
-                    logger.debug(f"Downloading full cover: {full_cover_url}")
-                    job = await self.arq.enqueue_job("universal_download", full_cover_url, full_cover_path)
-                    try:
-                        await job.result()
-                    except Exception as e:
-                        logger.warning(f"Failed to download full cover from Apple Music: {e}")
-                        full_cover_path = None
-                except Exception as e:
-                    logger.warning(f"Failed to download full cover: {e}")
-                    full_cover_path = None
+                download_tasks.append(
+                    await self.arq.enqueue_job("universal_download", full_cover_url, full_cover_path))
+
+            results = await asyncio.gather(*[job.result() for job in download_tasks])
 
             logger.debug("Updating metadata")
             job = await self.arq.enqueue_job(

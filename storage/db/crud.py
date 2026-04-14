@@ -4,7 +4,9 @@ import json
 from datetime import date
 
 from sqlalchemy import select, update, func, desc, or_
-from .models import Users, Chats, Statistics, BotSetting, Payment
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from .models import Users, Chats, Statistics, BotSetting
 from storage.cache.redis_client import cache_get, cache_set, cache_delete, orm_to_dict, dict_to_orm
 from models.settings import UserSettingsJson, ChatSettingsJson
 
@@ -14,10 +16,11 @@ def _get_db():
     return database_manager
 
 
-async def get_user(user_id: int) -> Users | None:
+async def get_user(session: AsyncSession, user_id: int) -> Users | None:
     """Get user from database
 
     Args:
+        session (AsyncSession): Database session
         user_id (int): User ID
 
     Returns:
@@ -28,42 +31,42 @@ async def get_user(user_id: int) -> Users | None:
     if cached:
         return dict_to_orm(Users, cached)
 
-    async with _get_db().async_session() as session:
-        result = await session.execute(select(Users).where(Users.user_id == user_id))
-        user = result.scalar_one_or_none()
-        if user:
-            await cache_set(cache_key, orm_to_dict(user), ttl=3600)
-        return user
+    result = await session.execute(select(Users).where(Users.user_id == user_id))
+    user = result.scalar_one_or_none()
+    if user:
+        await cache_set(cache_key, orm_to_dict(user), ttl=3600)
+    return user
 
-async def create_user(user_id: int) -> Users | None:
+async def create_user(session: AsyncSession, user_id: int) -> Users | None:
     """Create user in database
 
     Args:
+        session (AsyncSession): Database session
         user_id (int): User ID
     """
     try:
-        async with _get_db().async_session() as session:
-            stmt = select(Users).where(Users.user_id == user_id)
-            result = await session.execute(stmt)
-            existing_user = result.scalar_one_or_none()
+        stmt = select(Users).where(Users.user_id == user_id)
+        result = await session.execute(stmt)
+        existing_user = result.scalar_one_or_none()
 
-            if existing_user:
-                return existing_user
+        if existing_user:
+            return existing_user
 
-            user = Users(user_id=user_id)
-            session.add_all([user])
-            await session.commit()
+        user = Users(user_id=user_id)
+        session.add_all([user])
+        await session.commit()
 
-            await cache_set(f"user:{user_id}", orm_to_dict(user), ttl=3600)
-            return user
+        await cache_set(f"user:{user_id}", orm_to_dict(user), ttl=3600)
+        return user
     except Exception as e:
         logging.error(e)
         return None
 
-async def get_user_settings(user_id: int) -> UserSettingsJson:
+async def get_user_settings(session: AsyncSession, user_id: int) -> UserSettingsJson:
     """Get user settings from database
 
     Args:
+        session (AsyncSession): Database session
         user_id (int): User ID
 
     Returns:
@@ -74,40 +77,38 @@ async def get_user_settings(user_id: int) -> UserSettingsJson:
     if cached:
         return UserSettingsJson.model_validate(cached)
 
-    async with _get_db().async_session() as session:
-        result = await session.execute(select(Users.settings_json).where(Users.user_id == user_id))
-        settings = result.scalar_one_or_none()
-        if settings:
-            await cache_set(cache_key, settings, ttl=3600)
-            return UserSettingsJson.model_validate(settings)
-        else:
-            return UserSettingsJson.model_validate({})
+    result = await session.execute(select(Users.settings_json).where(Users.user_id == user_id))
+    settings = result.scalar_one_or_none()
+    if settings:
+        await cache_set(cache_key, settings, ttl=3600)
+        return UserSettingsJson.model_validate(settings)
+    else:
+        return UserSettingsJson.model_validate({})
 
-async def update_user_premium(user_id: int, is_premium: bool, premium_ends: date):
-    async with _get_db().async_session() as session:
-        await session.execute(
-            update(Users)
-            .where(Users.user_id == user_id)
-            .values(is_premium=is_premium, premium_ends=premium_ends)
-        )
-        await session.commit()
+async def update_user_premium(session: AsyncSession, user_id: int, is_premium: bool, premium_ends: date):
+    await session.execute(
+        update(Users)
+        .where(Users.user_id == user_id)
+        .values(is_premium=is_premium, premium_ends=premium_ends)
+    )
+    await session.commit()
     await cache_delete(f"user:{user_id}")
 
-async def update_user_settings(user_id: int, settings: UserSettingsJson):
-    async with _get_db().async_session() as session:
-        await session.execute(
-            update(Users)
-            .where(Users.user_id == user_id)
-            .values(settings_json=settings.model_dump(mode="json"))
-        )
-        await session.commit()
+async def update_user_settings(session: AsyncSession, user_id: int, settings: UserSettingsJson):
+    await session.execute(
+        update(Users)
+        .where(Users.user_id == user_id)
+        .values(settings_json=settings.model_dump(mode="json"))
+    )
+    await session.commit()
     await cache_delete(f"user_settings:{user_id}")
 
 
-async def get_chat(chat_id: int) -> Chats | None:
+async def get_chat(session: AsyncSession, chat_id: int) -> Chats | None:
     """Get chat from database
 
     Args:
+        session (AsyncSession): Database session
         chat_id (int): User ID
 
     Returns:
@@ -118,43 +119,43 @@ async def get_chat(chat_id: int) -> Chats | None:
     if cached:
         return dict_to_orm(Chats, cached)
 
-    async with _get_db().async_session() as session:
-        result = await session.execute(select(Chats).where(Chats.chat_id == chat_id))
-        chat = result.scalar_one_or_none()
-        if chat:
-            await cache_set(cache_key, orm_to_dict(chat), ttl=3600)
-        return chat
+    result = await session.execute(select(Chats).where(Chats.chat_id == chat_id))
+    chat = result.scalar_one_or_none()
+    if chat:
+        await cache_set(cache_key, orm_to_dict(chat), ttl=3600)
+    return chat
 
-async def create_chat(chat_id: int, owner_id: int) -> Chats | None:
+async def create_chat(session: AsyncSession, chat_id: int, owner_id: int) -> Chats | None:
     """Create chat in database
 
     Args:
+        session (AsyncSession): Database session
         chat_id (int): Chat ID
         owner_id (int): User ID
     """
     try:
-        async with _get_db().async_session() as session:
-            stmt = select(Chats).where(Chats.chat_id == chat_id)
-            result = await session.execute(stmt)
-            existing_chat = result.scalar_one_or_none()
+        stmt = select(Chats).where(Chats.chat_id == chat_id)
+        result = await session.execute(stmt)
+        existing_chat = result.scalar_one_or_none()
 
-            if existing_chat:
-                return existing_chat
+        if existing_chat:
+            return existing_chat
 
-            chat = Chats(chat_id=chat_id, owner_id=owner_id)
-            session.add_all([chat])
-            await session.commit()
+        chat = Chats(chat_id=chat_id, owner_id=owner_id)
+        session.add_all([chat])
+        await session.commit()
 
-            await cache_set(f"chat:{chat_id}", orm_to_dict(chat), ttl=3600)
-            return chat
+        await cache_set(f"chat:{chat_id}", orm_to_dict(chat), ttl=3600)
+        return chat
     except Exception as e:
         logging.error(f"Error creating chat {chat_id}: {e}")
         return None
 
-async def get_chat_settings(chat_id: int) -> ChatSettingsJson:
+async def get_chat_settings(session: AsyncSession, chat_id: int) -> ChatSettingsJson:
     """Get chat settings from database
 
     Args:
+        session (AsyncSession): Database session
         chat_id (int): Chat ID
 
     Returns:
@@ -165,187 +166,175 @@ async def get_chat_settings(chat_id: int) -> ChatSettingsJson:
     if cached:
         return ChatSettingsJson.model_validate(cached)
 
-    async with _get_db().async_session() as session:
-        result = await session.execute(select(Chats.settings_json).where(Chats.chat_id == chat_id))
-        settings = result.scalar_one_or_none()
-        if settings is not None:
-            await cache_set(cache_key, settings, ttl=3600)
-            return ChatSettingsJson.model_validate(settings)
-        else:
-            return ChatSettingsJson.model_validate({})
+    result = await session.execute(select(Chats.settings_json).where(Chats.chat_id == chat_id))
+    settings = result.scalar_one_or_none()
+    if settings is not None:
+        await cache_set(cache_key, settings, ttl=3600)
+        return ChatSettingsJson.model_validate(settings)
+    else:
+        return ChatSettingsJson.model_validate({})
 
-async def update_chat_settings(chat_id: int, settings: ChatSettingsJson):
+async def update_chat_settings(session: AsyncSession, chat_id: int, settings: ChatSettingsJson):
     settings_dict = settings.model_dump(mode="json")
-    async with _get_db().async_session() as session:
-        result = await session.execute(
-            update(Chats)
-            .where(Chats.chat_id == chat_id)
-            .values(settings_json=settings_dict)
-        )
-        await session.commit()
+    await session.execute(
+        update(Chats)
+        .where(Chats.chat_id == chat_id)
+        .values(settings_json=settings_dict)
+    )
+    await session.commit()
     await cache_delete(f"chat_settings:{chat_id}")
 
 
-async def create_usage_log(user_id: int, service_name: str, event_type: str, status: str) -> Statistics | None:
-    async with _get_db().async_session() as session:
-        statistics = Statistics(service_name=service_name, user_id=user_id, event_type=event_type, status=status)
-        session.add_all([statistics])
-        await session.commit()
-        return statistics
+async def create_usage_log(session: AsyncSession, user_id: int, service_name: str, event_type: str, status: str) -> Statistics | None:
+    statistics = Statistics(service_name=service_name, user_id=user_id, event_type=event_type, status=status)
+    session.add_all([statistics])
+    await session.commit()
+    return statistics
 
 
-async def create_payment_log(user_id: int, amount: int, currency: str, payload: str,
+async def create_payment_log(session: AsyncSession, user_id: int, amount: int, currency: str, payload: str,
                             telegram_payment_charge_id: str, provider_payment_charge_id: str = None):
     from .models import Payment
-    async with _get_db().async_session() as session:
-        payment = Payment(
-            user_id=user_id,
-            amount=amount,
-            currency=currency,
-            payload=payload,
-            telegram_payment_charge_id=telegram_payment_charge_id,
-            provider_payment_charge_id=provider_payment_charge_id
-        )
-        session.add(payment)
-        await session.commit()
-        return payment
+    payment = Payment(
+        user_id=user_id,
+        amount=amount,
+        currency=currency,
+        payload=payload,
+        telegram_payment_charge_id=telegram_payment_charge_id,
+        provider_payment_charge_id=provider_payment_charge_id
+    )
+    session.add(payment)
+    await session.commit()
+    return payment
 
 
-async def update_payment_status(telegram_payment_charge_id: str, status: str):
+async def update_payment_status(session: AsyncSession, telegram_payment_charge_id: str, status: str):
     from .models import Payment
-    async with _get_db().async_session() as session:
-        await session.execute(
-            update(Payment)
-            .where(Payment.telegram_payment_charge_id == telegram_payment_charge_id)
-            .values(status=status)
-        )
-        await session.commit()
+    await session.execute(
+        update(Payment)
+        .where(Payment.telegram_payment_charge_id == telegram_payment_charge_id)
+        .values(status=status)
+    )
+    await session.commit()
 
 
-async def get_last_payment(user_id: int):
+async def get_last_payment(session: AsyncSession, user_id: int):
     from .models import Payment
-    async with _get_db().async_session() as session:
-        result = await session.execute(
-            select(Payment)
-            .where(Payment.user_id == user_id)
-            .order_by(desc(Payment.created_at))
-            .limit(1)
-        )
-        return result.scalar_one_or_none()
+    result = await session.execute(
+        select(Payment)
+        .where(Payment.user_id == user_id)
+        .order_by(desc(Payment.created_at))
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
 
 
-async def get_payment_by_charge_id(telegram_payment_charge_id: str):
+async def get_payment_by_charge_id(session: AsyncSession, telegram_payment_charge_id: str):
     from .models import Payment
-    async with _get_db().async_session() as session:
-        result = await session.execute(
-            select(Payment)
-            .where(Payment.telegram_payment_charge_id == telegram_payment_charge_id)
-        )
-        return result.scalar_one_or_none()
+    result = await session.execute(
+        select(Payment)
+        .where(Payment.telegram_payment_charge_id == telegram_payment_charge_id)
+    )
+    return result.scalar_one_or_none()
 
 
-async def get_user_counts():
+async def get_user_counts(session: AsyncSession):
     now = datetime.datetime.now(datetime.timezone.utc)
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
     yesterday = today - datetime.timedelta(days=1)
     week_ago = now - datetime.timedelta(days=7)
     month_ago = now - datetime.timedelta(days=30)
 
-    async with _get_db().async_session() as session:
-        results = {}
+    results = {}
 
-        # Сегодня
-        res = await session.execute(
-            select(func.count(func.distinct(Statistics.user_id)))
-            .where(Statistics.event_time >= today)
-        )
-        results["today"] = res.scalar()
+    # Сегодня
+    res = await session.execute(
+        select(func.count(func.distinct(Statistics.user_id)))
+        .where(Statistics.event_time >= today)
+    )
+    results["today"] = res.scalar()
 
-        # Вчера
-        res = await session.execute(
-            select(func.count(func.distinct(Statistics.user_id)))
-            .where(Statistics.event_time.between(yesterday, today - datetime.timedelta(microseconds=1)))
-        )
-        results["yesterday"] = res.scalar()
+    # Вчера
+    res = await session.execute(
+        select(func.count(func.distinct(Statistics.user_id)))
+        .where(Statistics.event_time.between(yesterday, today - datetime.timedelta(microseconds=1)))
+    )
+    results["yesterday"] = res.scalar()
 
-        # За неделю
-        res = await session.execute(
-            select(func.count(func.distinct(Statistics.user_id)))
-            .where(Statistics.event_time >= week_ago)
-        )
-        results["week"] = res.scalar()
+    # За неделю
+    res = await session.execute(
+        select(func.count(func.distinct(Statistics.user_id)))
+        .where(Statistics.event_time >= week_ago)
+    )
+    results["week"] = res.scalar()
 
-        # За месяц
-        res = await session.execute(
-            select(func.count(func.distinct(Statistics.user_id)))
-            .where(Statistics.event_time >= month_ago)
-        )
-        results["month"] = res.scalar()
+    # За месяц
+    res = await session.execute(
+        select(func.count(func.distinct(Statistics.user_id)))
+        .where(Statistics.event_time >= month_ago)
+    )
+    results["month"] = res.scalar()
 
     return results
 
 
-async def get_top_services(limit: int = 10):
-    async with _get_db().async_session() as session:
-        query = (
-            select(
-                Statistics.service_name,
-                func.count().label("usage_count")
-            )
-            .group_by(Statistics.service_name)
-            .order_by(desc("usage_count"))
-            .limit(limit)
+async def get_top_services(session: AsyncSession, limit: int = 10):
+    query = (
+        select(
+            Statistics.service_name,
+            func.count().label("usage_count")
         )
-        result = await session.execute(query)
-        return result.all()
+        .group_by(Statistics.service_name)
+        .order_by(desc("usage_count"))
+        .limit(limit)
+    )
+    result = await session.execute(query)
+    return result.all()
 
 
-async def get_status_stats():
-    async with _get_db().async_session() as session:
-        query = select(
-            func.count().filter(Statistics.status == "success").label("complete_count"),
-            func.count().filter(Statistics.status == "failed").label("error_count")
+async def get_status_stats(session: AsyncSession):
+    query = select(
+        func.count().filter(Statistics.status == "success").label("complete_count"),
+        func.count().filter(Statistics.status == "failed").label("error_count")
+    )
+    result = await session.execute(query)
+    complete_count, error_count = result.one()
+    return {
+        "complete": complete_count,
+        "error": error_count
+    }
+
+async def get_premium_events_by_user(session: AsyncSession, user_id: int):
+    query = (
+        select(Statistics)
+        .where(
+            Statistics.user_id == user_id,
+            Statistics.event_type.in_(["buy_premium", "refund_premium"])
         )
-        result = await session.execute(query)
-        complete_count, error_count = result.one()
-        return {
-            "complete": complete_count,
-            "error": error_count
-        }
+        .order_by(Statistics.event_time.desc())
+    )
+    result = await session.execute(query)
+    return result.scalars().all()
 
-async def get_premium_events_by_user(user_id: int):
-    async with _get_db().async_session() as session:
-        query = (
-            select(Statistics)
-            .where(
-                Statistics.user_id == user_id,
-                Statistics.event_type.in_(["buy_premium", "refund_premium"])
-            )
-            .order_by(Statistics.event_time.desc())
-        )
-        result = await session.execute(query)
-        return result.scalars().all()
+async def get_premium_and_donation_stats(session: AsyncSession) -> dict:
+    stmt = select(
+        func.count().filter(or_(Users.is_premium == True, Users.is_lifetime_premium == True)).label("premium_count"),
+        func.sum(Users.stars_donated).label("total_stars")
+    )
 
-async def get_premium_and_donation_stats() -> dict:
-    async with _get_db().async_session() as session:
-        stmt = select(
-            func.count().filter(or_(Users.is_premium == True, Users.is_lifetime_premium == True)).label("premium_count"),
-            func.sum(Users.stars_donated).label("total_stars")
-        )
-
-        result = await session.execute(stmt)
-        row = result.one()
+    result = await session.execute(stmt)
+    row = result.one()
 
     return {
         "total_premium_users": row.premium_count or 0,
         "total_stars_donated": row.total_stars or 0
     }
 
-async def check_if_user_premium(user_id: int) -> bool:
-    user = await get_user(user_id=user_id)
+async def check_if_user_premium(session: AsyncSession, user_id: int) -> bool:
+    user = await get_user(session=session, user_id=user_id)
     if user is None:
-        await create_user(user_id)
-        user = await get_user(user_id=user_id)
+        await create_user(session=session, user_id=user_id)
+        user = await get_user(session=session, user_id=user_id)
 
     if not user:
         return False
@@ -363,88 +352,83 @@ async def check_if_user_premium(user_id: int) -> bool:
 
     return False
 
-async def toggle_lifetime_premium(user_id: int) -> bool | None:
+async def toggle_lifetime_premium(session: AsyncSession, user_id: int) -> bool | None:
     """
     Determines the file type by its extension.
 
     :param user_id: User id
+    :param session: AsyncSession
     :return: bool: True when toggled on premium, False when toggled off premium. None when some error occurs.
     """
-    user = await get_user(user_id=user_id)
+    user = await get_user(session=session, user_id=user_id)
     if user is None:
-        await create_user(user_id)
-        user = await get_user(user_id=user_id)
+        await create_user(session=session, user_id=user_id)
+        user = await get_user(session=session, user_id=user_id)
 
     if not user:
         return None
 
     if user.is_premium:
-        async with _get_db().async_session() as session:
-            await session.execute(
-                update(Users)
-                .where(Users.user_id == user_id)
-                .values(is_premium=False, is_lifetime_premium=False)
-            )
-            await session.commit()
+        await session.execute(
+            update(Users)
+            .where(Users.user_id == user_id)
+            .values(is_premium=False, is_lifetime_premium=False)
+        )
+        await session.commit()
         await cache_delete(f"user:{user_id}")
         return False
     elif not user.is_premium:
-        async with _get_db().async_session() as session:
-            await session.execute(
-                update(Users)
-                .where(Users.user_id == user_id)
-                .values(is_premium=True, is_lifetime_premium=True)
-            )
-            await session.commit()
+        await session.execute(
+            update(Users)
+            .where(Users.user_id == user_id)
+            .values(is_premium=True, is_lifetime_premium=True)
+        )
+        await session.commit()
         await cache_delete(f"user:{user_id}")
         return True
     return None
 
-async def ban_user(user_id: int) -> None:
-    user = await get_user(user_id=user_id)
+async def ban_user(session: AsyncSession, user_id: int) -> None:
+    user = await get_user(session=session, user_id=user_id)
     if user is None:
-        await create_user(user_id=user_id)
-        user = await get_user(user_id=user_id)
+        await create_user(session=session, user_id=user_id)
+        user = await get_user(session=session, user_id=user_id)
 
     if not user:
         return
 
-    async with _get_db().async_session() as session:
-        user.is_banned = True
-        session.add(user)
-        await session.commit()
+    user.is_banned = True
+    session.add(user)
+    await session.commit()
     await cache_delete(f"user:{user_id}")
 
-async def unban_user(user_id: int) -> None:
-    user = await get_user(user_id=user_id)
+async def unban_user(session: AsyncSession, user_id: int) -> None:
+    user = await get_user(session=session, user_id=user_id)
     if user is None:
-        await create_user(user_id=user_id)
-        user = await get_user(user_id=user_id)
+        await create_user(session=session, user_id=user_id)
+        user = await get_user(session=session, user_id=user_id)
 
     if not user:
         return
 
-    async with _get_db().async_session() as session:
-        user.is_banned = False
-        session.add(user)
-        await session.commit()
+    user.is_banned = False
+    session.add(user)
+    await session.commit()
     await cache_delete(f"user:{user_id}")
 
-async def list_of_banned_users() -> list[Users]:
-    async with _get_db().async_session() as session:
-        stmt = select(Users).where(Users.is_banned == True)
-        result = await session.execute(stmt)
-        return list(result.scalars().all())
+async def list_of_banned_users(session: AsyncSession) -> list[Users]:
+    stmt = select(Users).where(Users.is_banned == True)
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
 
-async def get_global_settings() -> dict:
+async def get_global_settings(session: AsyncSession) -> dict:
     cached = await cache_get("global_settings")
     if cached:
         return cached
 
-    async with _get_db().async_session() as session:
-        stmt = select(BotSetting)
-        result = await session.execute(stmt)
-        settings = result.scalars().all()
+    stmt = select(BotSetting)
+    result = await session.execute(stmt)
+    settings = result.scalars().all()
 
     data = {}
     for s in settings:
@@ -458,28 +442,27 @@ async def get_global_settings() -> dict:
     return data
 
 
-async def update_global_settings(key: str, value) -> None:
+async def update_global_settings(session: AsyncSession, key: str, value) -> None:
     """value может быть str, list, dict — автоматически сериализуем"""
     if not isinstance(value, str):
         value = json.dumps(value)
 
-    async with _get_db().async_session() as session:
-        stmt = select(BotSetting).where(BotSetting.key == key)
-        result = await session.execute(stmt)
-        setting = result.scalars().first()
+    stmt = select(BotSetting).where(BotSetting.key == key)
+    result = await session.execute(stmt)
+    setting = result.scalars().first()
 
-        if setting:
-            setting.value = value
-        else:
-            setting = BotSetting(key=key, value=value)
-            session.add(setting)
+    if setting:
+        setting.value = value
+    else:
+        setting = BotSetting(key=key, value=value)
+        session.add(setting)
 
-        await session.commit()
+    await session.commit()
 
     await cache_delete("global_settings")
 
 
-async def get_db_overview_stats() -> dict:
+async def get_db_overview_stats(session: AsyncSession) -> dict:
     """
     Returns total counts of users and chats in the database,
     along with the count of inactive ones (no activity in the last 30 days).
@@ -488,21 +471,20 @@ async def get_db_overview_stats() -> dict:
     now = datetime.datetime.now(datetime.timezone.utc)
     month_ago = now - datetime.timedelta(days=30)
 
-    async with _get_db().async_session() as session:
-        # Total users & chats
-        res = await session.execute(select(func.count()).select_from(Users))
-        total_users = res.scalar() or 0
+    # Total users & chats
+    res = await session.execute(select(func.count()).select_from(Users))
+    total_users = res.scalar() or 0
 
-        res = await session.execute(select(func.count()).select_from(Chats))
-        total_chats = res.scalar() or 0
+    res = await session.execute(select(func.count()).select_from(Chats))
+    total_chats = res.scalar() or 0
 
-        # Active users: distinct user_ids in Statistics for last 30 days
-        res = await session.execute(
-            select(func.count(func.distinct(Statistics.user_id)))
-            .where(Statistics.event_time >= month_ago)
-        )
-        active_users = res.scalar() or 0
-        inactive_users = max(total_users - active_users, 0)
+    # Active users: distinct user_ids in Statistics for last 30 days
+    res = await session.execute(
+        select(func.count(func.distinct(Statistics.user_id)))
+        .where(Statistics.event_time >= month_ago)
+    )
+    active_users = res.scalar() or 0
+    inactive_users = max(total_users - active_users, 0)
 
     return {
         "total_users": total_users,
@@ -511,44 +493,41 @@ async def get_db_overview_stats() -> dict:
     }
 
 
-async def get_list_user_ids() -> list[int]:
-    async with _get_db().async_session() as session:
-        stmt = select(Users.user_id).where(Users.is_banned == False)
-        result = await session.execute(stmt)
-        return [row[0] for row in result.fetchall()]
+async def get_list_user_ids(session: AsyncSession) -> list[int]:
+    stmt = select(Users.user_id).where(Users.is_banned == False)
+    result = await session.execute(stmt)
+    return [row[0] for row in result.fetchall()]
 
-async def get_news_subscribers_ids() -> list[int]:
-    async with _get_db().async_session() as session:
-        # Get users who are not banned
-        stmt_users = select(Users.user_id, Users.settings_json).where(Users.is_banned == False)
-        result_users = await session.execute(stmt_users)
-        users = result_users.fetchall()
+async def get_news_subscribers_ids(session: AsyncSession) -> list[int]:
+    # Get users who are not banned
+    stmt_users = select(Users.user_id, Users.settings_json).where(Users.is_banned == False)
+    result_users = await session.execute(stmt_users)
+    users = result_users.fetchall()
 
-        # Get all chats
-        stmt_chats = select(Chats.chat_id, Chats.settings_json)
-        result_chats = await session.execute(stmt_chats)
-        chats = result_chats.fetchall()
+    # Get all chats
+    stmt_chats = select(Chats.chat_id, Chats.settings_json)
+    result_chats = await session.execute(stmt_chats)
+    chats = result_chats.fetchall()
 
-        subscriber_ids = []
+    subscriber_ids = []
 
-        for user_id, settings_json in users:
-            settings_dict = settings_json if isinstance(settings_json, dict) else {}
-            profile = settings_dict.get('profile', {})
-            news_spam = profile.get('news_spam', False)  # defaults to False
-            if news_spam:
-                subscriber_ids.append(user_id)
+    for user_id, settings_json in users:
+        settings_dict = settings_json if isinstance(settings_json, dict) else {}
+        profile = settings_dict.get('profile', {})
+        news_spam = profile.get('news_spam', False)  # defaults to False
+        if news_spam:
+            subscriber_ids.append(user_id)
 
-        for chat_id, settings_json in chats:
-            settings_dict = settings_json if isinstance(settings_json, dict) else {}
-            profile = settings_dict.get('profile', {})
-            news_spam = profile.get('news_spam', False)  # defaults to False
-            if news_spam:
-                subscriber_ids.append(chat_id)
+    for chat_id, settings_json in chats:
+        settings_dict = settings_json if isinstance(settings_json, dict) else {}
+        profile = settings_dict.get('profile', {})
+        news_spam = profile.get('news_spam', False)  # defaults to False
+        if news_spam:
+            subscriber_ids.append(chat_id)
 
-        return subscriber_ids
+    return subscriber_ids
 
-async def get_all_chat_ids() -> list[int]:
-    async with _get_db().async_session() as session:
-        stmt = select(Chats.chat_id)
-        result = await session.execute(stmt)
-        return [row[0] for row in result.fetchall()]
+async def get_all_chat_ids(session: AsyncSession) -> list[int]:
+    stmt = select(Chats.chat_id)
+    result = await session.execute(stmt)
+    return [row[0] for row in result.fetchall()]

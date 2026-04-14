@@ -17,6 +17,7 @@ from aiogram.types import (
     ReplyKeyboardRemove
 )
 from aiogram.exceptions import TelegramRetryAfter, TelegramForbiddenError, TelegramBadRequest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from storage.db.crud import (
     get_user_counts,
@@ -124,7 +125,7 @@ async def settings_back(callback: CallbackQuery, state: FSMContext):
 
 # === Statistic ===
 @dp.callback_query(lambda c: c.data == "admin_panel_statistic")
-async def admin_panel_stats(callback: CallbackQuery, state: FSMContext):
+async def admin_panel_stats(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession):
     config: Optional[Config] = dp.workflow_data.get("config")
     if not config:
         return
@@ -139,9 +140,9 @@ async def admin_panel_stats(callback: CallbackQuery, state: FSMContext):
 
     await state.update_data(current_admin_screen="statistics")
 
-    user_count = await get_user_counts()
-    status_stats = await get_status_stats()
-    db_overview = await get_db_overview_stats()
+    user_count = await get_user_counts(db_session)
+    status_stats = await get_status_stats(db_session)
+    db_overview = await get_db_overview_stats(db_session)
 
     total_requests = status_stats['complete'] + status_stats['error']
     success_rate = (status_stats['complete'] / total_requests * 100) if total_requests > 0 else 0
@@ -181,7 +182,7 @@ async def admin_panel_stats(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data == "statistic_top_services")
-async def admin_panel_top_services(callback: CallbackQuery, state: FSMContext):
+async def admin_panel_top_services(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession):
     config: Optional[Config] = dp.workflow_data.get("config")
     if not config:
         return
@@ -197,7 +198,7 @@ async def admin_panel_top_services(callback: CallbackQuery, state: FSMContext):
     await state.update_data(current_admin_screen="top_services")
 
     text = "🏆 <b>Top Services (All Time)</b>\n\n"
-    top_services = await get_top_services()
+    top_services = await get_top_services(db_session)
 
     medals = ["🥇", "🥈", "🥉"]
     for idx, (service, count) in enumerate(top_services):
@@ -218,7 +219,7 @@ async def admin_panel_top_services(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data == "statistic_premium_stats")
-async def admin_panel_prem_stats(callback: CallbackQuery, state: FSMContext):
+async def admin_panel_prem_stats(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession):
     config: Optional[Config] = dp.workflow_data.get("config")
     if not config:
         return
@@ -233,7 +234,7 @@ async def admin_panel_prem_stats(callback: CallbackQuery, state: FSMContext):
 
     await state.update_data(current_admin_screen="premium_stats")
 
-    stats = await get_premium_and_donation_stats()
+    stats = await get_premium_and_donation_stats(db_session)
     text = (
         "⭐ <b>Premium Statistics</b>\n\n"
         f"👑 Total premium users: {stats['total_premium_users']}\n"
@@ -289,7 +290,7 @@ async def admin_panel_premium(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data == "admin_panel_toggle_premium")
-async def admin_toggle_premium(callback: CallbackQuery, state: FSMContext):
+async def admin_toggle_premium(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession):
     config: Optional[Config] = dp.workflow_data.get("config")
     if not config:
         return
@@ -303,7 +304,7 @@ async def admin_toggle_premium(callback: CallbackQuery, state: FSMContext):
         ]
     ])
 
-    premium_status = await toggle_lifetime_premium(user_id=callback.from_user.id)
+    premium_status = await toggle_lifetime_premium(session=db_session, user_id=callback.from_user.id)
 
     text = (f"Changed premium status to `{premium_status}`")
 
@@ -338,7 +339,7 @@ async def handle_toggle_lifetime_premium_callback(callback: CallbackQuery, state
     await callback.answer()
 
 @dp.message(AdminStates.waiting_for_user_id)
-async def process_user_id(message: types.Message, state: FSMContext):
+async def process_user_id(message: types.Message, state: FSMContext, db_session: AsyncSession):
     message_text = message.text
     if message_text is None:
         return
@@ -350,7 +351,7 @@ async def process_user_id(message: types.Message, state: FSMContext):
 
     user_id = int(user_id_text)
 
-    premium_status = await toggle_lifetime_premium(user_id=user_id)
+    premium_status = await toggle_lifetime_premium(session=db_session, user_id=user_id)
 
     await message.answer(
         (
@@ -363,7 +364,7 @@ async def process_user_id(message: types.Message, state: FSMContext):
     if premium_status and message.bot:
         try:
             from storage.db.crud import get_user_settings
-            settings = await get_user_settings(user_id)
+            settings = await get_user_settings(session=db_session, user_id=user_id)
             lang = settings.profile.language if settings else "en"
 
             hub = dp.workflow_data.get("_translator_hub")
@@ -416,7 +417,7 @@ async def admin_panel_banlist(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data == "ban_panel_list")
-async def ban_panel_list(callback: CallbackQuery, state: FSMContext):
+async def ban_panel_list(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession):
     config: Optional[Config] = dp.workflow_data.get("config")
     if not config:
         return
@@ -432,7 +433,7 @@ async def ban_panel_list(callback: CallbackQuery, state: FSMContext):
     ])
 
     text = "Banned users:\n"
-    banned_users = await list_of_banned_users()
+    banned_users = await list_of_banned_users(db_session)
     for user in banned_users:
         text += f"{user.user_id}\n"
 
@@ -476,7 +477,7 @@ async def handle_pardon_user_callback(callback: CallbackQuery, state: FSMContext
     await callback.answer()
 
 @dp.message(AdminStates.waiting_for_user_id_ban)
-async def process_ban(message: types.Message, state: FSMContext):
+async def process_ban(message: types.Message, state: FSMContext, db_session: AsyncSession):
     message_text = message.text
     if message_text is None:
         return
@@ -488,7 +489,7 @@ async def process_ban(message: types.Message, state: FSMContext):
 
     user_id = int(user_id_text)
 
-    await ban_user(user_id=user_id)
+    await ban_user(session=db_session, user_id=user_id)
 
     await message.answer(
         (
@@ -499,7 +500,7 @@ async def process_ban(message: types.Message, state: FSMContext):
     await state.clear()
 
 @dp.message(AdminStates.waiting_for_user_id_pardon)
-async def process_pardon(message: types.Message, state: FSMContext):
+async def process_pardon(message: types.Message, state: FSMContext, db_session: AsyncSession):
     message_text = message.text
     if message_text is None:
         return
@@ -511,7 +512,7 @@ async def process_pardon(message: types.Message, state: FSMContext):
 
     user_id = int(user_id_text)
 
-    await unban_user(user_id=user_id)
+    await unban_user(session=db_session, user_id=user_id)
 
     await message.answer(
         (
@@ -591,7 +592,7 @@ async def proccess_spam_news(message: types.Message, state: FSMContext) -> None:
     )
 
 @dp.callback_query(lambda c: c.data in ["news_spam_subscribers", "news_spam_force_all"])
-async def process_spam_news_to_chats(callback: CallbackQuery, state: FSMContext) -> None:
+async def process_spam_news_to_chats(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession) -> None:
     data = await state.get_data()
     bot = callback.bot
     chat_id = callback.from_user.id
@@ -610,10 +611,10 @@ async def process_spam_news_to_chats(callback: CallbackQuery, state: FSMContext)
     error_send = 0
 
     if callback.data == "news_spam_subscribers":
-        user_ids = await get_news_subscribers_ids()
+        user_ids = await get_news_subscribers_ids(db_session)
     else:
-        user_ids = await get_list_user_ids()
-        chat_ids = await get_all_chat_ids()
+        user_ids = await get_list_user_ids(db_session)
+        chat_ids = await get_all_chat_ids(db_session)
         user_ids.extend(chat_ids)
 
 
@@ -753,13 +754,13 @@ async def admin_panel_bot_settings(callback: CallbackQuery, state: FSMContext):
 
 
 @dp.callback_query(lambda c: c.data.startswith("global_service_toggle_"))
-async def toggle_service(callback: CallbackQuery):
+async def toggle_service(callback: CallbackQuery, db_session: AsyncSession):
     data = callback.data
     if data is None:
         return
     service = data.replace("global_service_toggle_", "")
     service = service.lower()
-    settings = await get_global_settings()
+    settings = await get_global_settings(db_session)
     blocked_services = settings.get("blocked_services", [])
 
     if service in blocked_services:
@@ -767,7 +768,7 @@ async def toggle_service(callback: CallbackQuery):
     else:
         blocked_services.append(service)
 
-    await update_global_settings("blocked_services", blocked_services)
+    await update_global_settings(db_session,"blocked_services", blocked_services)
     # await blocked_services_menu(callback)
 
 

@@ -4,6 +4,7 @@ from aiogram import F
 from aiogram.enums import ParseMode
 from aiogram.types import FSInputFile, Message
 from fluentogram import TranslatorRunner
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import Config
 from models.errors import BotError, ErrorCode
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 SPOTIFY_REGEX = r"https?://open\.spotify\.com/(track|playlist|album)/([\w-]+)"
 
 @router.message(F.text.regexp(SPOTIFY_REGEX))
-async def spotify_handler(message: Message, config: Config, i18n: TranslatorRunner):
+async def spotify_handler(message: Message, config: Config, i18n: TranslatorRunner, db_session: AsyncSession):
     if not message.text or not message.from_user:
         return
 
@@ -32,7 +33,7 @@ async def spotify_handler(message: Message, config: Config, i18n: TranslatorRunn
     # Start download task
     download_task = await task_manager.add_task(
         user_id,
-        download_coro=process_spotify_url(message, config, i18n),
+        download_coro=process_spotify_url(message, config, i18n, db_session),
         message=message
     )
 
@@ -42,7 +43,7 @@ async def spotify_handler(message: Message, config: Config, i18n: TranslatorRunn
                 media_content = await download_task
                 if media_content:
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, service="spotify")
+                    await send_manager.send(message, media_content, service="spotify", db_session=db_session)
             except Exception:
                 # Error already logged in download task
                 pass
@@ -50,7 +51,7 @@ async def spotify_handler(message: Message, config: Config, i18n: TranslatorRunn
         await task_manager.add_send_task(user_id, send_when_ready())
 
 
-async def process_spotify_url(message: Message, config: Config, i18n: TranslatorRunner):
+async def process_spotify_url(message: Message, config: Config, i18n: TranslatorRunner, db_session: AsyncSession):
     """Download Spotify media and return content (for single tracks) or manage playlist queue"""
     if not message.text:
         return None
@@ -69,9 +70,9 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
 
     # Get user settings for lossless mode
     if chat_id < 0:
-        settings = await get_chat_settings(chat_id)
+        settings = await get_chat_settings(db_session, chat_id)
     else:
-        settings = await get_user_settings(chat_id)
+        settings = await get_user_settings(db_session, chat_id)
     lossless_mode = settings.services.spotify.lossless if settings else False
 
     media_metadata = await service.get_info(message.text, config=config)
@@ -100,7 +101,7 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
             lossless_mode=lossless_mode
         )
 
-        await log_download_event(user.id, Services.SPOTIFY, 'success')
+        await log_download_event(db_session, user.id, Services.SPOTIFY, 'success')
         return track
 
     elif media_metadata.media_type == "album" or media_metadata.media_type == "playlist":
@@ -152,7 +153,7 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
                     try:
                         track_content = await task
                         if track_content:
-                            await send_manager.send(message, track_content, skip_reaction=True, service="spotify")
+                            await send_manager.send(message, track_content, skip_reaction=True, service="spotify", db_session=db_session)
                             return True
                         return False
                     except Exception:
@@ -160,7 +161,7 @@ async def process_spotify_url(message: Message, config: Config, i18n: Translator
 
                 await task_manager.add_send_task(user.id, send_track_logic(track_download_task))
 
-        await log_download_event(user.id, Services.SPOTIFY, 'success')
+        await log_download_event(db_session, user.id, Services.SPOTIFY, 'success')
 
         # Return None for playlists (no single content to send)
         return None
