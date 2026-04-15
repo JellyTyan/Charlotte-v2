@@ -34,7 +34,7 @@ async def youtube_handler(message: Message, i18n: TranslatorRunner, db_session: 
     # Start download task (for YouTube this is just getting metadata and showing UI)
     download_task = await task_manager.add_task(
         user_id,
-        download_coro=process_youtube_url(message, i18n),
+        download_coro=process_youtube_url(message, i18n, db_session),
         message=message
     )
 
@@ -123,7 +123,7 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
     original_message = message.reply_to_message if message.reply_to_message else message
 
     # Premium Logic
-    user = await get_user(user_id)
+    user = await get_user(db_session, user_id)
     is_premium = user.is_premium if user else False
 
     # Check if format requires premium (sponsored flag in callback_data)
@@ -151,7 +151,7 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
     # Start download task
     download_task = await task_manager.add_task(
         user_id,
-        download_coro=download_youtube_media(original_message, url, format_choice, user_id, ""),
+        download_coro=download_youtube_media(original_message, url, format_choice, user_id, db_session, ""),
         message=original_message
     )
 
@@ -170,7 +170,7 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
         await task_manager.add_send_task(user_id, send_when_ready())
 
 
-async def download_youtube_media(message: Message, url: str, format_choice: str, user_id: int, payment_charge_id: str = ""):
+async def download_youtube_media(message: Message, url: str, format_choice: str, user_id: int, db_session: AsyncSession, payment_charge_id: str = ""):
     """Download YouTube media and return content"""
 
     arq = await get_arq_pool('light')
@@ -181,7 +181,7 @@ async def download_youtube_media(message: Message, url: str, format_choice: str,
     try:
         media_content = await YouTubeService(arq=arq).download(url, format_choice)
 
-        await log_download_event(user_id, Services.YOUTUBE, 'success')
+        await log_download_event(db_session, user_id, Services.YOUTUBE, 'success')
         return media_content
     except BotError as e:
         # Refund if download failed and user paid
@@ -193,7 +193,7 @@ async def download_youtube_media(message: Message, url: str, format_choice: str,
 
                     # Update payment status in DB
                     from storage.db import update_payment_status
-                    await update_payment_status(payment_charge_id, "refunded")
+                    await update_payment_status(db_session, payment_charge_id, "refunded")
                 except Exception as refund_error:
                     logger.error(f"Failed to refund payment: {refund_error}")
         raise

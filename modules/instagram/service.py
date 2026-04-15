@@ -146,7 +146,6 @@ class InstagramService(BaseService):
     )
 
     async def _download_video(self, url: str) -> List[MediaContent]:
-        from .account_manager import MAX_REQUESTS_PER_MINUTE  # local import to avoid circular
         MAX_RETRIES = 3
 
         logger.info("yt-dlp reels download started: %s", url)

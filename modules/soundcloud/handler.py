@@ -41,7 +41,7 @@ async def soundcloud_handler(message: Message, config: Config, i18n: TranslatorR
                 media_content = await download_task
                 if media_content:
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, service=\"soundcloud\", db_session=db_session)
+                    await send_manager.send(message, media_content, service="soundcloud", db_session=db_session)
             except Exception:
                 pass
         await task_manager.add_send_task(user_id, send_when_ready())
@@ -148,7 +148,7 @@ async def process_soundcloud_url(message: Message, config: Config, i18n: Transla
                     try:
                         track_content = await task
                         if track_content:
-                            await send_manager.send(message, track_content, skip_reaction=True, service=\"soundcloud\", db_session=db_session)
+                            await send_manager.send(message, track_content, skip_reaction=True, service="soundcloud", db_session=db_session)
                             return True
                         return False
                     except Exception:

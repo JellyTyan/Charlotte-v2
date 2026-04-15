@@ -2,7 +2,6 @@ from aiogram import types
 from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.utils.i18n import gettext as _
 from fluentogram import TranslatorRunner
 
 from core.loader import dp

@@ -1,14 +1,13 @@
 import logging
 
 from aiogram import Router, F, Bot
-from aiogram.enums import ParseMode, parse_mode
+from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, PreCheckoutQuery, ContentType, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from aiogram.types import Message, PreCheckoutQuery, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import Config
-from storage.db.crud import get_user
 from utils.url_cache import get_url
 from tasks.task_manager import task_manager
 from states import SupportStates

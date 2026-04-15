@@ -3,9 +3,8 @@ import base64
 import json
 import logging
 import os
-import re
 import xml.etree.ElementTree as ET
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 from curl_cffi.requests import AsyncSession
 import aiofiles

@@ -6,8 +6,9 @@ from fluentogram import TranslatorRunner
 
 from core.config import Config
 from core.loader import dp, bot
-from models.errors import BotError, ErrorCode
-from storage.db.crud import get_chat_settings
+from models.errors import BotError
+from storage.db.crud import get_chat_settings, get_user_settings
+from storage.db import database_manager
 
 logger = logging.getLogger(__name__)
 config = Config()
@@ -51,8 +52,7 @@ async def global_error_handler(event: ErrorEvent):
 
     lang = "en"
 
-    session = data.get("db_session")
-    if session:
+    async with database_manager.async_session() as session:
         if chat and chat.type != "private":
             settings = await get_chat_settings(session, chat.id)
             if settings:

@@ -36,7 +36,7 @@ async def nicovideo_handler(message: Message, i18n: TranslatorRunner, db_session
 
     await task_manager.add_task(
         user_id,
-        download_coro=process_nicovideo_url(message, i18n),
+        download_coro=process_nicovideo_url(message, i18n, db_session),
         message=message,
     )
 

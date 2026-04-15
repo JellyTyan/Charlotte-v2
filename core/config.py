@@ -17,6 +17,12 @@ class Config:
     TELEGRAM_API_HASH: str = os.getenv("TELEGRAM_API_HASH", "")
     TELEGRAM_LOCAL: bool = os.getenv("TELEGRAM_LOCAL", "False").lower() == "true"
     TELEGRAM_SERVER_URL: str = os.getenv("TELEGRAM_SERVER_URL", "http://nginx:80")
+    
+    # Webhook Config
+    WEBHOOK_HOST: str = os.getenv("WEBHOOK_HOST", "http://nginx:80")
+    WEBHOOK_PATH: str = os.getenv("WEBHOOK_PATH", "/webhook")
+    WEBAPP_HOST: str = os.getenv("WEBAPP_HOST", "0.0.0.0")
+    WEBAPP_PORT: int = int(os.getenv("WEBAPP_PORT", "8000"))
 
     _instance = None
 

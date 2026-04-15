@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
-from aiogram import Bot, types
+from aiogram import types
 from aiogram.utils.media_group import MediaGroupBuilder
 from aiogram.exceptions import TelegramEntityTooLarge
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from utils import delete_files, truncate_string
 from models.media import MediaContent, MediaType
 from models.errors import BotError, ErrorCode
-from storage.db.crud import get_user_settings, get_chat_settings, create_chat, create_user
+from storage.db.crud import get_user_settings, get_chat_settings
 from models.settings import UserSettingsJson, ChatSettingsJson
 from utils import translate_text
 import random

@@ -10,7 +10,7 @@ from modules.router import service_router as router
 from senders.media_sender import MediaSender
 from tasks.task_manager import task_manager
 from utils.arq_pool import get_arq_pool
-from storage.db.crud import get_user, get_chat_settings
+from storage.db.crud import get_chat_settings
 from utils.statistics_helper import log_download_event
 from .service import RedditService
 

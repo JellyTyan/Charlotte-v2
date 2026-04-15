@@ -85,9 +85,31 @@ async def main():
     await set_default_commands()
     logger.info("✅ Default commands set")
 
-    # todo maybe use webhooks instead :)
-    logger.info("🎉 Bot successfully started and ready to receive messages!")
-    await dp.start_polling(bot, skip_updates=True)
+    if config.TELEGRAM_LOCAL:
+        logger.info("🌐 Starting webhook mode with local Telegram Bot API...")
+        from aiohttp import web
+        from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+        
+        app = web.Application()
+        webhook_requests_handler = SimpleRequestHandler(dispatcher=dp, bot=bot)
+        webhook_requests_handler.register(app, path=config.WEBHOOK_PATH)
+        setup_application(app, dp, bot=bot)
+        
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, config.WEBAPP_HOST, config.WEBAPP_PORT)
+        await site.start()
+        
+        webhook_url = f"{config.WEBHOOK_HOST}{config.WEBHOOK_PATH}"
+        await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
+        logger.info(f"✅ Webhook set to {webhook_url}")
+        logger.info(f"🎉 Bot started in webhook mode on {config.WEBAPP_HOST}:{config.WEBAPP_PORT}")
+        
+        import asyncio
+        await asyncio.Event().wait()
+    else:
+        logger.info("🎉 Bot successfully started and ready to receive messages!")
+        await dp.start_polling(bot, skip_updates=True)
 
 if __name__ == "__main__":
     import asyncio

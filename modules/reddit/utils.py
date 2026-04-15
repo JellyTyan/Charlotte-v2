@@ -1,5 +1,4 @@
 import logging
-import re
 from curl_cffi.requests import AsyncSession
 from models.errors import BotError, ErrorCode
 from models.service_list import Services
