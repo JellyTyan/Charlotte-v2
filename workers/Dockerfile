@@ -1,4 +1,4 @@
-FROM python:3.14-slim
+FROM python:3.11-slim
 
 RUN useradd -m -u 1000 charlotte && \
     mkdir -p /app /app/storage/temp /app/logs /app/storage/cookies && \
