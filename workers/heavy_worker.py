@@ -552,10 +552,15 @@ async def universal_metadata_update(
 
     Args:
         ctx: ARQ context
-        file_path: Audio file path
-        metadata: Metadata dict (title, artist, album, date, etc.)
-        cover_file: Optional cover art file path
-        ...
+        audio_file: Audio file path
+        title: Song title
+        artist: Artist name
+        cover_file: Cover art file path
+        album_name: Album name
+        orchestra_name: Group name
+        track_number: Track number in disc/album
+        genre_name: Genre Name
+        date: Release Date
 
     Returns:
         bool: Success status

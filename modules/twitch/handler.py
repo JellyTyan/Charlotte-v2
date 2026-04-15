@@ -2,7 +2,6 @@ from aiogram import F
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.errors import BotError, ErrorCode
 from models.service_list import Services
 from modules.router import service_router as router
 from senders.media_sender import MediaSender
@@ -12,9 +11,6 @@ from utils.statistics_helper import log_download_event
 from .service import TwitchService
 
 
-# Matches:
-#   https://www.twitch.tv/<channel>/clip/<slug>
-#   https://clips.twitch.tv/<slug>
 TWITCH_REGEX = (
     r"https?://(?:www\.)?twitch\.tv/\w+/clip/\S+"
     r"|https?://clips\.twitch\.tv/\S+"

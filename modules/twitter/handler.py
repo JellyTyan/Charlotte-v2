@@ -38,7 +38,7 @@ async def twitter_handler(message: Message, config: Config, i18n: TranslatorRunn
                 media_content = await download_task
                 if media_content:
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, service=\"twitter\", db_session=db_session)
+                    await send_manager.send(message, media_content, service="twitter", db_session=db_session)
             except Exception:
                 # Error already logged in download task
                 pass
@@ -67,7 +67,7 @@ async def process_twitter_url(message: Message, config: Config, i18n: Translator
 
     try:
         # Download content
-        user = await get_user(user_id)
+        user = await get_user(db_session, user_id)
         is_premium = user.is_premium if user else False
 
         if is_premium:
@@ -76,7 +76,7 @@ async def process_twitter_url(message: Message, config: Config, i18n: Translator
             media_content = await TwitterService(arq=arq).download(url, allow_nsfw=allow_nsfw)
 
         # Log success
-        await log_download_event(user_id, Services.TWITTER, 'success')
+        await log_download_event(db_session, user_id, Services.TWITTER, 'success')
 
         return media_content
 

@@ -2,7 +2,7 @@ import asyncio
 import logging
 import re
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 from urllib.parse import urljoin
 
 from curl_cffi.requests import AsyncSession

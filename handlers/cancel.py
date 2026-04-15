@@ -1,5 +1,4 @@
 from aiogram import types
-from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from fluentogram import TranslatorRunner

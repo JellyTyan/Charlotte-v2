@@ -38,7 +38,7 @@ async def bluesky_handler(message: Message, config: Config, i18n: TranslatorRunn
                 media_content = await download_task
                 if media_content:
                     send_manager = MediaSender()
-                    await send_manager.send(message, media_content, service=\"bluesky\", db_session=db_session)
+                    await send_manager.send(message, media_content, service="bluesky", db_session=db_session)
             except Exception:
                 # Error already logged in download task
                 pass

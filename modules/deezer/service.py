@@ -3,7 +3,7 @@ import re
 import os
 from pathlib import Path
 import pathlib
-from typing import List, Optional
+from typing import List
 from curl_cffi.requests import AsyncSession
 
 from aiofiles import os as aios

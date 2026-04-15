@@ -98,7 +98,6 @@ class TaskManager:
         from core.loader import bot, dp
         from core.config import Config
         from aiogram.enums import ParseMode
-        from models.errors import ErrorCode
         from storage.db import database_manager
 
         config = Config()

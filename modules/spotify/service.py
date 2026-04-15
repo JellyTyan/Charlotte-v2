@@ -3,7 +3,7 @@ import os
 import pathlib
 import re
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 from aiofiles import os as aios
 
