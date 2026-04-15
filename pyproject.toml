@@ -1,7 +1,15 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = [""]
+exclude = ["logs*", "storage*", "temp*", "tests*", "backups*"]
+
 [project]
 name = "charlotte"
 version = "1.0.0"
-requires-python = ">=3.14"
+requires-python = ">=3.11"
 
 # Core
 dependencies = [
