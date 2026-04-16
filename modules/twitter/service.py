@@ -11,7 +11,6 @@ from core.config import Config
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
-from modules.base_service import BaseService
 from utils import truncate_string, sanitize_filename
 from .utils import get_guest_token, get_tweet_info
 from models.service_list import Services
@@ -19,11 +18,10 @@ from models.service_list import Services
 logger = logging.getLogger(__name__)
 
 
-class TwitterService(BaseService):
+class TwitterService:
     name = "Twitter"
 
     def __init__(self, output_path: str = "storage/temp", arq = None) -> None:
-        super().__init__()
         self.output_path = output_path
         self.auth = "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
         self.arq = arq

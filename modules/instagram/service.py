@@ -8,7 +8,6 @@ from urllib.parse import urlparse
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
-from modules.base_service import BaseService
 from utils import truncate_string, process_video_for_telegram, escape_html
 from models.service_list import Services
 from .utils import get_post_data
@@ -17,11 +16,10 @@ from .account_manager import get_available_account, record_request, mark_account
 logger = logging.getLogger(__name__)
 
 
-class InstagramService(BaseService):
+class InstagramService:
     name = "Instagram"
 
     def __init__(self, output_path: str = "storage/temp", arq = None) -> None:
-        super().__init__()
         self.output_path = output_path
         self.arq = arq
 

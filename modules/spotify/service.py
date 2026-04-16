@@ -11,7 +11,6 @@ from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from models.service_list import Services
-from modules.base_service import BaseService
 from storage.cache.redis_client import get_or_cache
 from utils import search_music, transliterate, random_cookie_file, get_extra_audio_options, sanitize_filename
 from utils.service_utils import get_audio_options
@@ -24,11 +23,10 @@ from .utils import (
 
 logger = logging.getLogger(__name__)
 
-class SpotifyService(BaseService):
+class SpotifyService:
     name = "Spotify"
 
     def __init__(self, output_path: str = "storage/temp/", arq = None) -> None:
-        super().__init__()
         self.output_path = output_path
         self.arq = arq
 

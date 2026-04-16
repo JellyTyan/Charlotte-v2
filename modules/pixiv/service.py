@@ -11,17 +11,15 @@ from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
 from models.service_list import Services
-from modules.base_service import BaseService
 from utils import escape_html, get_user_agent
 
 logger = logging.getLogger(__name__)
 
 
-class PixivService(BaseService):
+class PixivService:
     name = "Pixiv"
 
     def __init__(self, output_path: str = "storage/temp/", arq=None) -> None:
-        super().__init__()
         self.output_path = output_path
         self.arq = arq
 
