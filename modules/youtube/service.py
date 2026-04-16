@@ -9,7 +9,6 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
-from modules.base_service import BaseService
 from utils import store_url, url_hash, process_video_for_telegram, sanitize_filename
 from models.service_list import Services
 
@@ -19,11 +18,10 @@ from .utils import get_video_info, get_ytdlp_options
 logger = logging.getLogger(__name__)
 
 
-class YouTubeService(BaseService):
+class YouTubeService:
     name = "YouTube"
 
     def __init__(self, output_path: str = "storage/temp/", arq = None) -> None:
-        super().__init__()
         self.output_path = output_path
         self.arq = arq
 

@@ -10,18 +10,16 @@ from ytmusicapi import YTMusic
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
-from modules.base_service import BaseService
 from models.service_list import Services
 from utils import random_cookie_file, get_extra_audio_options, sanitize_filename
 
 logger = logging.getLogger(__name__)
 
-class YTMusicService(BaseService):
+class YTMusicService:
     name = "YTMusic"
     _download_executor = ThreadPoolExecutor(max_workers=10)
 
     def __init__(self, output_path: str = "storage/temp/", arq=None) -> None:
-        super().__init__()
         self.output_path = output_path
         self.arq = arq
 

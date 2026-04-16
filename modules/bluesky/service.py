@@ -10,7 +10,6 @@ from curl_cffi.requests import AsyncSession
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
-from modules.base_service import BaseService
 from utils import truncate_string, process_video_for_telegram, sanitize_filename
 from .utils import get_post_info
 from models.service_list import Services
@@ -18,11 +17,10 @@ from models.service_list import Services
 logger = logging.getLogger(__name__)
 
 
-class BlueSkyService(BaseService):
+class BlueSkyService:
     name = "Twitter"
 
     def __init__(self, output_path: str = "storage/temp", arq = None) -> None:
-        super().__init__()
         self.output_path = output_path
         self.arq = arq
 

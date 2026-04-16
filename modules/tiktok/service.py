@@ -13,7 +13,6 @@ from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from models.service_list import Services
-from modules.base_service import BaseService
 from utils import truncate_string, escape_html, process_video_for_telegram, sanitize_filename
 
 from .utils import get_tikwm_info
@@ -21,12 +20,11 @@ from .utils import get_tikwm_info
 logger = logging.getLogger(__name__)
 
 
-class TiktokService(BaseService):
+class TiktokService:
     name = "TikTok"
     _download_executor = ThreadPoolExecutor(max_workers=10)
 
     def __init__(self, output_path: str = "storage/temp/", arq=None) -> None:
-        super().__init__()
         self.output_path = output_path
         self.arq = arq
 

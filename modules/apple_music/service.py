@@ -12,7 +12,6 @@ from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
 from models.service_list import Services
-from modules.base_service import BaseService
 
 from .utils import get_album_info, get_track_info, get_playlist_info
 from utils import search_music, transliterate, random_cookie_file, get_extra_audio_options, sanitize_filename
@@ -21,11 +20,10 @@ from utils.tidal import TidalUtil
 
 logger = logging.getLogger(__name__)
 
-class AppleMusicService(BaseService):
+class AppleMusicService:
     name = "AppleMusic"
 
     def __init__(self, output_path: str = "storage/temp/", arq=None) -> None:
-        super().__init__()
         self.output_path = output_path
         self.arq = arq
 

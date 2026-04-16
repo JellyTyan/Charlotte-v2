@@ -10,18 +10,16 @@ from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
 from models.service_list import Services
-from modules.base_service import BaseService
 from utils import get_extra_audio_options, transliterate
 from .utils import get_cover_url, get_song_info, get_playlist_info
 
 logger = logging.getLogger(__name__)
 
-class SoundCloudService(BaseService):
+class SoundCloudService:
     name = "SoundCloud"
     _download_executor = ThreadPoolExecutor(max_workers=10)
 
     def __init__(self, output_path: str = "storage/temp/", arq = None) -> None:
-        super().__init__()
         self.output_path = output_path
         self.arq = arq
 

@@ -7,17 +7,15 @@ from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from models.service_list import Services
-from modules.base_service import BaseService
 from utils import process_video_for_telegram, escape_html, truncate_string, sanitize_filename
 
 logger = logging.getLogger(__name__)
 
 
-class TwitchService(BaseService):
+class TwitchService:
     name = "Twitch"
 
     def __init__(self, output_path: str = "storage/temp/", arq=None) -> None:
-        super().__init__()
         self.output_path = output_path
         self.arq = arq
 
