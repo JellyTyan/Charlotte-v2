@@ -9,6 +9,7 @@ from curl_cffi.requests import AsyncSession
 from arq.connections import RedisSettings
 import aiofiles
 from bs4 import BeautifulSoup
+from PIL import Image, ImageFile
 
 logger = logging.getLogger(__name__)
 
@@ -579,6 +580,34 @@ async def universal_url_resolve(
             logger.error(f"URL resolution failed completely: {e2}")
             raise
 
+async def convert_to_png(
+        ctx,
+        input_path: str,
+) -> str:
+    """
+    Convert image to PNG format.
+
+    Args:
+        ctx: ARQ context
+        input_path: Input image path
+
+    Returns:
+        str: Output PNG file path
+    """
+    logger.info(f"Converting {input_path} to PNG")
+
+    try:
+        output_path = str(Path(input_path).with_suffix(".png"))
+        ImageFile.LOAD_TRUNCATED_IMAGES = True
+        img = Image.open(input_path)
+        img.save(output_path, "PNG", optimize=True)
+        logger.info(f"Conversion complete: {output_path}")
+        return output_path
+    except Exception as e:
+        logger.error(f"Image conversion failed: {e}")
+        raise
+
+
 
 # ============================================================================
 # WORKER SETTINGS
@@ -600,6 +629,7 @@ class WorkerSettings:
         universal_regex_extract,
         # Utilities
         universal_url_resolve,
+        convert_to_png,
     ]
     redis_settings = RedisSettings(host='redis', port=6379)
     queue_name = 'light'
