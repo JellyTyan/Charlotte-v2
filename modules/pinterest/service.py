@@ -1,79 +1,35 @@
+import asyncio
 import logging
 import os
 import re
 from pathlib import Path
-from typing import List, Optional
-
-try:
-    from PIL import Image
-    import pillow_heif
-    pillow_heif.register_heif_opener()
-    HEIC_SUPPORT = True
-except ImportError:
-    HEIC_SUPPORT = False
+from typing import List
 
 from aiofiles import os as aios
 
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
-from modules.base_service import BaseService
 from models.service_list import Services
 
 from .utils import get_pin_info
-from utils import escape_html, process_video_for_telegram
+from utils import escape_html, process_video_for_telegram, delete_files
 
 logger = logging.getLogger(__name__)
 
 
-async def _convert_heic_to_jpg(heic_path: Path) -> Path:
-    """Convert HEIC image to JPG format."""
-    if not HEIC_SUPPORT:
-        logger.warning("pillow_heif not available, cannot convert HEIC")
-        return heic_path
-
-    try:
-        jpg_path = heic_path.with_suffix('.jpg')
-        logger.debug(f"Converting HEIC to JPG: {heic_path} -> {jpg_path}")
-
-        # Open and convert HEIC to JPG
-        image = Image.open(heic_path)
-        # Convert to RGB if necessary (HEIC can have alpha channel)
-        if image.mode in ('RGBA', 'LA', 'P'):
-            background = Image.new('RGB', image.size, (255, 255, 255))
-            if image.mode == 'P':
-                image = image.convert('RGBA')
-            background.paste(image, mask=image.split()[-1] if image.mode == 'RGBA' else None)
-            image = background
-        elif image.mode != 'RGB':
-            image = image.convert('RGB')
-
-        # Save as JPG
-        image.save(jpg_path, 'JPEG', quality=95, optimize=True)
-        logger.info(f"HEIC converted successfully: {jpg_path}")
-
-        # Delete original HEIC file
-        if await aios.path.exists(heic_path):
-            await aios.remove(heic_path)
-            logger.debug(f"Removed original HEIC file: {heic_path}")
-
-        return jpg_path
-    except Exception as e:
-        logger.error(f"Failed to convert HEIC to JPG: {e}")
-        return heic_path
-
-
-class PinterestService(BaseService):
+class PinterestService:
     name = "Pinterest"
 
     def __init__(self, output_path: str = "storage/temp/", arq=None) -> None:
-        super().__init__()
         self.output_path = output_path
         self.arq = arq
 
-    async def download(self, url: str) -> List[MediaContent]:
-        logger.debug(f"Starting Pinterest download for URL: {url}")
 
+    async def get_info(self, url: str) -> MediaMetadata:
+        return await get_pin_info(url)
+
+    async def download(self, data: MediaMetadata) -> List[MediaContent]:
         if not self.arq:
             raise BotError(
                 code=ErrorCode.INTERNAL_ERROR,
@@ -82,310 +38,301 @@ class PinterestService(BaseService):
                 is_logged=True
             )
 
-        try:
-            # Get pin metadata
-            logger.debug(f"Extracting pin info from URL: {url}")
-            post_dict = await get_pin_info(url)
+        media_type = data.media_type
 
-            image_signature = post_dict["image_signature"]
-            title = post_dict["title"]
-            ext = post_dict["ext"]
-
-            logger.debug(f"Pin info extracted: signature={image_signature}, type={ext}")
-
-            result = []
-
-            # Handle video
-            if ext == "mp4":
-                video_url = post_dict["video"]
-                filename = f"{image_signature}.mp4"
-                filepath = os.path.join(self.output_path, filename)
-
-                logger.debug(f"Downloading video from: {video_url}")
-
-                if video_url.endswith(".m3u8"):
-                    # Use yt-dlp for m3u8 streams
-                    logger.debug("Using yt-dlp for m3u8 stream")
-                    job = await self.arq.enqueue_job(
-                        "universal_ytdlp_extract",
-                        video_url,
-                        extract_only=False,
-                        format_selector=None,
-                        output_template=filepath,
-                        _queue_name='heavy'
-                    )
-                    try:
-                        result_data = await job.result()
-                    except Exception as e:
-                        raise BotError(
-                            code=ErrorCode.DOWNLOAD_FAILED,
-                            service=Services.PINTEREST,
-                            message=f"Failed to download Pinterest video stream: {e}",
-                            url=url,
-                            critical=True,
-                            is_logged=True
-                        )
-                    downloaded_path = result_data.get("filepath")
-                else:
-                    # Direct download for regular mp4
-                    logger.debug("Using direct download for mp4")
-                    job = await self.arq.enqueue_job(
-                        "universal_download",
-                        video_url,
-                        filepath,
-                        _queue_name='light'
-                    )
-                    try:
-                        downloaded_path = await job.result()
-                    except Exception as e:
-                        raise BotError(
-                            code=ErrorCode.DOWNLOAD_FAILED,
-                            service=Services.PINTEREST,
-                            message=f"Failed to download Pinterest video: {e}",
-                            url=url,
-                            critical=True,
-                            is_logged=True
-                        )
-
-                if downloaded_path and await aios.path.exists(downloaded_path):
-                    fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(self.arq, downloaded_path)
-                    logger.debug(f"Video downloaded successfully: {downloaded_path}")
-                    result.append(MediaContent(
-                        type=MediaType.VIDEO,
-                        path=Path(fixed_video),
-                        title=escape_html(title),
-                        cover=Path(thumbnail) if thumbnail else None,
-                        width=width,
-                        height=height,
-                        duration=int(duration)
-                    ))
-                else:
-                    raise BotError(
-                        code=ErrorCode.DOWNLOAD_FAILED,
-                        message="Video file not found after download",
-                        url=url,
-                        service=Services.PINTEREST,
-                        is_logged=True
-                    )
-
-            # Handle carousel
-            elif ext == "carousel":
-                carousel_data = post_dict["carousel_data"]
-                logger.debug(f"Downloading carousel with {len(carousel_data)} items")
-
-                for i, image_url in enumerate(carousel_data):
-                    # Try original quality first
-                    original_url = re.sub(r"/\d+x", "/originals", image_url)
-
-                    # Detect file extension from URL
-                    file_ext = Path(original_url.split('?')[0]).suffix or '.jpg'
-                    filename = f"{image_signature}_{i}{file_ext}"
-                    filepath = os.path.join(self.output_path, filename)
-
-                    downloaded = False
-                    try:
-                        # Try original quality
-                        job = await self.arq.enqueue_job(
-                            "universal_download",
-                            original_url,
-                            filepath,
-                            _queue_name='light'
-                        )
-                        try:
-                            downloaded_path = await job.result()
-                        except Exception as e:
-                            logger.warning(f"Original quality download failed for Pinterest carousel item {i}: {e}")
-                            downloaded_path = None
-
-                        if downloaded_path and await aios.path.exists(downloaded_path):
-                            logger.debug(f"Carousel item {i} downloaded (original): {downloaded_path}")
-
-                            # Convert HEIC to JPG if needed
-                            final_path = Path(downloaded_path)
-                            if final_path.suffix.lower() in ('.heic', '.heif'):
-                                final_path = await _convert_heic_to_jpg(final_path)
-
-                            result.append(MediaContent(
-                                type=MediaType.PHOTO,
-                                path=final_path,
-                                title=escape_html(title),
-                            ))
-                            downloaded = True
-                    except Exception as e:
-                        logger.warning(f"Original quality failed for carousel item {i}: {e}")
-
-                    # Fallback to standard quality if original failed
-                    if not downloaded:
-                        try:
-                            job = await self.arq.enqueue_job(
-                                "universal_download",
-                                image_url,
-                                filepath,
-                                _queue_name='light'
-                            )
-                            try:
-                                downloaded_path = await job.result()
-                            except Exception as e:
-                                logger.error(f"Standard quality download failed for Pinterest carousel item {i}: {e}")
-                                downloaded_path = None
-
-                            if downloaded_path and await aios.path.exists(downloaded_path):
-                                logger.debug(f"Carousel item {i} downloaded (standard): {downloaded_path}")
-
-                                # Convert HEIC to JPG if needed
-                                final_path = Path(downloaded_path)
-                                if final_path.suffix.lower() in ('.heic', '.heif'):
-                                    final_path = await _convert_heic_to_jpg(final_path)
-
-                                result.append(MediaContent(
-                                    type=MediaType.PHOTO,
-                                    path=final_path,
-                                    title=escape_html(title),
-                                ))
-                        except Exception as fallback_error:
-                            logger.error(f"Failed to download carousel item {i}: {fallback_error}")
-                            continue
-
-            # Handle photo/GIF
-            elif ext == "jpg":
-                image_url = post_dict["image"]
-
-                if image_url.endswith(".gif"):
-                    logger.debug(f"Downloading GIF from: {image_url}")
-                    filename = f"{image_signature}.gif"
-                    filepath = os.path.join(self.output_path, filename)
-
-                    job = await self.arq.enqueue_job(
-                        "universal_download",
-                        image_url,
-                        filepath,
-                        _queue_name='light'
-                    )
-                    try:
-                        downloaded_path = await job.result()
-                    except Exception as e:
-                        raise BotError(
-                            code=ErrorCode.DOWNLOAD_FAILED,
-                            service=Services.PINTEREST,
-                            message=f"Failed to download Pinterest GIF: {e}",
-                            url=url,
-                            critical=True,
-                            is_logged=True
-                        )
-
-                    if downloaded_path and await aios.path.exists(downloaded_path):
-                        logger.debug(f"GIF downloaded successfully: {downloaded_path}")
-                        result.append(MediaContent(
-                            type=MediaType.GIF,
-                            path=Path(downloaded_path),
-                        ))
-                else:
-                    # Try original quality first
-                    original_url = re.sub(r"/\d+x", "/originals", image_url)
-                    logger.debug(f"Downloading photo from: {original_url}")
-
-                    # Detect file extension from URL
-                    file_ext = Path(original_url.split('?')[0]).suffix or '.jpg'
-                    filename = f"{image_signature}{file_ext}"
-                    filepath = os.path.join(self.output_path, filename)
-
-                    downloaded = False
-                    try:
-                        job = await self.arq.enqueue_job(
-                            "universal_download",
-                            original_url,
-                            filepath,
-                            _queue_name='light'
-                        )
-                        try:
-                            downloaded_path = await job.result()
-                        except Exception as e:
-                            logger.warning(f"Original quality photo download failed for Pinterest: {e}")
-                            downloaded_path = None
-
-                        if downloaded_path and await aios.path.exists(downloaded_path):
-                            logger.debug(f"Photo downloaded successfully (original): {downloaded_path}")
-
-                            # Convert HEIC to JPG if needed
-                            final_path = Path(downloaded_path)
-                            if final_path.suffix.lower() in ('.heic', '.heif'):
-                                final_path = await _convert_heic_to_jpg(final_path)
-
-                            result.append(MediaContent(
-                                type=MediaType.PHOTO,
-                                path=final_path,
-                                title=escape_html(title),
-                            ))
-                            downloaded = True
-                    except Exception as e:
-                        logger.warning(f"Original quality failed: {e}")
-
-                    # Fallback to standard quality if original failed
-                    if not downloaded:
-                        job = await self.arq.enqueue_job(
-                            "universal_download",
-                            image_url,
-                            filepath,
-                            _queue_name='light'
-                        )
-                        try:
-                            downloaded_path = await job.result()
-                        except Exception as e:
-                            raise BotError(
-                                code=ErrorCode.DOWNLOAD_FAILED,
-                                service=Services.PINTEREST,
-                                message=f"Failed to download Pinterest photo: {e}",
-                                url=url,
-                                critical=True,
-                                is_logged=True
-                            )
-
-                        if downloaded_path and await aios.path.exists(downloaded_path):
-                            logger.debug(f"Photo downloaded successfully (standard): {downloaded_path}")
-
-                            # Convert HEIC to JPG if needed
-                            final_path = Path(downloaded_path)
-                            if final_path.suffix.lower() in ('.heic', '.heif'):
-                                final_path = await _convert_heic_to_jpg(final_path)
-
-                            result.append(MediaContent(
-                                type=MediaType.PHOTO,
-                                path=final_path,
-                                title=escape_html(title),
-                            ))
-
-            else:
-                raise BotError(
-                    code=ErrorCode.DOWNLOAD_FAILED,
-                    message=f"Unsupported file type: {ext}",
-                    url=url,
-                    service=Services.PINTEREST,
-                    is_logged=True
-                )
-
-            if not result:
-                raise BotError(
-                    code=ErrorCode.DOWNLOAD_FAILED,
-                    message="Failed to download any media files",
-                    url=url,
-                    service=Services.PINTEREST,
-                    is_logged=True
-                )
-
-            logger.debug(f"Pinterest download completed: {len(result)} items")
-            return result
-
-        except BotError:
-            raise
-        except Exception as e:
-            logger.error(f"Error downloading Pinterest media: {str(e)}")
+        if media_type == "video":
+            return await self._download_video(data)
+        elif media_type == "gallery":
+            return await self._download_carousel(data)
+        elif media_type == "gif":
+            return await self._download_gif(data)
+        elif media_type == "photo":
+            return await self._download_photo(data)
+        else:
             raise BotError(
                 code=ErrorCode.DOWNLOAD_FAILED,
-                message=f"Pinterest download error: {str(e)}",
-                url=url,
+                message=f"Unsupported file type: {media_type}",
+                url=data.url,
                 service=Services.PINTEREST,
                 is_logged=True
             )
 
-    async def get_info(self, url: str) -> Optional[MediaMetadata]:
-        return None
+    async def _download_video(self, data: MediaMetadata) -> List[MediaContent]:
+        result = []
+
+        video = data.attachments[0]
+        video_url = video.url
+        image_signature = data.extra.get("image_signature")
+        filename = f"{image_signature}.mp4"
+        filepath = os.path.join(self.output_path, filename)
+
+        if video_url.endswith(".m3u8"):
+            # Use yt-dlp for m3u8 streams
+            job = await self.arq.enqueue_job(
+                "universal_ytdlp_extract",
+                video_url,
+                extract_only=False,
+                format_selector=None,
+                output_template=filepath,
+                _queue_name='heavy'
+            )
+            try:
+                result_data = await job.result()
+            except Exception as e:
+                raise BotError(
+                    code=ErrorCode.DOWNLOAD_FAILED,
+                    service=Services.PINTEREST,
+                    message=f"Failed to download Pinterest video stream: {e}",
+                    url=data.url,
+                    critical=True,
+                    is_logged=True
+                )
+            downloaded_path = result_data.get("filepath")
+        else:
+            # Direct download for regular mp4
+            job = await self.arq.enqueue_job(
+                "universal_download",
+                video_url,
+                filepath,
+                _queue_name='light'
+            )
+            try:
+                downloaded_path = await job.result()
+            except Exception as e:
+                raise BotError(
+                    code=ErrorCode.DOWNLOAD_FAILED,
+                    service=Services.PINTEREST,
+                    message=f"Failed to download Pinterest video: {e}",
+                    url=data.url,
+                    critical=True,
+                    is_logged=True
+                )
+
+        if downloaded_path and await aios.path.exists(downloaded_path):
+            fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(self.arq,
+                                                                                                downloaded_path)
+            result.append(MediaContent(
+                type=MediaType.VIDEO,
+                path=Path(fixed_video),
+                title=escape_html(data.title),
+                cover=Path(thumbnail) if thumbnail else None,
+                width=width,
+                height=height,
+                duration=int(duration)
+            ))
+        else:
+            raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                message="Video file not found after download",
+                url=data.url,
+                service=Services.PINTEREST,
+                is_logged=True
+            )
+
+        return result
+
+
+    async def _download_carousel(self, data: MediaMetadata) -> List[MediaContent]:
+        title = data.title
+        image_signature = data.extra.get("image_signature", "pinterest")
+
+        async def download_single_image(i: int, image) -> MediaContent | None:
+            original_url = re.sub(r"/\d+x", "/originals", image.url)
+            file_ext = Path(original_url.split('?')[0]).suffix or '.jpg'
+            filename = f"{image_signature}_{i}{file_ext}"
+            filepath = os.path.join(self.output_path, filename)
+
+            # Try original quality
+            try:
+                job = await self.arq.enqueue_job(
+                    "universal_download",
+                    original_url,
+                    filepath,
+                    _queue_name='light'
+                )
+                downloaded_path = await job.result()
+
+                if downloaded_path and await aios.path.exists(downloaded_path):
+                    # Convert only if not JPG/JPEG
+                    if not downloaded_path.lower().endswith(('.jpg', '.jpeg')):
+                        job = await self.arq.enqueue_job(
+                            "convert_to_jpg",
+                            downloaded_path,
+                            _queue_name='light'
+                        )
+                        converted_img = await job.result()
+
+                        if await aios.path.exists(converted_img):
+                            await delete_files([downloaded_path])
+                            downloaded_path = converted_img
+
+                    return MediaContent(
+                        type=MediaType.PHOTO,
+                        path=Path(downloaded_path),
+                        title=escape_html(title),
+                    )
+            except Exception as e:
+                logger.warning(f"Original quality failed for carousel item {i}: {e}")
+
+            # Fallback to standard quality
+            try:
+                job = await self.arq.enqueue_job(
+                    "universal_download",
+                    image.url,
+                    filepath,
+                    _queue_name='light'
+                )
+                downloaded_path = await job.result()
+
+                if downloaded_path and await aios.path.exists(downloaded_path):
+                    # Convert only if not JPG/JPEG
+                    if not downloaded_path.lower().endswith(('.jpg', '.jpeg')):
+                        job = await self.arq.enqueue_job(
+                            "convert_to_jpg",
+                            downloaded_path,
+                            _queue_name='light'
+                        )
+                        converted_img = await job.result()
+
+                        if await aios.path.exists(converted_img):
+                            await delete_files([downloaded_path])
+                            downloaded_path = converted_img
+
+                    return MediaContent(
+                        type=MediaType.PHOTO,
+                        path=Path(downloaded_path),
+                        title=escape_html(title),
+                    )
+            except Exception as e:
+                logger.error(f"Failed to download carousel item {i}: {e}")
+                return None
+
+        tasks = [download_single_image(i, img) for i, img in enumerate(data.attachments)]
+        results = await asyncio.gather(*tasks)
+        return [r for r in results if r is not None]
+
+    async def _download_gif(self, data: MediaMetadata) -> List[MediaContent]:
+        image_url = data.attachments[0].url
+        image_signature = data.extra.get("image_signature", "pinterest")
+        filename = f"{image_signature}.gif"
+        filepath = os.path.join(self.output_path, filename)
+
+        job = await self.arq.enqueue_job(
+            "universal_download",
+            image_url,
+            filepath,
+            _queue_name='light'
+        )
+        try:
+            downloaded_path = await job.result()
+        except Exception as e:
+            raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                service=Services.PINTEREST,
+                message=f"Failed to download Pinterest GIF: {e}",
+                url=data.url,
+                critical=True,
+                is_logged=True
+            )
+
+        if not downloaded_path or not await aios.path.exists(downloaded_path):
+            raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                message="GIF file not found after download",
+                url=data.url,
+                service=Services.PINTEREST,
+                is_logged=True
+            )
+
+        return [MediaContent(
+            type=MediaType.GIF,
+            path=Path(downloaded_path),
+        )]
+
+    async def _download_photo(self, data: MediaMetadata) -> List[MediaContent]:
+        image_url = data.attachments[0].url
+        title = data.title
+        image_signature = data.extra.get("image_signature", "pinterest")
+        original_url = re.sub(r"/\d+x", "/originals", image_url)
+        file_ext = Path(original_url.split('?')[0]).suffix or '.jpg'
+        filename = f"{image_signature}{file_ext}"
+        filepath = os.path.join(self.output_path, filename)
+
+        # Try original quality
+        try:
+            job = await self.arq.enqueue_job(
+                "universal_download",
+                original_url,
+                filepath,
+                _queue_name='light'
+            )
+            downloaded_path = await job.result()
+
+            if downloaded_path and await aios.path.exists(downloaded_path):
+                # Convert only if not JPG/JPEG
+                if not downloaded_path.lower().endswith(('.jpg', '.jpeg')):
+                    job = await self.arq.enqueue_job(
+                        "convert_to_jpg",
+                        downloaded_path,
+                        _queue_name='light'
+                    )
+                    converted_img = await job.result()
+
+                    if await aios.path.exists(converted_img):
+                        await delete_files([downloaded_path])
+                        downloaded_path = converted_img
+
+                return [MediaContent(
+                    type=MediaType.PHOTO,
+                    path=Path(downloaded_path),
+                    title=escape_html(title),
+                )]
+        except Exception as e:
+            logger.warning(f"Original quality failed: {e}")
+
+        # Fallback to standard quality
+        job = await self.arq.enqueue_job(
+            "universal_download",
+            image_url,
+            filepath,
+            _queue_name='light'
+        )
+        try:
+            downloaded_path = await job.result()
+        except Exception as e:
+            raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                service=Services.PINTEREST,
+                message=f"Failed to download Pinterest photo: {e}",
+                url=data.url,
+                critical=True,
+                is_logged=True
+            )
+
+        if not downloaded_path or not await aios.path.exists(downloaded_path):
+            raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                message="Photo file not found after download",
+                url=data.url,
+                service=Services.PINTEREST,
+                is_logged=True
+            )
+
+        # Convert only if not JPG/JPEG
+        if not downloaded_path.lower().endswith(('.jpg', '.jpeg')):
+            job = await self.arq.enqueue_job(
+                "convert_to_jpg",
+                downloaded_path,
+                _queue_name='light'
+            )
+            converted_img = await job.result()
+
+            if await aios.path.exists(converted_img):
+                await delete_files([downloaded_path])
+                downloaded_path = converted_img
+
+        return [MediaContent(
+            type=MediaType.PHOTO,
+            path=Path(downloaded_path),
+            title=escape_html(title),
+        )]

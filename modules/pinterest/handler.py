@@ -4,6 +4,7 @@ from aiogram import F
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from models.errors import BotError, ErrorCode
 from models.service_list import Services
 from modules.router import service_router as router
 from senders.media_sender import MediaSender
@@ -63,7 +64,20 @@ async def process_pinterest_url(message: Message, db_session: AsyncSession):
 
         # Download content
         service = PinterestService(arq=arq)
-        media_content = await service.download(message.text)
+
+        media_metadata = await service.get_info(message.text)
+
+        if not media_metadata:
+            raise BotError(
+                code=ErrorCode.METADATA_ERROR,
+                message="Failed to get metadata",
+                url=message.text,
+                service=Services.PINTEREST,
+                is_logged=True,
+                critical=True
+            )
+
+        media_content = await service.download(media_metadata)
 
         # Log success
         await log_download_event(db_session, user_id, Services.PINTEREST, 'success')

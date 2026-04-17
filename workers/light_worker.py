@@ -608,6 +608,47 @@ async def convert_to_png(
         raise
 
 
+async def convert_to_jpg(
+        ctx,
+        input_path: str,
+        quality: int = 95,
+) -> str:
+    """
+    Convert image to JPG format.
+
+    Args:
+        ctx: ARQ context
+        input_path: Input image path
+        quality: JPEG quality (1-100, default 95)
+
+    Returns:
+        str: Output JPG file path
+    """
+    logger.info(f"Converting {input_path} to JPG")
+
+    try:
+        output_path = str(Path(input_path).with_suffix(".jpg"))
+        ImageFile.LOAD_TRUNCATED_IMAGES = True
+        img = Image.open(input_path)
+        
+        # Convert RGBA to RGB if needed
+        if img.mode in ("RGBA", "LA", "P"):
+            background = Image.new("RGB", img.size, (255, 255, 255))
+            if img.mode == "P":
+                img = img.convert("RGBA")
+            background.paste(img, mask=img.split()[-1] if img.mode in ("RGBA", "LA") else None)
+            img = background
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
+        
+        img.save(output_path, "JPEG", quality=quality, optimize=True)
+        logger.info(f"Conversion complete: {output_path}")
+        return output_path
+    except Exception as e:
+        logger.error(f"Image conversion failed: {e}")
+        raise
+
+
 
 # ============================================================================
 # WORKER SETTINGS
@@ -630,6 +671,7 @@ class WorkerSettings:
         # Utilities
         universal_url_resolve,
         convert_to_png,
+        convert_to_jpg,
     ]
     redis_settings = RedisSettings(host='redis', port=6379)
     queue_name = 'light'

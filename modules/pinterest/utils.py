@@ -5,19 +5,17 @@ from typing import Any, Dict, Optional
 from curl_cffi.requests import AsyncSession
 
 from models.errors import BotError, ErrorCode
-from utils import get_user_agent
+from models.metadata import MediaMetadata, MetadataType, MediaAttachment
 
 logger = logging.getLogger(__name__)
 
 
-async def get_pin_info(url: str) -> Dict[str, Any]:
+async def get_pin_info(url: str) -> MediaMetadata:
     """Fetch pin information from Pinterest API."""
     async with AsyncSession(impersonate="chrome136") as session:
-        # Follow redirects for short URLs
         response = await session.get(url, allow_redirects=True)
         final_url = str(response.url)
 
-        # Extract pin ID from URL
         match = re.search(r"/pin/(\d+)", final_url)
         if not match:
             raise BotError(
@@ -28,13 +26,9 @@ async def get_pin_info(url: str) -> Dict[str, Any]:
             )
 
         pin_id = match.group(1)
-        logger.debug(f"Extracted pin ID: {pin_id}")
-
-        # Fetch pin data from API
         api_url = "https://www.pinterest.com/resource/PinResource/get/"
         headers = {
             "accept": "application/json, text/javascript, */*, q=0.01",
-            "user-agent": get_user_agent(),
             "x-pinterest-pws-handler": "www/pin/[id]/feedback.js",
         }
         params = {
@@ -43,7 +37,6 @@ async def get_pin_info(url: str) -> Dict[str, Any]:
         }
 
         response = await session.get(api_url, params=params, headers=headers)
-
         if response.status_code != 200:
             raise BotError(
                 code=ErrorCode.METADATA_ERROR,
@@ -52,71 +45,63 @@ async def get_pin_info(url: str) -> Dict[str, Any]:
                 is_logged=True
             )
 
-        response_json = response.json()
-        root = response_json["resource_response"]["data"]
-
-        title = root.get("title", "Pinterest Media")
-        image_signature = root["image_signature"]
-        ext = ""
-        carousel_data = None
-        video = None
-        image = None
-
-        # Check for carousel
-        if root.get("carousel_data"):
-            carousel = root["carousel_data"]["carousel_slots"]
-            carousel_data = []
-            for carousel_element in carousel:
-                image_url = carousel_element["images"]["736x"]["url"]
-                carousel_data.append(image_url)
-            ext = "carousel"
-
-        # Check for story pin video
-        elif (
-            isinstance(root.get("story_pin_data"), dict)
-            and isinstance(root["story_pin_data"].get("pages"), list)
-            and len(root["story_pin_data"]["pages"]) > 0
-            and isinstance(root["story_pin_data"]["pages"][0].get("blocks"), list)
-            and len(root["story_pin_data"]["pages"][0]["blocks"]) > 0
-            and isinstance(root["story_pin_data"]["pages"][0]["blocks"][0], dict)
-            and isinstance(
-                root["story_pin_data"]["pages"][0]["blocks"][0].get("video"), dict
+        data = response.json().get("resource_response", {}).get("data", {})
+        if not data:
+            raise BotError(
+                code=ErrorCode.METADATA_ERROR,
+                message="Invalid API response structure",
+                url=url,
+                is_logged=True
             )
-            and isinstance(
-                root["story_pin_data"]["pages"][0]["blocks"][0]["video"].get(
-                    "video_list"
-                ),
-                dict,
-            )
-        ):
-            video_list = root["story_pin_data"]["pages"][0]["blocks"][0]["video"][
-                "video_list"
-            ]
-            video = get_best_video(video_list)
 
-            if video:
-                ext = "mp4"
+        title = data.get("title") or "Pinterest Media"
+        attachments = []
+        media_type = "unknown"
 
-        # Check for regular video
-        elif isinstance(root.get("videos"), dict) and isinstance(
-            root["videos"].get("video_list"), dict
-        ):
-            video_list = root["videos"]["video_list"]
-            video = get_best_video(video_list)
+        # Carousel
+        carousel_data = data.get("carousel_data") or {}
+        carousel = carousel_data.get("carousel_slots")
+        if carousel:
+            for slot in carousel:
+                img_url = slot.get("images", {}).get("736x", {}).get("url")
+                if img_url:
+                    attachments.append(MediaAttachment(url=img_url, mime_type="image/jpeg"))
+            media_type = "gallery" if attachments else "unknown"
 
-            if video:
-                ext = "mp4"
+        # Story pin video
+        elif not attachments:
+            story_pin = data.get("story_pin_data") or {}
+            pages = story_pin.get("pages")
+            if pages and pages[0].get("blocks"):
+                video_block = (pages[0]["blocks"][0].get("video") or {}).get("video_list")
+                if video_block:
+                    video_url = get_best_video(video_block)
+                    if video_url:
+                        attachments.append(MediaAttachment(url=video_url, mime_type="video/mp4"))
+                        media_type = "video"
 
-        # Check for image
-        elif (
-            isinstance(root.get("images"), dict)
-            and isinstance(root["images"].get("orig"), dict)
-            and "url" in root["images"]["orig"]
-        ):
-            image = root["images"]["orig"]["url"]
-            ext = "jpg"
+        # Regular video
+        if not attachments:
+            videos = data.get("videos") or {}
+            video_list = videos.get("video_list")
+            if video_list:
+                video_url = get_best_video(video_list)
+                if video_url:
+                    attachments.append(MediaAttachment(url=video_url, mime_type="video/mp4"))
+                    media_type = "video"
 
-        else:
+        # Image or GIF
+        if not attachments:
+            images = data.get("images") or {}
+            orig = images.get("orig") or {}
+            img_url = orig.get("url")
+            if img_url:
+                is_gif = img_url.lower().endswith(".gif")
+                mime_type = "image/gif" if is_gif else "image/jpeg"
+                media_type = "gif" if is_gif else "photo"
+                attachments.append(MediaAttachment(url=img_url, mime_type=mime_type))
+
+        if not attachments:
             raise BotError(
                 code=ErrorCode.METADATA_ERROR,
                 message=f"Unknown Pinterest media type. Pin id: {pin_id}",
@@ -124,16 +109,14 @@ async def get_pin_info(url: str) -> Dict[str, Any]:
                 is_logged=True
             )
 
-        data = {
-            "title": title,
-            "image_signature": image_signature,
-            "ext": ext,
-            "carousel_data": carousel_data,
-            "video": video,
-            "image": image,
-        }
-
-        return data
+        return MediaMetadata(
+            type=MetadataType.METADATA,
+            url=url,
+            title=title,
+            media_type=media_type,
+            attachments=attachments,
+            extra={"image_signature": data.get("image_signature", pin_id)}
+        )
 
 
 def get_best_video(video_list: Dict[str, Any]) -> Optional[str]:
