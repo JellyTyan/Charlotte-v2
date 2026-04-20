@@ -403,7 +403,9 @@ async def universal_html_parse(
     """
     logger.info(f"Parsing HTML with {selector_type} selectors")
 
-    try:
+    loop = asyncio.get_running_loop()
+
+    def parse():
         soup = BeautifulSoup(html_content, "html.parser")
         results = {}
 
@@ -431,6 +433,8 @@ async def universal_html_parse(
 
         return results
 
+    try:
+        return await loop.run_in_executor(None, parse)
     except Exception as e:
         logger.error(f"HTML parsing failed: {e}")
         raise
@@ -596,11 +600,17 @@ async def convert_to_png(
     """
     logger.info(f"Converting {input_path} to PNG")
 
-    try:
+    loop = asyncio.get_running_loop()
+
+    def convert():
         output_path = str(Path(input_path).with_suffix(".png"))
         ImageFile.LOAD_TRUNCATED_IMAGES = True
         img = Image.open(input_path)
         img.save(output_path, "PNG", optimize=True)
+        return output_path
+
+    try:
+        output_path = await loop.run_in_executor(None, convert)
         logger.info(f"Conversion complete: {output_path}")
         return output_path
     except Exception as e:
@@ -626,7 +636,9 @@ async def convert_to_jpg(
     """
     logger.info(f"Converting {input_path} to JPG")
 
-    try:
+    loop = asyncio.get_running_loop()
+
+    def convert():
         output_path = str(Path(input_path).with_suffix(".jpg"))
         ImageFile.LOAD_TRUNCATED_IMAGES = True
         img = Image.open(input_path)
@@ -642,6 +654,10 @@ async def convert_to_jpg(
             img = img.convert("RGB")
         
         img.save(output_path, "JPEG", quality=quality, optimize=True)
+        return output_path
+
+    try:
+        output_path = await loop.run_in_executor(None, convert)
         logger.info(f"Conversion complete: {output_path}")
         return output_path
     except Exception as e:
