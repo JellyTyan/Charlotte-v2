@@ -4,6 +4,7 @@ import logging
 import os
 import shutil
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -19,6 +20,9 @@ from PIL import Image
 from io import BytesIO
 
 logger = logging.getLogger(__name__)
+
+# Dedicated executor for subprocess operations
+_subprocess_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="ffmpeg")
 
 
 # ============================================================================
@@ -211,50 +215,48 @@ async def universal_gallery_dl(
             cmd.extend([f"--{key}", str(value)])
 
     cmd.append(url)
-    try:
-        logger.debug(f"Running gallery-dl: {' '.join(cmd)}")
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        stdout, stderr = await proc.communicate()
+    
+    logger.debug(f"Running gallery-dl: {' '.join(cmd)}")
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    stdout, stderr = await proc.communicate()
 
-        if proc.returncode != 0:
-            logger.error(f"gallery-dl error: {stderr.decode()}")
-            raise Exception(f"gallery-dl error: {stderr.decode()}")
+    if proc.returncode != 0:
+        logger.error(f"gallery-dl error: {stderr.decode()}")
+        raise Exception(f"gallery-dl error: {stderr.decode()}")
 
-        output = stdout.decode().strip()
-        if not output:
-            raise Exception(f"gallery-dl error: {stderr.decode()}")
+    output = stdout.decode().strip()
+    if not output:
+        raise Exception(f"gallery-dl error: {stderr.decode()}")
 
-        if extract_only:
-            try:
-                data = json.loads(output)
-                if isinstance(data, list) and len(data) > 0:
-                    first_item = data[0]
-                    if isinstance(first_item, list) and len(first_item) > 1:
-                        items.append(first_item[1])
-                    else:
-                        raise Exception(f"Structure mismatch: {stderr.decode()}")
-            except json.JSONDecodeError:
-                lines = output.splitlines()
-                for line in lines:
-                    try:
-                        line_json = json.loads(line)
-                        if isinstance(line_json, list) and len(line_json) > 1:
-                            items.append(line_json[1])
-                    except:
-                        pass
-                if not items:
+    if extract_only:
+        try:
+            data = json.loads(output)
+            if isinstance(data, list) and len(data) > 0:
+                first_item = data[0]
+                if isinstance(first_item, list) and len(first_item) > 1:
+                    items.append(first_item[1])
+                else:
                     raise Exception(f"Structure mismatch: {stderr.decode()}")
-        else:
-            # Parse downloaded files from stdout
-            for line in output.strip().split('\n'):
-                if line and os.path.exists(line):
-                    files.append(line)
-    except Exception as e:
-        logger.error(f"Error executing gallery-dl: {e}")
+        except json.JSONDecodeError:
+            lines = output.splitlines()
+            for line in lines:
+                try:
+                    line_json = json.loads(line)
+                    if isinstance(line_json, list) and len(line_json) > 1:
+                        items.append(line_json[1])
+                except:
+                    pass
+            if not items:
+                raise Exception(f"Structure mismatch: {stderr.decode()}")
+    else:
+        # Parse downloaded files from stdout
+        for line in output.strip().split('\n'):
+            if line and os.path.exists(line):
+                files.append(line)
 
     return {
         "items": items,
@@ -297,6 +299,8 @@ async def universal_ffmpeg_process(
     options = options or {}
 
     def process():
+        concat_file = None
+        
         if operation == "convert_audio":
             codec = options.get("codec", "libmp3lame")
             bitrate = options.get("bitrate", "192k")
@@ -386,7 +390,7 @@ async def universal_ffmpeg_process(
                 "-show_streams", "-show_format",
                 input_file
             ]
-            probe_result = subprocess.run(probe_cmd, capture_output=True, text=True)
+            probe_result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=30)
 
             rotation = 0
             width = 0
@@ -442,33 +446,38 @@ async def universal_ffmpeg_process(
                     "-y", output_file
                 ]
 
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            if result.returncode != 0:
-                raise Exception(f"FFmpeg failed: {result.stderr}")
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+                if result.returncode != 0:
+                    raise Exception(f"FFmpeg failed: {result.stderr}")
 
-            # Create thumbnail if requested
-            thumb_path = None
-            if options and options.get('create_thumbnail'):
-                thumb_path = options.get('thumbnail_path')
-                if thumb_path:
-                    thumb_cmd = [
-                        "ffmpeg", "-i", output_file,
-                        "-ss", "00:00:01", "-vframes", "1",
-                        "-s", f"{width}x{height}",
-                        "-y", thumb_path
-                    ]
-                    thumb_result = subprocess.run(thumb_cmd, capture_output=True, text=True)
-                    if thumb_result.returncode != 0:
-                        logger.warning(f"Thumbnail creation failed: {thumb_result.stderr}")
-                        thumb_path = None
+                # Create thumbnail if requested
+                thumb_path = None
+                if options and options.get('create_thumbnail'):
+                    thumb_path = options.get('thumbnail_path')
+                    if thumb_path:
+                        thumb_cmd = [
+                            "ffmpeg", "-i", output_file,
+                            "-ss", "00:00:01", "-vframes", "1",
+                            "-s", f"{width}x{height}",
+                            "-y", thumb_path
+                        ]
+                        thumb_result = subprocess.run(thumb_cmd, capture_output=True, text=True, timeout=30)
+                        if thumb_result.returncode != 0:
+                            logger.warning(f"Thumbnail creation failed: {thumb_result.stderr}")
+                            thumb_path = None
 
-            return {
-                'path': output_file,
-                'width': width,
-                'height': height,
-                'duration': duration,
-                'thumbnail': thumb_path
-            }
+                return {
+                    'path': output_file,
+                    'width': width,
+                    'height': height,
+                    'duration': duration,
+                    'thumbnail': thumb_path
+                }
+            finally:
+                # Clean up concat file if it was created
+                if concat_file and os.path.exists(concat_file):
+                    os.remove(concat_file)
 
         elif operation == "get_info":
             # Get video info using ffprobe
@@ -478,7 +487,7 @@ async def universal_ffmpeg_process(
                 "-show_format", "-show_streams",
                 input_file
             ]
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             if result.returncode != 0:
                 raise Exception(f"ffprobe failed: {result.stderr}")
 
@@ -515,20 +524,19 @@ async def universal_ffmpeg_process(
         else:
             raise ValueError(f"Unknown operation: {operation}")
 
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
 
-        if result.returncode != 0:
-            raise Exception(f"FFmpeg failed: {result.stderr}")
+            if result.returncode != 0:
+                raise Exception(f"FFmpeg failed: {result.stderr}")
 
-        # Clean up concat file if created
-        if operation == "concat":
-            concat_file = output_file + ".concat.txt"
-            if os.path.exists(concat_file):
+            return output_file
+        finally:
+            # Clean up concat file if created
+            if concat_file and os.path.exists(concat_file):
                 os.remove(concat_file)
 
-        return output_file
-
-    return await loop.run_in_executor(None, process)
+    return await loop.run_in_executor(_subprocess_executor, process)
 
 
 # ============================================================================
@@ -691,3 +699,6 @@ class WorkerSettings:
     ]
     redis_settings = RedisSettings(host='redis', port=6379)
     queue_name = 'heavy'
+    max_jobs = 4
+    job_timeout = 300
+    keep_result_s = 600
