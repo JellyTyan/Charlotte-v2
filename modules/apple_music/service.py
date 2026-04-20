@@ -181,6 +181,14 @@ class AppleMusicService:
 
                 results = await asyncio.gather(*[job.result() for job in download_tasks])
 
+                if cover_url and cover_path:
+                    try:
+                        process_job = await self.arq.enqueue_job('process_audio_thumbnail', input_path=cover_path, _queue_name='light')
+                        cover_path = await process_job.result()
+                    except Exception as e:
+                        logger.warning(f"Failed to process Apple Music cover: {e}")
+                        cover_path = None
+
                 # 3. Update Metadata
                 try:
                     job = await self.arq.enqueue_job(
@@ -273,6 +281,14 @@ class AppleMusicService:
                     await self.arq.enqueue_job("universal_download", full_cover_url, full_cover_path))
 
             results = await asyncio.gather(*[job.result() for job in download_tasks])
+
+            if cover_url and cover_path:
+                try:
+                    process_job = await self.arq.enqueue_job('process_audio_thumbnail', input_path=cover_path, _queue_name='light')
+                    cover_path = await process_job.result()
+                except Exception as e:
+                    logger.warning(f"Failed to process Apple Music cover (fallback): {e}")
+                    cover_path = None
 
             logger.debug("Updating metadata")
             job = await self.arq.enqueue_job(

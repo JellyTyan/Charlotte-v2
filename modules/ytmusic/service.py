@@ -238,6 +238,9 @@ class YTMusicService:
 
                     try:
                         await job.result()
+                        # Process audio thumbnail for Telegram
+                        process_job = await self.arq.enqueue_job('process_audio_thumbnail', input_path=cover_path, _queue_name='light')
+                        cover_path = await process_job.result()
                     except Exception as e:
                         logger.warning(f"Failed to download YTMusic cover: {e}")
                         cover_path = None

@@ -355,6 +355,8 @@ class YouTubeService:
                 try:
                     job = await self.arq.enqueue_job('universal_download', url=thumbnail_url, destination=thumbnail_path, _queue_name='light')
                     await job.result()
+                    process_job = await self.arq.enqueue_job('process_audio_thumbnail', input_path=thumbnail_path, _queue_name='light')
+                    thumbnail_path = await process_job.result()
                 except Exception as e:
                     logger.warning(f"Failed to download thumbnail: {e}")
 
