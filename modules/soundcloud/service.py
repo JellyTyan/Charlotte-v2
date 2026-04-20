@@ -10,7 +10,7 @@ from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
 from models.service_list import Services
-from utils import get_extra_audio_options, transliterate
+from utils import get_extra_audio_options, transliterate, sanitize_filename
 from .utils import get_cover_url, get_song_info, get_playlist_info
 
 logger = logging.getLogger(__name__)
@@ -127,12 +127,13 @@ class SoundCloudService:
                 is_logged=True
             )
         try:
+            safe_title = sanitize_filename(transliterate(meta.title or str(uuid.uuid4())))
             job = await self.arq.enqueue_job(
                 "universal_ytdlp_extract",
                 url=meta.url,
                 extract_only = False,
                 format_selector = None,
-                output_template = f"storage/temp/{transliterate(meta.title or str(uuid.uuid4()))}.%(ext)s",
+                output_template = f"storage/temp/{safe_title}.%(ext)s",
                 extra_opts=get_extra_audio_options(),
                 extract_audio = True,
                 _queue_name='heavy'
@@ -155,7 +156,8 @@ class SoundCloudService:
             cover_url = get_cover_url(info_dict)
 
             if cover_url:
-                cover_path = f"{self.output_path}/{transliterate(meta.title or str(uuid.uuid4()))}.jpg"
+                safe_cover_name = sanitize_filename(transliterate(meta.title or str(uuid.uuid4())))
+                cover_path = f"{self.output_path}/{safe_cover_name}.jpg"
                 logger.debug(f"Downloading cover: {cover_url}")
                 job = await self.arq.enqueue_job(
                     "universal_download",

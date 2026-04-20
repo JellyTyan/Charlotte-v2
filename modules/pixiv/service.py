@@ -11,7 +11,7 @@ from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
 from models.service_list import Services
-from utils import escape_html, get_user_agent
+from utils import escape_html, get_user_agent, sanitize_filename
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,9 @@ class PixivService:
                         logger.warning(f"No original URL for page {i}")
                         continue
 
-                    filename = os.path.join(self.output_path, img_url.split("/")[-1])
+                    raw_filename = img_url.split("/")[-1]
+                    safe_filename = sanitize_filename(raw_filename)
+                    filename = os.path.join(self.output_path, safe_filename)
                     logger.debug(f"Enqueueing download for page {i}: {img_url}")
 
                     # Enqueue ARQ download job

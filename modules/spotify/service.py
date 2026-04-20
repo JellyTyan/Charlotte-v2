@@ -12,7 +12,7 @@ from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from models.service_list import Services
 from storage.cache.redis_client import get_or_cache
-from utils import search_music, transliterate, random_cookie_file, get_extra_audio_options, sanitize_filename
+from utils import search_music, transliterate, random_cookie_file, get_extra_audio_options, sanitize_filename, sanitize_filename
 from utils.service_utils import get_audio_options
 from utils.tidal import TidalUtil
 from .utils import (
@@ -226,7 +226,7 @@ class SpotifyService:
                 video_link,
                 extract_only = False,
                 format_selector = None,
-                output_template = f"storage/temp/{transliterate(title)}.%(ext)s",
+                output_template = f"storage/temp/{sanitize_filename(transliterate(title))}.%(ext)s",
                 cookies_file = random_cookie_file("youtube"),
                 extra_opts=get_extra_audio_options(),
                 _queue_name='heavy'
