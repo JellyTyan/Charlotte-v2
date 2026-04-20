@@ -1,5 +1,5 @@
 import datetime
-from sqlalchemy import BigInteger, Boolean, Date, Integer, String, DateTime, JSON
+from sqlalchemy import BigInteger, Boolean, Date, Integer, String, DateTime, JSON, Text
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -61,6 +61,28 @@ class Payment(Base):
     telegram_payment_charge_id: Mapped[str] = mapped_column(String, nullable=False)
     provider_payment_charge_id: Mapped[str] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="completed")
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.datetime.now, nullable=False
+    )
+
+
+class MediaCache(Base):
+    __tablename__ = "mediacache"
+
+    media_id: Mapped[int] = mapped_column(primary_key=True)
+    file_id: Mapped[str] = mapped_column(String, nullable=False)
+    service: Mapped[str] = mapped_column(String, nullable=False)
+    media_type = mapped_column(String)  # 'video', 'audio', 'photo', 'gallery'
+
+    title: Mapped[str] = mapped_column(String, nullable=True)
+    description: Mapped[str] = mapped_column(Text, nullable=True)
+    author: Mapped[str] = mapped_column(String, nullable=True)
+    duration: Mapped[str] = mapped_column(String, nullable=True)
+
+    thumbnail_file_id: Mapped[str] = mapped_column(String, nullable=True)
+
+    platform: Mapped[str] = mapped_column(String)  # 'youtube', 'instagram' и т.д.
+    attachments: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.datetime.now, nullable=False
     )
