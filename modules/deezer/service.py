@@ -137,6 +137,8 @@ class DeezerService:
                         job = await self.arq.enqueue_job("universal_download", cover_url, cover_path)
                         try:
                             await job.result()
+                            process_job = await self.arq.enqueue_job('process_audio_thumbnail', input_path=cover_path, _queue_name='light')
+                            cover_path = await process_job.result()
                         except Exception as e:
                             logger.warning(f"Failed to download Tidal cover: {e}")
                             cover_path = None
@@ -246,6 +248,8 @@ class DeezerService:
                     job = await self.arq.enqueue_job("universal_download", cover_url, cover_path)
                     try:
                         await job.result()
+                        process_job = await self.arq.enqueue_job('process_audio_thumbnail', input_path=cover_path, _queue_name='light')
+                        cover_path = await process_job.result()
                     except Exception as e:
                         logger.warning(f"Failed to download cover from YouTube fallback: {e}")
                         cover_path = None
