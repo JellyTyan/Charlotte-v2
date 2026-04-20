@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata
-from utils import truncate_string, process_video_for_telegram, escape_html
+from utils import truncate_string, process_video_for_telegram, escape_html, sanitize_filename
 from models.service_list import Services
 from .utils import get_post_data
 from .account_manager import get_available_account, record_request, mark_account_banned
@@ -62,8 +62,9 @@ class InstagramService:
         author_username = post_data.get("username", None)
         author_name = post_data.get("full_name", None)
         images = post_data.get("media", [])
+        shortcode = sanitize_filename(post_data.get('shortcode', 'instagram'))
         filenames = [
-            f"{post_data.get('shortcode', i)}_{i}.{urlparse(img).path.split('.')[-1]}"
+            f"{shortcode}_{i}.{sanitize_filename(urlparse(img).path.split('.')[-1])}"
             for i, img in enumerate(images, start=1)
         ]
 

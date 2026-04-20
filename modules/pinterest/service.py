@@ -13,7 +13,7 @@ from models.metadata import MediaMetadata
 from models.service_list import Services
 
 from .utils import get_pin_info
-from utils import escape_html, process_video_for_telegram, delete_files
+from utils import escape_html, process_video_for_telegram, delete_files, sanitize_filename
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ class PinterestService:
 
         video = data.attachments[0]
         video_url = video.url
-        image_signature = data.extra.get("image_signature")
+        image_signature = sanitize_filename(data.extra.get("image_signature", "pinterest"))
         filename = f"{image_signature}.mp4"
         filepath = os.path.join(self.output_path, filename)
 
@@ -134,7 +134,7 @@ class PinterestService:
 
     async def _download_carousel(self, data: MediaMetadata) -> List[MediaContent]:
         title = data.title
-        image_signature = data.extra.get("image_signature", "pinterest")
+        image_signature = sanitize_filename(data.extra.get("image_signature", "pinterest"))
 
         async def download_single_image(i: int, image) -> MediaContent | None:
             original_url = re.sub(r"/\d+x", "/originals", image.url)
@@ -213,7 +213,7 @@ class PinterestService:
 
     async def _download_gif(self, data: MediaMetadata) -> List[MediaContent]:
         image_url = data.attachments[0].url
-        image_signature = data.extra.get("image_signature", "pinterest")
+        image_signature = sanitize_filename(data.extra.get("image_signature", "pinterest"))
         filename = f"{image_signature}.gif"
         filepath = os.path.join(self.output_path, filename)
 
@@ -252,7 +252,7 @@ class PinterestService:
     async def _download_photo(self, data: MediaMetadata) -> List[MediaContent]:
         image_url = data.attachments[0].url
         title = data.title
-        image_signature = data.extra.get("image_signature", "pinterest")
+        image_signature = sanitize_filename(data.extra.get("image_signature", "pinterest"))
         original_url = re.sub(r"/\d+x", "/originals", image_url)
         file_ext = Path(original_url.split('?')[0]).suffix or '.jpg'
         filename = f"{image_signature}{file_ext}"

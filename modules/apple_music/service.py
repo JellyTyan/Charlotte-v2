@@ -233,7 +233,7 @@ class AppleMusicService:
                 video_link,
                 extract_only = False,
                 format_selector = None,
-                output_template = f"storage/temp/{transliterate(title)}.%(ext)s",
+                output_template = f"storage/temp/{sanitize_filename(transliterate(title))}.%(ext)s",
                 cookies_file = random_cookie_file("youtube"),
                 extra_opts=get_extra_audio_options(),
                 _queue_name='heavy'
