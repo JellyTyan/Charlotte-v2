@@ -37,6 +37,7 @@ class MediaMetadata:
     performer_url: str | None = None
     width: int | None = None                 # width (video/image)
     height: int | None = None                # height
+    cache_key: str | None = None             # cache key (for caching purposes)
 
     # Extra service-specific info
     extra: dict = field(default_factory=dict)

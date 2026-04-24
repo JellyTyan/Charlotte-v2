@@ -17,6 +17,7 @@ from utils.arq_pool import get_arq_pool
 from utils.file_utils import delete_files
 from utils.statistics_helper import log_download_event
 from .service import AppleMusicService
+from .utils import cache_check
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +40,18 @@ async def apple_handler(message:Message, config: Config, i18n: TranslatorRunner,
     if download_task:
         async def send_when_ready():
             try:
-                media_content = await download_task
-                if media_content:
-                    send_manager = MediaSender()
-                    await send_manager.send(message, media_content, service="applemusic", db_session=db_session)
+                result = await download_task
+                if result:
+                    media_content, cache_key = result
+                    if media_content:
+                        send_manager = MediaSender()
+                        await send_manager.send(
+                            message,
+                            media_content,
+                            service="applemusic",
+                            db_session=db_session,
+                            cache_key=cache_key
+                        )
             except Exception:
                 pass
         await task_manager.add_send_task(user_id, send_when_ready())
@@ -50,11 +59,11 @@ async def apple_handler(message:Message, config: Config, i18n: TranslatorRunner,
 
 async def process_apple_url(message: Message, config: Config, i18n: TranslatorRunner, db_session: AsyncSession):
     if not message.text:
-        return None
+        return None, None
     chat_id = message.chat.id
     user = message.from_user
     if not chat_id or not user:
-        return None
+        return None, None
 
     # Initialize ARQ pool
     arq = await get_arq_pool('light')
@@ -78,6 +87,9 @@ async def process_apple_url(message: Message, config: Config, i18n: TranslatorRu
         )
 
     if media_metadata.media_type == "track":
+        cache_check_result = await cache_check(db_session, media_metadata.cache_key)
+        if cache_check_result:
+            return [cache_check_result], media_metadata.cache_key
         if not media_metadata.performer or not media_metadata.title:
             raise BotError(
                 code=ErrorCode.METADATA_ERROR,
@@ -94,7 +106,7 @@ async def process_apple_url(message: Message, config: Config, i18n: TranslatorRu
         )
 
         await log_download_event(db_session, user.id, Services.APPLE_MUSIC, 'success')
-        return track
+        return track, media_metadata.cache_key
 
     elif media_metadata.media_type == "album" or media_metadata.media_type == "playlist":
         if chat_id < 0 and settings.profile.allow_playlists == False:
@@ -126,6 +138,10 @@ async def process_apple_url(message: Message, config: Config, i18n: TranslatorRu
 
             async def download_track_logic(meta=track_meta, mode=lossless_mode):
                 try:
+                    if meta.cache_key:
+                        cache_check_result = await cache_check(db_session, meta.cache_key)
+                        if cache_check_result:
+                            return [cache_check_result]
                     return await service.download(meta, lossless_mode=mode)
                 except Exception as e:
                     logger.error(f"Failed to download track {meta.title}: {e}")
@@ -138,11 +154,18 @@ async def process_apple_url(message: Message, config: Config, i18n: TranslatorRu
             )
 
             if track_download_task:
-                async def send_track_logic(task=track_download_task):
+                async def send_track_logic(task=track_download_task, meta=track_meta):
                     try:
                         track_content = await task
                         if track_content:
-                            await send_manager.send(message, track_content, skip_reaction=True, service="spotify", db_session=db_session)
+                            await send_manager.send(
+                                message,
+                                track_content,
+                                skip_reaction=True,
+                                service="applemusic",
+                                db_session=db_session,
+                                cache_key=meta.cache_key
+                            )
                             return True
                         return False
                     except Exception:
@@ -151,4 +174,5 @@ async def process_apple_url(message: Message, config: Config, i18n: TranslatorRu
                 await task_manager.add_send_task(user.id, send_track_logic(track_download_task))
 
         await log_download_event(db_session, user.id, Services.APPLE_MUSIC, 'success')
-        return None
+        return None, None
+    return None
