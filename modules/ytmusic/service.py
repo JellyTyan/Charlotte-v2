@@ -67,7 +67,7 @@ class YTMusicService(BaseService):
                             url=url,
                             extract_only=True,
                             cookies_file=random_cookie_file("youtube"),
-                            _queue_name='light'
+                            _queue_name='heavy'
                         )
                         try:
                             info = await job.result()
