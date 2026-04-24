@@ -3,12 +3,14 @@ import datetime
 import json
 from datetime import date
 
-from sqlalchemy import select, update, func, desc, or_
+from sqlalchemy import select, update, func, desc, or_, delete
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.dialects.postgresql import insert
 
-from .models import Users, Chats, Statistics, BotSetting
+from .models import Users, Chats, Statistics, BotSetting, MediaCache
 from storage.cache.redis_client import cache_get, cache_set, cache_delete, orm_to_dict, dict_to_orm
 from models.settings import UserSettingsJson, ChatSettingsJson
+from models.media_cache import MediaCacheDTO
 
 
 def _get_db():
@@ -531,3 +533,46 @@ async def get_all_chat_ids(session: AsyncSession) -> list[int]:
     stmt = select(Chats.chat_id)
     result = await session.execute(stmt)
     return [row[0] for row in result.fetchall()]
+
+
+async def get_media_cache(session: AsyncSession, cache_key: str) -> MediaCacheDTO | None:
+    """Ищет медиа в кэше по уникальному ключу (например, 'yt:123')"""
+
+    stmt = select(MediaCache).where(MediaCache.cache_key == cache_key)
+    result = await session.execute(stmt)
+    db_obj = result.scalar_one_or_none()
+
+    if not db_obj:
+        return None
+
+    return MediaCacheDTO.model_validate(db_obj, from_attributes=True)
+
+
+async def upsert_media_cache(session: AsyncSession, dto: MediaCacheDTO) -> MediaCacheDTO:
+    """Создает новую запись или обновляет существующую за 1 SQL-запрос"""
+
+    values_to_insert = dto.model_dump(exclude_none=True)
+
+    stmt = insert(MediaCache).values(**values_to_insert)
+
+    do_update_stmt = stmt.on_conflict_do_update(
+        index_elements=['cache_key'],
+        set_=stmt.excluded
+    ).returning(MediaCache)
+
+    result = await session.execute(do_update_stmt)
+    await session.commit()
+
+    updated_obj = result.scalar_one()
+    return MediaCacheDTO.model_validate(updated_obj, from_attributes=True)
+
+
+async def delete_media_cache(session: AsyncSession, cache_key: str) -> bool:
+    """Удаляет запись из кэша (например, если файл удалили с серверов Telegram)"""
+
+    stmt = delete(MediaCache).where(MediaCache.cache_key == cache_key).returning(MediaCache.media_id)
+    result = await session.execute(stmt)
+    await session.commit()
+
+    deleted_id = result.scalar_one_or_none()
+    return deleted_id is not None

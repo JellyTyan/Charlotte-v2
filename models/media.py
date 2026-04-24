@@ -15,6 +15,10 @@ class MediaContent:
     type: MediaType
     path: Optional[Path] = None
     content: Optional[bytes] = None
+    telegram_file_id: Optional[str] = None
+    telegram_document_file_id: Optional[str] = None
+    cover_file_id: Optional[str] = None
+    full_cover_file_id: Optional[str] = None
     filename: Optional[str] = None
     width: Optional[int] = None
     height: Optional[int] = None
@@ -24,3 +28,4 @@ class MediaContent:
     full_cover: Optional[Path] = None
     performer: Optional[str] = None
     is_blurred: bool | None = None
+
