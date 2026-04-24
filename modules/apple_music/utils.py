@@ -1,9 +1,13 @@
+import re
+
 from curl_cffi. requests import AsyncSession
 
 from models.errors import BotError, ErrorCode
+from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from models.service_list import Services
 from utils.download_utils import download_file
+from storage.db.crud import get_media_cache
 
 
 async def get_track_info(song_id: int, token: str, region_code: str = "us") -> MediaMetadata:
@@ -66,6 +70,7 @@ async def get_track_info(song_id: int, token: str, region_code: str = "us") -> M
             cover=small_cover,
             full_size_cover=full_cover,
             media_type="track",
+            cache_key=f"apple:{song_id}",
             extra={
                 'genres': genres,
                 'release_date': release_date,
@@ -151,6 +156,7 @@ async def get_playlist_info(playlist_id: str, token: str, region_code: str = "us
                 cover=track_cover,
                 full_size_cover=track_full_cover,
                 media_type='track',
+                cache_key=make_cache_key(track_attrs['url']),
                 extra={
                     'genres': genres,
                     'release_date': release_date,
@@ -251,6 +257,7 @@ async def get_album_info(album_id: str, token: str, region_code: str = "us") -> 
                 cover=track_cover,
                 full_size_cover=track_full_cover,
                 media_type='track',
+                cache_key=make_cache_key(track_attrs['url']),
                 extra={
                     'genres': genres,
                     'release_date': release_date,
@@ -273,3 +280,29 @@ async def get_album_info(album_id: str, token: str, region_code: str = "us") -> 
             },
             items=items
         )
+
+
+def make_cache_key(url: str) -> str | None:
+    patterns = [
+        r"music\.apple\.com/[a-z]{2}/song/(?:[^/]+/)?(?P<id>\d+)",
+        r"music\.apple\.com/[a-z]{2}/album/(?:[^/]+/)?\d+.*?[?&]i=(?P<id>\d+)",
+    ]
+    for pattern in patterns:
+        if m := re.search(pattern, url):
+            return f"apple:{int(m.group('id'))}"
+    return None
+
+async def cache_check(session: AsyncSession, cache_key: str) -> MediaContent | None:
+    cached = await get_media_cache(session, cache_key)
+    if cached:
+        return MediaContent(
+            type=MediaType.AUDIO,
+            telegram_file_id=cached.telegram_file_id,
+            telegram_document_file_id=cached.telegram_document_file_id,
+            cover_file_id=cached.data.cover,
+            full_cover_file_id=cached.data.full_cover,
+            title=cached.data.title,
+            performer=cached.data.author,
+            duration=cached.data.duration
+        )
+    return None

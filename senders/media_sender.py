@@ -244,32 +244,42 @@ class MediaSender:
                          settings: Union[UserSettingsJson, ChatSettingsJson], service: Optional[str] = None) -> None:
         logger.debug(f"Sending audio: {audio.title or 'Unknown'}")
 
-        if not audio.path:
+        if not audio.path and not audio.telegram_file_id:
             raise BotError(code=ErrorCode.SEND_ERROR, message="Missing audio file source", is_logged=True)
 
-        # Check file size before sending
-        file_size_mb = audio.path.stat().st_size / (1024 * 1024)
-        max_size_mb = 4000 if os.getenv("TELEGRAM_BOT_API_URL") else 2000
+        # Check file size before sending if path exists
+        if audio.path:
+            file_size_mb = audio.path.stat().st_size / (1024 * 1024)
+            max_size_mb = 4000 if os.getenv("TELEGRAM_BOT_API_URL") else 2000
 
-        if file_size_mb > max_size_mb:
-            raise BotError(
-                code=ErrorCode.LARGE_FILE,
-                message=f"Audio file is {file_size_mb:.1f}MB (limit: {max_size_mb}MB)",
-                is_logged=True
-            )
+            if file_size_mb > max_size_mb:
+                raise BotError(
+                    code=ErrorCode.LARGE_FILE,
+                    message=f"Audio file is {file_size_mb:.1f}MB (limit: {max_size_mb}MB)",
+                    is_logged=True
+                )
 
         if message.bot:
             await message.bot.send_chat_action(message.chat.id, "upload_voice")
 
         try:
-            sent_msg = await message.answer_audio(
-                audio=types.FSInputFile(audio.path),
-                disable_notification=not settings.profile.reactions,
-                thumbnail=types.FSInputFile(audio.cover) if audio.cover else None,
-                title=audio.title,
-                duration=audio.duration,
-                performer=audio.performer
-            )
+            if audio.telegram_file_id:
+                sent_msg = await message.answer_audio(
+                    audio=audio.telegram_file_id,
+                    disable_notification=not settings.profile.reactions,
+                    title=audio.title,
+                    duration=audio.duration,
+                    performer=audio.performer
+                )
+            else:
+                sent_msg = await message.answer_audio(
+                    audio=types.FSInputFile(audio.path),
+                    disable_notification=not settings.profile.reactions,
+                    thumbnail=types.FSInputFile(audio.cover) if audio.cover else None,
+                    title=audio.title,
+                    duration=audio.duration,
+                    performer=audio.performer
+                )
             if sent_msg.audio:
                 audio.telegram_file_id = sent_msg.audio.file_id
                 if sent_msg.audio.thumbnail:
