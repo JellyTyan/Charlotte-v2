@@ -1,4 +1,6 @@
 import datetime
+from datetime import timezone
+from typing import Any
 from sqlalchemy import BigInteger, Boolean, Date, Integer, String, DateTime, JSON, Text
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -70,19 +72,23 @@ class MediaCache(Base):
     __tablename__ = "mediacache"
 
     media_id: Mapped[int] = mapped_column(primary_key=True)
-    file_id: Mapped[str] = mapped_column(String, nullable=False)
-    service: Mapped[str] = mapped_column(String, nullable=False)
-    media_type = mapped_column(String)  # 'video', 'audio', 'photo', 'gallery'
 
-    title: Mapped[str] = mapped_column(String, nullable=True)
-    description: Mapped[str] = mapped_column(Text, nullable=True)
-    author: Mapped[str] = mapped_column(String, nullable=True)
-    duration: Mapped[str] = mapped_column(String, nullable=True)
+    # Unique key like "yt:dQw4w9WgXcQ" or "ig:p_123")
+    cache_key: Mapped[str] = mapped_column(String, unique=True, nullable=False)
 
-    thumbnail_file_id: Mapped[str] = mapped_column(String, nullable=True)
+    # ID file in Telgeram. May be null if gallery
+    telegram_file_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    platform: Mapped[str] = mapped_column(String)  # 'youtube', 'instagram' и т.д.
-    attachments: Mapped[dict] = mapped_column(JSON, default=dict)
+    # ID raw file in Telegram.
+    telegram_document_file_id: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    media_type: Mapped[str] = mapped_column(String, nullable=False)  # 'video', 'audio', 'gallery'
+    platform: Mapped[str] = mapped_column(String, nullable=False)  # 'youtube', 'instagram', 'tiktok'
+
+    data: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.datetime.now, nullable=False
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(timezone.utc),
+        nullable=False
     )

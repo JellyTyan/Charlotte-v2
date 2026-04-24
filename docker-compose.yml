@@ -21,6 +21,7 @@ services:
       - redis
       - postgres
       - nginx
+      - migrations
 
   redis:
     image: redis:7-alpine
@@ -140,6 +141,15 @@ services:
     networks:
       - charlotte-net
     restart: always
+
+  migrations:
+    build: .
+    env_file: .env
+    command: alembic upgrade head
+    depends_on:
+      - postgres
+    networks:
+      - charlotte-net
 
 networks:
   charlotte-net:

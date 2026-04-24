@@ -2,9 +2,6 @@ from typing import List
 
 from pydantic import BaseModel, Field
 
-from utils import truncate_string
-
-
 class ProfileSettings(BaseModel):
     language: str = "en"
     title_language: str = "en"
