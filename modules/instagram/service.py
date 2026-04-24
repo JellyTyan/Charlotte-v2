@@ -188,15 +188,18 @@ class InstagramService(BaseService):
                     output_template=f"{self.output_path}/%(id)s_%(title)s.%(ext)s",
                     cookies_file=cookie_file,
                     extra_opts={
-                        "http_headers": {
-                            "User-Agent": (
-                                "Mozilla/5.0 (Linux; Android 13; SM-S901B) "
-                                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                                "Chrome/131.0.0.0 Mobile Safari/537.36"
-                            ),
-                            "Sec-Ch-Ua": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
-                            "Sec-Ch-Ua-Mobile": "?1",
-                            "Sec-Ch-Ua-Platform": '"Android"',
+                        "postprocessors": [{
+                            "key": "FFmpegVideoConvertor",
+                            "preferedformat": "mp4",
+                        }],
+                        "postprocessor_args": {
+                            "default": [
+                                "-c:v", "libx264",
+                                "-preset", "medium",
+                                "-crf", "20",
+                                "-pix_fmt", "yuv420p",
+                                "-movflags", "+faststart"
+                            ]
                         },
                         "merge_output_format": "mp4",
                     },
