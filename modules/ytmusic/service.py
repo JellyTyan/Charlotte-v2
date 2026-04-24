@@ -56,6 +56,8 @@ class YTMusicService(BaseService):
                             performer=video_details.get("author", "Unknown"),
                             media_type="track",
                         )
+                    else:
+                        raise ValueError("videoDetails not found in response")
                 except Exception as e:
                     if attempt == 2:
                         logger.warning(f"ytmusicapi failed, using yt-dlp fallback: {e}")
@@ -69,11 +71,11 @@ class YTMusicService(BaseService):
                         )
                         try:
                             info = await job.result()
-                        except Exception as e:
+                        except Exception as dl_e:
                             raise BotError(
                                 code=ErrorCode.METADATA_ERROR,
                                 service=Services.YTMUSIC,
-                                message=f"Failed to fetch YTMusic info via yt-dlp: {e}",
+                                message=f"Failed to fetch YTMusic info via yt-dlp: {dl_e}",
                                 url=url,
                                 critical=True,
                                 is_logged=True
