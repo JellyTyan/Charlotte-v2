@@ -107,8 +107,11 @@ class TaskManager:
             return
 
         # Get user settings for locale
-        from storage.db.crud import get_user_settings
-        settings = await get_user_settings(user_id)
+        from storage.db.crud import get_user_settings, get_chat_settings
+        if message.chat.id < 0:
+            settings = await get_chat_settings(message.chat.id)
+        else:
+            settings = await get_user_settings(user_id)
         lang = settings.profile.language if settings else "en"
         i18n = hub.get_translator_by_locale(lang)
 
