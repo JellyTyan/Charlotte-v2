@@ -9,3 +9,4 @@ class YoutubeCallback(CallbackData, prefix="yt"):
     audio_id: Optional[str] = None
     url_hash: Optional[str] = None
     sponsored: Optional[bool] = False
+    resolution: Optional[str] = None

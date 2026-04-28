@@ -4,7 +4,7 @@ import logging
 import os
 import uuid
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
@@ -160,7 +160,13 @@ class RedditService:
 
         return None
 
-    async def download(self, meta: MediaMetadata, allow_nsfw: bool = True) -> List[MediaContent]:
+    async def download(self, meta: Union[str, MediaMetadata], allow_nsfw: bool = True) -> List[MediaContent]:
+        if isinstance(meta, str):
+            fetched_metadata = await self.get_info(meta)
+            if not fetched_metadata:
+                raise BotError(ErrorCode.METADATA_ERROR, message="Failed to get Reddit post info", service=Services.REDDIT, url=meta, is_logged=True)
+            meta = fetched_metadata
+
         media_contents = []
         if not self.arq:
             raise BotError(
@@ -180,7 +186,7 @@ class RedditService:
             )
         
         try:
-            if isinstance(meta, str):
+            if isinstance(meta, str): # Fallback just in case
                 raise BotError(ErrorCode.INVALID_URL, message="Invalid metadata format", url=meta, is_logged=True)
 
             if meta.media_type == "gallery" and meta.attachments:

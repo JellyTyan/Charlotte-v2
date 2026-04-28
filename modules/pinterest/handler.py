@@ -12,9 +12,9 @@ from tasks.task_manager import task_manager
 from utils.arq_pool import get_arq_pool
 from utils.statistics_helper import log_download_event
 from .service import PinterestService
+from .utils import get_cache_key, cache_check
 
 logger = logging.getLogger(__name__)
-
 
 PINTEREST_REGEX = r"https?://(?:www\.)?(?:pinterest\.com/[\w/-]+|pin\.it/[A-Za-z0-9]+)"
 
@@ -23,68 +23,35 @@ async def pinterest_handler(message: Message, db_session: AsyncSession):
     if not message.text or not message.from_user:
         return
 
+    url = message.text
+    chat_id = message.chat.id
     user_id = message.from_user.id
 
-    # Start download task
-    download_task = await task_manager.add_task(
-        user_id,
-        download_coro=process_pinterest_url(message, db_session),
-        message=message
-    )
+    if message.bot:
+        await message.bot.send_chat_action(chat_id, "choose_sticker")
 
-    # When download completes, queue send task
-    if download_task:
-        async def send_when_ready():
-            try:
-                media_content = await download_task
-                if media_content:
-                    send_manager = MediaSender()
-                    await send_manager.send(message, media_content, service="pinterest", db_session=db_session)
-            except Exception:
-                # Error already logged in download task
-                pass
+    send_manager = MediaSender()
+    cache_key = get_cache_key(url)
 
-        await task_manager.add_send_task(user_id, send_when_ready())
+    cached = await cache_check(db_session, cache_key)
+    if cached:
+        await send_manager.send(message, cached, service="pinterest", db_session=db_session)
+        return
 
-
-async def process_pinterest_url(message: Message, db_session: AsyncSession):
-    """Download Pinterest media and return content"""
-    if not message.bot or not message.text:
-        return None
-
-    user_id = message.from_user.id if message.from_user else message.chat.id
-
-    # Initialize ARQ pool
     arq = await get_arq_pool('light')
+    service = PinterestService(arq=arq)
 
     try:
-        # Send chat action for visual feedback
-        if message.bot:
-            await message.bot.send_chat_action(message.chat.id, "choose_sticker")
+        media_content = await task_manager.run_download(
+            user_id=user_id,
+            url=url,
+            coro=service.download(url)
+        )
 
-        # Download content
-        service = PinterestService(arq=arq)
+        if media_content:
+            await send_manager.send(message, media_content, service="pinterest", cache_key=cache_key, db_session=db_session)
 
-        media_metadata = await service.get_info(message.text)
-
-        if not media_metadata:
-            raise BotError(
-                code=ErrorCode.METADATA_ERROR,
-                message="Failed to get metadata",
-                url=message.text,
-                service=Services.PINTEREST,
-                is_logged=True,
-                critical=True
-            )
-
-        media_content = await service.download(media_metadata)
-
-        # Log success
-        await log_download_event(db_session, user_id, Services.PINTEREST, 'success')
-
-        return media_content
-
-    except Exception as e:
-        logger.error(f"Error processing Pinterest URL: {e}")
-        # Re-raise to let task manager handle it
-        raise
+    except BotError as e:
+        await log_download_event(db_session, user_id, Services.PINTEREST, 'failed_download')
+        logger.error(f"Pinterest download error: {e}")
+        raise e

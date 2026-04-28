@@ -1,8 +1,12 @@
+import re
+
 from curl_cffi.requests import AsyncSession
 
 from models.errors import BotError, ErrorCode
+from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from models.service_list import Services
+from storage.db.crud import get_media_cache
 from utils.download_utils import download_file
 
 async def get_track_info(track_id: int) -> MediaMetadata:
@@ -41,6 +45,7 @@ async def get_track_info(track_id: int) -> MediaMetadata:
             full_size_cover=full_cover_url,
             duration=data.get('duration'),
             media_type="track",
+            cache_key=f"deezer:{track_id}",
             extra={
                 'release_date': data.get('release_date'),
                 'track_number': data.get('track_position'),
@@ -84,6 +89,7 @@ async def get_album_info(album_id: int) -> MediaMetadata:
             track_md5 = track.get('md5_image')
             track_cover = f"https://cdn-images.dzcdn.net/images/cover/{track_md5}/400x400.jpg" if track_md5 else None
             track_full_cover = f"https://cdn-images.dzcdn.net/images/cover/{track_md5}/1900x1900.png" if track_md5 else None
+            track_id = track.get('id')
 
             items.append(MediaMetadata(
                 type=MetadataType.METADATA,
@@ -94,6 +100,7 @@ async def get_album_info(album_id: int) -> MediaMetadata:
                 full_size_cover=track_full_cover,
                 duration=track.get('duration'),
                 media_type="track",
+                cache_key=f"deezer:{track_id}" if track_id else None,
                 extra={
                     'release_date': track.get('release_date'),
                     'track_number': track.get('track_position'),
@@ -152,6 +159,7 @@ async def get_playlist_info(playlist_id: int) -> MediaMetadata:
             track_md5 = track.get('album', {}).get('md5_image')
             track_cover = f"https://cdn-images.dzcdn.net/images/cover/{track_md5}/400x400.jpg" if track_md5 else None
             track_full_cover = f"https://cdn-images.dzcdn.net/images/cover/{track_md5}/1900x1900.png" if track_md5 else None
+            track_id = track.get('id')
 
             items.append(MediaMetadata(
                 type=MetadataType.METADATA,
@@ -162,6 +170,7 @@ async def get_playlist_info(playlist_id: int) -> MediaMetadata:
                 full_size_cover=track_full_cover,
                 duration=track.get('duration'),
                 media_type="track",
+                cache_key=f"deezer:{track_id}" if track_id else None,
                 extra={
                     'release_date': track.get('release_date'),
                     'track_number': track.get('track_position'),
@@ -183,3 +192,28 @@ async def get_playlist_info(playlist_id: int) -> MediaMetadata:
             },
             items=items
         )
+
+
+def make_cache_key(url: str) -> str | None:
+    """Build a Deezer cache key from a track URL."""
+    match = re.search(r"/track/(\d+)", url)
+    if match:
+        return f"deezer:{match.group(1)}"
+    return None
+
+
+async def cache_check(session, cache_key: str) -> MediaContent | None:
+    """Check DB cache for a previously sent Deezer track and return a MediaContent if found."""
+    cached = await get_media_cache(session, cache_key)
+    if cached:
+        return MediaContent(
+            type=MediaType.AUDIO,
+            telegram_file_id=cached.telegram_file_id,
+            telegram_document_file_id=cached.telegram_document_file_id,
+            cover_file_id=cached.data.cover,
+            full_cover_file_id=cached.data.full_cover,
+            title=cached.data.title,
+            performer=cached.data.author,
+            duration=cached.data.duration
+        )
+    return None

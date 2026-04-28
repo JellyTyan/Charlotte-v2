@@ -488,10 +488,15 @@ async def get_db_overview_stats(session: AsyncSession) -> dict:
     active_users = res.scalar() or 0
     inactive_users = max(total_users - active_users, 0)
 
+    # Cache count
+    res = await session.execute(select(func.count()).select_from(MediaCache))
+    total_cached = res.scalar() or 0
+
     return {
         "total_users": total_users,
         "total_chats": total_chats,
         "inactive_users": inactive_users,
+        "total_cached": total_cached,
     }
 
 
@@ -533,6 +538,12 @@ async def get_all_chat_ids(session: AsyncSession) -> list[int]:
     stmt = select(Chats.chat_id)
     result = await session.execute(stmt)
     return [row[0] for row in result.fetchall()]
+
+async def get_cache_counts_by_service(session: AsyncSession) -> dict[str, int]:
+    """Returns a mapping of service_name to count of cached files."""
+    stmt = select(MediaCache.platform, func.count()).group_by(MediaCache.platform)
+    result = await session.execute(stmt)
+    return {row[0]: row[1] for row in result.all()}
 
 
 async def get_media_cache(session: AsyncSession, cache_key: str) -> MediaCacheDTO | None:

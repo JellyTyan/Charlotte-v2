@@ -4,6 +4,7 @@ from aiogram import F
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from models.errors import BotError, ErrorCode
 from models.service_list import Services
 from modules.router import service_router as router
 from senders.media_sender import MediaSender
@@ -11,6 +12,7 @@ from tasks.task_manager import task_manager
 from utils.arq_pool import get_arq_pool
 from utils.statistics_helper import log_download_event
 from .service import PixivService
+from .utils import get_cache_key, cache_check
 
 logger = logging.getLogger(__name__)
 
@@ -23,52 +25,45 @@ async def pixiv_handler(message: Message, db_session: AsyncSession):
         return
 
     user_id = message.from_user.id
+    url = message.text.strip()
+    
+    send_manager = MediaSender()
+    
+    cache_key = get_cache_key(url)
+    if not cache_key:
+        return
 
-    # Start download task
-    download_task = await task_manager.add_task(
-        user_id,
-        download_coro=process_pixiv_url(message, db_session),
-        message=message
-    )
+    cached = await cache_check(db_session, cache_key)
+    if cached:
+        await send_manager.send(message, cached, service="pixiv", db_session=db_session)
+        return
 
-    # When download completes, queue send task
-    if download_task:
-        async def send_when_ready():
-            try:
-                media_content = await download_task
-                if media_content:
-                    send_manager = MediaSender()
-                    await send_manager.send(message, media_content, service="pixiv", db_session=db_session)
-            except Exception:
-                # Error already logged in download task
-                pass
-
-        await task_manager.add_send_task(user_id, send_when_ready())
-
-
-async def process_pixiv_url(message: Message, db_session: AsyncSession):
-    """Download Pixiv media and return content"""
-    if not message.bot or not message.text:
-        return None
-
-    user_id = message.from_user.id if message.from_user else message.chat.id
-
-    # Get ARQ pool
     arq = await get_arq_pool('light')
+    service = PixivService(arq=arq)
 
-    # Send chat action for user feedback
     if message.bot:
         await message.bot.send_chat_action(message.chat.id, "choose_sticker")
 
     try:
-        # Pass arq to service
-        service = PixivService(arq=arq)
-        media_content = await service.download(message.text)
+        media_content = await task_manager.run_download(
+            user_id=user_id,
+            url=url,
+            coro=service.download(url)
+        )
 
-        await log_download_event(db_session, user_id, Services.PIXIV, 'success')
+        if media_content:
+            await send_manager.send(message, media_content, service="pixiv", cache_key=cache_key, db_session=db_session)
 
-        return media_content
-
+    except BotError as e:
+        await log_download_event(db_session, user_id, Services.PIXIV, 'failed_download')
+        raise e
     except Exception as e:
+        await log_download_event(db_session, user_id, Services.PIXIV, 'failed_download')
         logger.error(f"Error processing Pixiv URL: {e}")
-        raise
+        raise BotError(
+            code=ErrorCode.DOWNLOAD_FAILED,
+            message=str(e),
+            url=url,
+            service=Services.PIXIV,
+            is_logged=True
+        )

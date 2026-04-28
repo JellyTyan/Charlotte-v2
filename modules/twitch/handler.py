@@ -1,7 +1,9 @@
+import logging
 from aiogram import F
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from models.errors import BotError, ErrorCode
 from models.service_list import Services
 from modules.router import service_router as router
 from senders.media_sender import MediaSender
@@ -9,13 +11,14 @@ from tasks.task_manager import task_manager
 from utils.arq_pool import get_arq_pool
 from utils.statistics_helper import log_download_event
 from .service import TwitchService
+from .utils import get_cache_key, cache_check
 
+logger = logging.getLogger(__name__)
 
 TWITCH_REGEX = (
     r"https?://(?:www\.)?twitch\.tv/\w+/clip/\S+"
     r"|https?://clips\.twitch\.tv/\S+"
 )
-
 
 @router.message(F.text.regexp(TWITCH_REGEX))
 async def twitch_handler(message: Message, db_session: AsyncSession):
@@ -23,41 +26,45 @@ async def twitch_handler(message: Message, db_session: AsyncSession):
         return
 
     user_id = message.from_user.id
+    url = message.text.strip()
+    
+    send_manager = MediaSender()
 
-    download_task = await task_manager.add_task(
-        user_id,
-        download_coro=process_twitch_url(message, db_session),
-        message=message,
-    )
+    cache_key = get_cache_key(url)
+    if not cache_key:
+        return
 
-    if download_task:
-        async def send_when_ready():
-            try:
-                media_content = await download_task
-                if media_content:
-                    sender = MediaSender()
-                    await sender.send(message, media_content, service="twitch", db_session=db_session)
-            except Exception:
-                pass
-
-        await task_manager.add_send_task(user_id, send_when_ready())
-
-
-async def process_twitch_url(message: Message, db_session: AsyncSession):
-    """Download a Twitch clip and return MediaContent list."""
-    if not message.bot or not message.text:
-        return None
-
-    user_id = message.from_user.id if message.from_user else message.chat.id
+    cached = await cache_check(db_session, cache_key)
+    if cached:
+        await send_manager.send(message, cached, service="twitch", db_session=db_session)
+        return
 
     arq = await get_arq_pool("heavy")
     service = TwitchService(arq=arq)
 
     if message.bot:
-        await message.bot.send_chat_action(message.chat.id, "upload_video")
+        await message.bot.send_chat_action(message.chat.id, "choose_sticker")
 
-    media_content = await service.download(message.text)
+    try:
+        media_content = await task_manager.run_download(
+            user_id=user_id,
+            url=url,
+            coro=service.download(url)
+        )
 
-    await log_download_event(db_session, user_id, Services.TWITCH, "success")
+        if media_content:
+            await send_manager.send(message, media_content, service="twitch", cache_key=cache_key, db_session=db_session)
 
-    return media_content
+    except BotError as e:
+        await log_download_event(db_session, user_id, Services.TWITCH, 'failed_download')
+        raise e
+    except Exception as e:
+        await log_download_event(db_session, user_id, Services.TWITCH, 'failed_download')
+        logger.error(f"Error processing Twitch URL: {e}")
+        raise BotError(
+            code=ErrorCode.DOWNLOAD_FAILED,
+            message=str(e),
+            url=url,
+            service=Services.TWITCH,
+            is_logged=True
+        )

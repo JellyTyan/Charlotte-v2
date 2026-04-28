@@ -33,7 +33,8 @@ from storage.db.crud import (
     get_list_user_ids,
     get_news_subscribers_ids,
     get_all_chat_ids,
-    get_db_overview_stats
+    get_db_overview_stats,
+    get_cache_counts_by_service
 )
 from states import NewsSpamGroup
 from utils import escape_markdown
@@ -165,7 +166,9 @@ async def admin_panel_stats(callback: CallbackQuery, state: FSMContext, db_sessi
         f"  This month: {user_count['month']}\n\n"
         "<b>📥 Total Requests:</b> {total}\n"
         f"  ✅ Successful: {status_stats['complete']} ({success_rate:.1f}%)\n"
-        f"  ❌ Failed: {status_stats['error']} ({100-success_rate:.1f}%)\n"
+        f"  ❌ Failed: {status_stats['error']} ({100-success_rate:.1f}%)\n\n"
+        "<b>💾 Media Cache:</b>\n"
+        f"  📦 Total cached: <b>{db_overview.get('total_cached', 0):,}</b> files\n"
     ).format(total=total_requests)
 
     if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
@@ -801,6 +804,7 @@ async def admin_panel_service_usage(callback: CallbackQuery, state: FSMContext):
         )
 
         stats = result.all()
+        cache_counts = await get_cache_counts_by_service(session)
 
     text = "📊 <b>Service Usage (Last 30 days)</b>\n\n"
     total_all = 0
@@ -813,7 +817,8 @@ async def admin_panel_service_usage(callback: CallbackQuery, state: FSMContext):
         text += f"  👥 Users: {unique_users}\n"
         text += f"  Total requests: {total}\n"
         text += f"  ✅ Success: {success} ({success_rate:.1f}%)\n"
-        text += f"  ❌ Failed: {failed}\n\n"
+        text += f"  ❌ Failed: {failed}\n"
+        text += f"  📦 Cached files: {cache_counts.get(service, 0)}\n\n"
         total_all += total
         success_all += success
         failed_all += failed

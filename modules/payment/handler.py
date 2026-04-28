@@ -305,10 +305,10 @@ async def successful_payment_handler(message: Message, bot: Bot, db_session: Asy
     )
 
     if payload.startswith("yt_"):
-        # Format: yt_URLHASH_FORMAT
+        # Format: yt_URLHASH_FORMAT_RESOLUTION
         try:
-            parts = payload.split("_", 2)
-            if len(parts) < 3:
+            parts = payload.split("_")
+            if len(parts) < 5:
                 logger.error(f"Invalid payload format: {payload}")
                 await message.answer("⚠️ Error: Invalid payment data.")
                 # Refund invalid payment
@@ -319,7 +319,9 @@ async def successful_payment_handler(message: Message, bot: Bot, db_session: Asy
                 await update_payment_status(db_session, payment.telegram_payment_charge_id, "refunded")
                 return
 
-            _, url_hash, format_choice = parts
+            url_hash = parts[1]
+            resolution = parts[-1]
+            format_choice = "_".join(parts[2:-1])
 
             # Validate format_choice
             if not format_choice.startswith(("youtube_video_", "youtube_audio_")):
@@ -346,19 +348,18 @@ async def successful_payment_handler(message: Message, bot: Bot, db_session: Asy
             await message.answer("✅ Thank you for supporting Charlotte! Starting download...")
 
             # Import here to avoid circular dep
-            from modules.youtube.handler import download_youtube_media
+            from modules.youtube.handler import process_youtube_download
+            import asyncio
 
-            await task_manager.add_task(
-                message.from_user.id,
-                download_youtube_media(
-                    message,
-                    url,
-                    format_choice,
-                    message.from_user.id,
-                    payment.telegram_payment_charge_id
-                ),
-                message
-            )
+            asyncio.create_task(process_youtube_download(
+                message=message,
+                url=url,
+                format_choice=format_choice,
+                resolution=resolution,
+                user_id=message.from_user.id,
+                db_session=db_session,
+                payment_charge_id=payment.telegram_payment_charge_id
+            ))
 
         except Exception as e:
             logger.error(f"Error processing payment payload: {e}")

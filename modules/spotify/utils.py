@@ -5,8 +5,10 @@ from curl_cffi.requests import AsyncSession
 
 from core.config import Config
 from models.errors import BotError, ErrorCode
+from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from models.service_list import Services
+from storage.db.crud import get_media_cache
 from utils.download_utils import download_file
 
 from .auth import get_access_token, get_operation_hash
@@ -96,6 +98,8 @@ async def get_spotify_author(track_id: str, token: str):
         if album_cover:
             cover_url = album_cover[0]["url"]
 
+        track_id_raw = track_info.get("uri", "").split(":")[-1]
+
         album_name = track_info.get("albumOfTrack", {}).get("name", "Uknown")
         date = track_info.get("albumOfTrack", {}).get("date", {}).get("isoString", "")[:10]
         
@@ -106,7 +110,7 @@ async def get_spotify_author(track_id: str, token: str):
             "cover_url": cover_url,
             "album_name": album_name,
             "date": date,
-
+            "track_id": track_id_raw,
         }
         
     except Exception as e:
@@ -218,6 +222,7 @@ async def _get_album_info(album_id: str, safe_id: str, token_data: dict, session
             performer=artist,
             cover=album_cover_url,
             media_type="track",
+            cache_key=f"spotify:{track_id}",
             extra={
                 "duration_ms": track.get("duration", {}).get("totalMilliseconds", 0),
                 "track_number": track.get("trackNumber", 0),
@@ -355,6 +360,7 @@ async def _get_playlist_info(playlist_id: str, safe_id: str, token_data: dict, s
                 performer=artist,
                 cover=cover_url,
                 media_type="track",
+                cache_key=f"spotify:{track_id}",
                 extra={
                     "duration_ms": track_data.get("trackDuration", {}).get("totalMilliseconds", 0)
                 }
@@ -400,3 +406,28 @@ async def fetch_spotify_token(config: Config):
             critical=True,
             is_logged=True
         )
+
+
+def make_cache_key(url: str) -> str | None:
+    """Build a Spotify cache key from a track URL."""
+    match = re.search(r"/track/([\w-]+)", url)
+    if match:
+        return f"spotify:{match.group(1)}"
+    return None
+
+
+async def cache_check(session, cache_key: str) -> MediaContent | None:
+    """Check DB cache for a previously sent Spotify track and return a MediaContent if found."""
+    cached = await get_media_cache(session, cache_key)
+    if cached:
+        return MediaContent(
+            type=MediaType.AUDIO,
+            telegram_file_id=cached.telegram_file_id,
+            telegram_document_file_id=cached.telegram_document_file_id,
+            cover_file_id=cached.data.cover,
+            full_cover_file_id=cached.data.full_cover,
+            title=cached.data.title,
+            performer=cached.data.author,
+            duration=cached.data.duration
+        )
+    return None

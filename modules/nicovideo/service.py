@@ -84,7 +84,8 @@ class NicoVideoService:
                     type="video",
                     video_id=video_format['video_format_id'],
                     audio_id=video_format['audio_format_id'],
-                    url_hash=url_hash(url)
+                    url_hash=url_hash(url),
+                    resolution=video_format['resolution']
                 ).pack()
 
                 button = InlineKeyboardButton(
@@ -109,7 +110,8 @@ class NicoVideoService:
                 callback_data_audio = NicoVideoCallback(
                     type="audio",
                     audio_id=formats_data['best_audio']['format_id'],
-                    url_hash=url_hash(url)
+                    url_hash=url_hash(url),
+                    resolution="audio"
                 ).pack()
 
                 markup.row(

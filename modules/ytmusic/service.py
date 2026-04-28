@@ -11,6 +11,7 @@ from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
 from models.service_list import Services
+from storage.db.crud import get_media_cache
 from utils import random_cookie_file, get_extra_audio_options, sanitize_filename
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,7 @@ class YTMusicService:
                             title=video_details.get("title", "Unknown"),
                             performer=video_details.get("author", "Unknown"),
                             media_type="track",
+                            cache_key=f"ytmusic:{video_id}"
                         )
                 except Exception as e:
                     if attempt == 2:
@@ -83,6 +85,7 @@ class YTMusicService:
                                 title=info.get("title", "Unknown"),
                                 performer=info.get("uploader", "Unknown"),
                                 media_type="track",
+                                cache_key=f"ytmusic:{video_id}"
                             )
                         raise
                     logger.warning(f"Attempt {attempt + 1} failed for {video_id}: {e}")
@@ -141,13 +144,15 @@ class YTMusicService:
 
             items = []
             for track in result.get("tracks", []):
+                video_id = track.get('videoId')
                 items.append(MediaMetadata(
                     type=MetadataType.METADATA,
-                    url=f"https://music.youtube.com/watch?v={track['videoId']}",
+                    url=f"https://music.youtube.com/watch?v={video_id}",
                     title=track.get("title"),
                     performer=", ".join(artist["name"] for artist in track.get("artists", [])),
                     duration=track.get("duration_seconds"),
-                    media_type="track"
+                    media_type="track",
+                    cache_key=f"ytmusic:{video_id}" if video_id else None
                 ))
 
             return MediaMetadata(
@@ -183,7 +188,7 @@ class YTMusicService:
                 extract_only = False,
                 extract_audio=True,
                 cookies_file=random_cookie_file("youtube"),
-                output_template=f"{self.output_path}%(id)s_{sanitize_filename('%(title)s')}.%(ext)s",
+                output_template=f"{self.output_path}%(id)s_%(title)s.%(ext)s",
                 extra_opts=get_extra_audio_options(),
                 _queue_name='heavy'
             )
@@ -298,3 +303,20 @@ class YTMusicService:
                 critical=True,
                 is_logged=True
             ) from e
+
+
+async def cache_check(session, cache_key: str) -> MediaContent | None:
+    """Check DB cache for a previously sent YTMusic track and return a MediaContent if found."""
+    cached = await get_media_cache(session, cache_key)
+    if cached:
+        return MediaContent(
+            type=MediaType.AUDIO,
+            telegram_file_id=cached.telegram_file_id,
+            telegram_document_file_id=cached.telegram_document_file_id,
+            cover_file_id=cached.data.cover,
+            full_cover_file_id=cached.data.full_cover,
+            title=cached.data.title,
+            performer=cached.data.author,
+            duration=cached.data.duration
+        )
+    return None

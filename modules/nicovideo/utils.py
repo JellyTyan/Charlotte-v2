@@ -1,4 +1,11 @@
 import logging
+import hashlib
+import re
+from typing import List
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from storage.db.crud import get_media_cache
+from models.media import MediaContent, MediaType
 
 logger = logging.getLogger(__name__)
 
@@ -92,3 +99,36 @@ def get_video_formats(formats_dict: dict, max_size_mb: int = 50, duration: int =
         logger.info(f"Best standalone audio: {best_audio['format_id']}, {best_audio.get('abr')}kbps")
 
     return result
+
+NICOVIDEO_ID_REGEX = re.compile(r"https?://(?:www\.)?nicovideo\.jp/watch/([\w-]+)")
+
+def get_cache_key(url: str, format_choice: str) -> str:
+    """Generate a unique cache key based on the Nicovideo ID and selected format."""
+    match = NICOVIDEO_ID_REGEX.search(url)
+    video_id = match.group(1) if match else url
+    
+    base_str = f"{video_id}:{format_choice}"
+    hashed = hashlib.md5(base_str.encode('utf-8')).hexdigest()
+    return f"nicovideo:{hashed}"
+
+async def cache_check(db_session: AsyncSession, key: str) -> List[MediaContent] | None:
+    """Check if the given cache key exists in the database and return the MediaContent if found."""
+    cached = await get_media_cache(db_session, key)
+    if not cached:
+        return None
+
+    media_type = MediaType.AUDIO if "audio" in key else MediaType.VIDEO
+
+    return [MediaContent(
+        type=media_type,
+        telegram_file_id=cached.telegram_file_id,
+        telegram_document_file_id=cached.telegram_document_file_id,
+        cover_file_id=cached.data.cover,
+        full_cover_file_id=cached.data.full_cover,
+        title=cached.data.title,
+        performer=cached.data.author,
+        duration=cached.data.duration,
+        width=cached.data.width,
+        height=cached.data.height,
+        is_blurred=cached.data.is_blurred
+    )]

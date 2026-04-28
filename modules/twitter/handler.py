@@ -2,8 +2,10 @@ from aiogram import F
 from aiogram.types import Message
 from fluentogram import TranslatorRunner
 from sqlalchemy.ext.asyncio import AsyncSession
+import logging
 
 from core.config import Config
+from models.errors import BotError
 from models.service_list import Services
 from modules.router import service_router as router
 from senders.media_sender import MediaSender
@@ -12,7 +14,9 @@ from tasks.task_manager import task_manager
 from utils.arq_pool import get_arq_pool
 from utils.statistics_helper import log_download_event
 from .service import TwitterService
+from .utils import get_cache_key, cache_check
 
+logger = logging.getLogger(__name__)
 
 TWITTER_REGEX = r"https://(?:twitter|x)\.com/\w+/status/\d+"
 
@@ -21,65 +25,48 @@ async def twitter_handler(message: Message, config: Config, i18n: TranslatorRunn
     if not message.text or not message.from_user:
         return
 
+    url = message.text.strip()
+    chat_id = message.chat.id
     user_id = message.from_user.id
 
-    # Start download task
-    download_task = await task_manager.add_task(
-        user_id,
-        download_coro=process_twitter_url(message, config, i18n, db_session),
-        message=message,
-        url=message.text
-    )
+    if message.bot:
+        await message.bot.send_chat_action(chat_id, "choose_sticker")
 
-    # When download completes, queue send task
-    if download_task:
-        async def send_when_ready():
-            try:
-                media_content = await download_task
-                if media_content:
-                    send_manager = MediaSender()
-                    await send_manager.send(message, media_content, service="twitter", db_session=db_session)
-            except Exception:
-                # Error already logged in download task
-                pass
+    send_manager = MediaSender()
+    cache_key = get_cache_key(url)
 
-        await task_manager.add_send_task(user_id, send_when_ready())
+    cached = await cache_check(db_session, cache_key)
+    if cached:
+        await send_manager.send(message, cached, service="twitter", db_session=db_session)
+        return
 
-
-async def process_twitter_url(message: Message, config: Config, i18n: TranslatorRunner, db_session: AsyncSession):
-    """Download Twitter media and return content"""
-    if not message.bot or not message.text:
-        return None
-
-    user_id = message.from_user.id if message.from_user else message.chat.id
-    url = message.text.strip()
     allow_nsfw = True
-
-    if message.chat.id < 0:
-        settings = await get_chat_settings(db_session, message.chat.id)
+    if chat_id < 0:
+        settings = await get_chat_settings(db_session, chat_id)
         allow_nsfw = settings.profile.allow_nsfw
 
-    arq = await get_arq_pool('light')
+    user = await get_user(db_session, user_id)
+    is_premium = user.is_premium if user else False
 
-    # Send chat action for user feedback
-    if message.bot:
-        await message.bot.send_chat_action(message.chat.id, "choose_sticker")
+    arq = await get_arq_pool('light')
+    service = TwitterService(arq=arq)
+
+    if is_premium:
+        coro = service.download(url, premium=True, config=config, allow_nsfw=allow_nsfw)
+    else:
+        coro = service.download(url, allow_nsfw=allow_nsfw)
 
     try:
-        # Download content
-        user = await get_user(db_session, user_id)
-        is_premium = user.is_premium if user else False
+        media_content = await task_manager.run_download(
+            user_id=user_id,
+            url=url,
+            coro=coro
+        )
 
-        if is_premium:
-            media_content = await TwitterService(arq=arq).download(url, premium=True, config=config, allow_nsfw=allow_nsfw)
-        else:
-            media_content = await TwitterService(arq=arq).download(url, allow_nsfw=allow_nsfw)
+        if media_content:
+            await send_manager.send(message, media_content, service="twitter", cache_key=cache_key, db_session=db_session)
 
-        # Log success
-        await log_download_event(db_session, user_id, Services.TWITTER, 'success')
-
-        return media_content
-
-    except Exception as e:
-        # Error handling is usually done by task wrapper or specific exception catches if needed
-        raise
+    except BotError as e:
+        await log_download_event(db_session, user_id, Services.TWITTER, 'failed_download')
+        logger.error(f"Twitter download error: {e}")
+        raise e
