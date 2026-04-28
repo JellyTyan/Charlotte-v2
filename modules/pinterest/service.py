@@ -3,7 +3,7 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import List
+from typing import List, Union
 
 from aiofiles import os as aios
 
@@ -29,7 +29,20 @@ class PinterestService:
     async def get_info(self, url: str) -> MediaMetadata:
         return await get_pin_info(url)
 
-    async def download(self, data: MediaMetadata) -> List[MediaContent]:
+    async def download(self, data: Union[str, MediaMetadata]) -> List[MediaContent]:
+        if isinstance(data, str):
+            metadata = await self.get_info(data)
+            if not metadata:
+                raise BotError(
+                    code=ErrorCode.METADATA_ERROR,
+                    message="Failed to fetch metadata",
+                    url=data,
+                    service=Services.PINTEREST,
+                    is_logged=True,
+                    critical=True
+                )
+            data = metadata
+
         if not self.arq:
             raise BotError(
                 code=ErrorCode.INTERNAL_ERROR,

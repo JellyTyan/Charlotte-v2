@@ -84,7 +84,8 @@ class SpotifyService:
                 performer=track_info["artist"],
                 cover=track_info["cover_url"],
                 media_type="track",
-                extra={"album_name": track_info["album_name"],"date": track_info["date"]}
+                cache_key=f"spotify:{track_info['track_id']}" if track_info.get("track_id") else None,
+                extra={"album_name": track_info["album_name"], "date": track_info["date"]}
             )
         elif match_playlist:
             playlist_id = match_playlist.group(1)
@@ -207,8 +208,17 @@ class SpotifyService:
                     duration=duration,
                     title=title,
                     performer=performer,
-                    cover=cover_file
+                    cover=cover_file,
+                    is_lossless=True
                 )]
+
+            # Tidal недоступен — не делаем YouTube-фоллбэк, пускаем хэндлер решать
+            raise BotError(
+                code=ErrorCode.LOSSLESS_UNAVAILABLE,
+                message="Tidal is unavailable, lossless download skipped",
+                service=Services.SPOTIFY,
+                is_logged=False,
+            )
 
         # Fallback to standard YouTube/yt-dlp method
         options = get_audio_options(f"{performer} - {title}")

@@ -1,5 +1,12 @@
 from utils import random_cookie_file
 import logging
+import hashlib
+import re
+from typing import List
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from storage.db.crud import get_media_cache
+from models.media import MediaContent, MediaType
 
 logger = logging.getLogger(__name__)
 def get_ytdlp_options():
@@ -122,3 +129,37 @@ async def get_video_info(info_dict: dict, max_size_mb: int = 50) -> dict:
         }
 
     return result
+
+YOUTUBE_ID_REGEX = re.compile(r"https?://(?:www\.)?(?:m\.)?(?:youtu\.be/|youtube\.com/(?:shorts/|watch\?v=))([\w-]+)")
+
+def get_cache_key(url: str, format_choice: str) -> str:
+    """Generate a unique cache key based on the URL and the selected format (video quality or audio)."""
+    match = YOUTUBE_ID_REGEX.search(url)
+    video_id = match.group(1) if match else url
+    
+    base_str = f"{video_id}:{format_choice}"
+    hashed = hashlib.md5(base_str.encode('utf-8')).hexdigest()
+    return f"youtube:{hashed}"
+
+async def cache_check(db_session: AsyncSession, key: str) -> List[MediaContent] | None:
+    """Check if the given cache key exists in the database and return the MediaContent if found."""
+    cached = await get_media_cache(db_session, key)
+    if not cached:
+        return None
+
+    # Determine media type based on key format or just default to video (audio tracks will still play fine if marked as video in cache, but we can do better if we check)
+    media_type = MediaType.AUDIO if "audio" in key else MediaType.VIDEO
+
+    return [MediaContent(
+        type=media_type,
+        telegram_file_id=cached.telegram_file_id,
+        telegram_document_file_id=cached.telegram_document_file_id,
+        cover_file_id=cached.data.cover,
+        full_cover_file_id=cached.data.full_cover,
+        title=cached.data.title,
+        performer=cached.data.author,
+        duration=cached.data.duration,
+        width=cached.data.width,
+        height=cached.data.height,
+        is_blurred=cached.data.is_blurred
+    )]

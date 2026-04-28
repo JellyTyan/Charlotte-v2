@@ -191,8 +191,17 @@ class DeezerService:
                     title=title,
                     performer=performer,
                     cover=cover_file,
-                    full_cover=full_cover_file
+                    full_cover=full_cover_file,
+                    is_lossless=True
                 )]
+
+            # Tidal недоступен — не делаем YouTube-фоллбэк, пускаем хэндлер решать
+            raise BotError(
+                code=ErrorCode.LOSSLESS_UNAVAILABLE,
+                message="Tidal is unavailable, lossless download skipped",
+                service=Services.DEEZER,
+                is_logged=False,
+            )
 
         # Fallback to standard method
         logger.debug(f"Searching YouTube for: {performer} - {title}")

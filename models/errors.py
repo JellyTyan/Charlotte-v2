@@ -20,6 +20,7 @@ class ErrorCode(Enum):
     INTERNAL_ERROR = "E500"
     ACCOUNT_BANNED = "E503"
     AGE_RESTRICTED = "E010"
+    LOSSLESS_UNAVAILABLE = "E011"  # Lossless service (Tidal) is unavailable
 
 @dataclass
 class BotError(Exception):

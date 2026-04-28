@@ -2,8 +2,12 @@ import logging
 
 from curl_cffi.requests import AsyncSession
 import re
+from models.errors import BotError, ErrorCode
+from models.media import MediaContent, MediaType
 from models.metadata import MediaMetadata, MetadataType
+from models.service_list import Services
 from storage.cache.redis_client import cache_get, cache_set
+from storage.db.crud import get_media_cache
 
 logger = logging.getLogger(__name__)
 
@@ -80,14 +84,15 @@ async def get_song_info(id: int):
 
         return MediaMetadata(
             type=MetadataType.METADATA,
-            url=url,
+            url=data.get('permalink_url', url),
             title=data.get('title'),
             description=data.get('description'),
             duration=data.get('full_duration', 0) // 1000,
             cover=data.get('artwork_url'),
             performer=(data.get('publisher_metadata') or {}).get('artist') or (data.get('user') or {}).get('username'),
             performer_url=data.get('user', {}).get('permalink_url'),
-            media_type='track'
+            media_type='track',
+            cache_key=f"soundcloud:{id}"
         )
 
 async def get_playlist_info(id: int):
@@ -101,8 +106,9 @@ async def get_playlist_info(id: int):
         data = response.json()
         items = []
         for track in data.get('tracks', []):
+            track_id = track.get('id')
             if not track.get('permalink_url'):
-                items.append(await get_song_info(track.get('id')))
+                items.append(await get_song_info(track_id))
             else:
                 items.append(MediaMetadata(
                     type=MetadataType.METADATA,
@@ -110,12 +116,13 @@ async def get_playlist_info(id: int):
                     title=track.get('title'),
                     duration=track.get('full_duration', 0) // 1000,
                     cover=track.get('artwork_url'),
-                    performer=(data.get('publisher_metadata') or {}).get('artist'),
-                    media_type='track'
+                    performer=(track.get('publisher_metadata') or {}).get('artist') or (track.get('user') or {}).get('username'),
+                    media_type='track',
+                    cache_key=f"soundcloud:{track_id}" if track_id else None
                 ))
         return MediaMetadata(
             type=MetadataType.METADATA,
-            url=url,
+            url=data.get('permalink_url', url),
             title=data.get('title'),
             description=data.get('description'),
             duration=data.get('duration', 0) // 1000,
@@ -125,3 +132,20 @@ async def get_playlist_info(id: int):
             media_type='playlist',
             items=items,
         )
+
+
+async def cache_check(session, cache_key: str) -> MediaContent | None:
+    """Check DB cache for a previously sent SoundCloud track and return a MediaContent if found."""
+    cached = await get_media_cache(session, cache_key)
+    if cached:
+        return MediaContent(
+            type=MediaType.AUDIO,
+            telegram_file_id=cached.telegram_file_id,
+            telegram_document_file_id=cached.telegram_document_file_id,
+            cover_file_id=cached.data.cover,
+            full_cover_file_id=cached.data.full_cover,
+            title=cached.data.title,
+            performer=cached.data.author,
+            duration=cached.data.duration
+        )
+    return None

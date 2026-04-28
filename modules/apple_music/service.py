@@ -105,7 +105,7 @@ class AppleMusicService:
             is_logged=True
         )
 
-    async def download(self, media_metadata: MediaMetadata, lossless_mode: bool = False) -> List[MediaContent]:
+    async def download(self, media_metadata: MediaMetadata, lossless_mode: bool = False) -> MediaContent:
         logger.debug(f"Starting download for: {media_metadata.performer} - {media_metadata.title} (Lossless: {lossless_mode})")
 
         if not self.arq:
@@ -214,15 +214,24 @@ class AppleMusicService:
                 cover_file = Path(cover_path) if cover_path and await aios.path.exists(cover_path) else None
                 full_cover_file = Path(full_cover_path) if full_cover_path and await aios.path.exists(full_cover_path) else None
 
-                return [MediaContent(
+                return MediaContent(
                     type=MediaType.AUDIO,
                     path=Path(tidal_downloaded_path),
                     duration=duration,
                     title=title,
                     performer=performer,
                     cover=cover_file,
-                    full_cover=full_cover_file
-                )]
+                    full_cover=full_cover_file,
+                    is_lossless=True  # Tidal delivered actual FLAC
+                )
+
+            # Tidal недоступен — не делаем YouTube-фоллбэк, пускаем хэндлер решать
+            raise BotError(
+                code=ErrorCode.LOSSLESS_UNAVAILABLE,
+                message="Tidal is unavailable, lossless download skipped",
+                service=Services.APPLE_MUSIC,
+                is_logged=False,
+            )
 
         # Fallback to standard method
         logger.debug(f"Searching YouTube for: {performer} - {title}")
@@ -314,7 +323,7 @@ class AppleMusicService:
                 cover_file = Path(cover_path) if cover_path and await aios.path.exists(cover_path) else None
                 full_cover_file = Path(full_cover_path) if full_cover_path and await aios.path.exists(full_cover_path) else None
 
-                return [MediaContent(
+                return MediaContent(
                     type=MediaType.AUDIO,
                     path=Path(audio_path),
                     duration=int(info_dict.get("duration", 0)) if info_dict.get("duration") else None,
@@ -322,7 +331,7 @@ class AppleMusicService:
                     performer=performer,
                     cover=cover_file,
                     full_cover=full_cover_file
-                )]
+                )
             else:
                 raise BotError(
                     code=ErrorCode.DOWNLOAD_FAILED,

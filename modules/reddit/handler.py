@@ -13,9 +13,9 @@ from utils.arq_pool import get_arq_pool
 from storage.db.crud import get_chat_settings
 from utils.statistics_helper import log_download_event
 from .service import RedditService
+from .utils import get_cache_key, cache_check
 
 logger = logging.getLogger(__name__)
-
 
 REDDIT_REGEX = r"https?:\/\/(?:www\.|old\.|new\.)?reddit\.com\/(?:r\/[A-Za-z0-9_]+\/)?(?:comments\/[A-Za-z0-9]+(?:\/[^\/\s?]+)?|s\/[A-Za-z0-9]+|gallery\/[A-Za-z0-9]+)(?:\/)?"
 
@@ -24,71 +24,40 @@ async def reddit_handler(message: Message, db_session: AsyncSession):
     if not message.text or not message.from_user:
         return
 
+    url = message.text
+    chat_id = message.chat.id
     user_id = message.from_user.id
 
-    # Start download task
-    download_task = await task_manager.add_task(
-        user_id,
-        download_coro=process_reddit_url(message, db_session),
-        message=message
-    )
+    if message.bot:
+        await message.bot.send_chat_action(chat_id, "choose_sticker")
 
-    # When download completes, queue send task
-    if download_task:
-        async def send_when_ready():
-            try:
-                media_content = await download_task
-                if media_content:
-                    send_manager = MediaSender()
-                    await send_manager.send(message, media_content, service="reddit", db_session=db_session)
-            except Exception:
-                # Error already logged in download task
-                pass
+    send_manager = MediaSender()
+    cache_key = get_cache_key(url)
 
-        await task_manager.add_send_task(user_id, send_when_ready())
+    cached = await cache_check(db_session, cache_key)
+    if cached:
+        await send_manager.send(message, cached, service="reddit", db_session=db_session)
+        return
 
-
-async def process_reddit_url(message: Message, db_session: AsyncSession):
-    """Download Reddit media and return content"""
-    if not message.bot or not message.text:
-        return None
-
-    user_id = message.from_user.id if message.from_user else message.chat.id
     allow_nsfw = True
-
-    if message.chat.id < 0:
-        settings = await get_chat_settings(db_session, message.chat.id)
+    if chat_id < 0:
+        settings = await get_chat_settings(db_session, chat_id)
         allow_nsfw = settings.profile.allow_nsfw
 
-    # Get ARQ pool
     arq = await get_arq_pool('light')
-
-    # Send chat action for user feedback
-    if message.bot:
-        await message.bot.send_chat_action(message.chat.id, "choose_sticker")
+    service = RedditService(arq=arq)
 
     try:
-        # Pass arq to service
-        service = RedditService(arq=arq)
+        media_content = await task_manager.run_download(
+            user_id=user_id,
+            url=url,
+            coro=service.download(url, allow_nsfw=allow_nsfw)
+        )
 
-        reddit_info = await service.get_info(message.text)
-        if not reddit_info:
-            raise BotError(
-                code=ErrorCode.METADATA_ERROR,
-                url = message.text,
-                service=Services.REDDIT,
-                message="Failed to get Reddit post metadata",
-                critical=False,
-                is_logged=True,
-            )
+        if media_content:
+            await send_manager.send(message, media_content, service="reddit", cache_key=cache_key, db_session=db_session)
 
-        media_content = await service.download(reddit_info, allow_nsfw=allow_nsfw)
-
-        # Log success
-        await log_download_event(db_session, user_id, Services.REDDIT, 'success')
-
-        return media_content
-
-    except Exception as e:
-        logger.error(f"Error processing Reddit URL: {e}")
-        raise
+    except BotError as e:
+        await log_download_event(db_session, user_id, Services.REDDIT, 'failed_download')
+        logger.error(f"Reddit download error: {e}")
+        raise e

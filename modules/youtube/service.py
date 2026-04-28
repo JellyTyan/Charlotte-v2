@@ -151,7 +151,8 @@ class YouTubeService:
                     sponsored=False,
                     format_id=video_format['video_format_id'],
                     audio_id=video_format['audio_format_id'],
-                    url_hash=url_hash(url)
+                    url_hash=url_hash(url),
+                    resolution=video_format['resolution']
                 ).pack()
 
                 callback_data_video_sponsor = YoutubeCallback(
@@ -159,7 +160,8 @@ class YouTubeService:
                     sponsored=True,
                     format_id=video_format['video_format_id'],
                     audio_id=video_format['audio_format_id'],
-                    url_hash=url_hash(url)
+                    url_hash=url_hash(url),
+                    resolution=video_format['resolution']
                 ).pack()
 
                 if video_format['total_size_mb'] > 100:
@@ -190,7 +192,8 @@ class YouTubeService:
                 callback_data_audio = YoutubeCallback(
                     type="audio",
                     format_id=video_info['best_audio']['format_id'],
-                    url_hash=url_hash(url)
+                    url_hash=url_hash(url),
+                    resolution="audio"
                 ).pack()
 
                 markup.row(

@@ -24,8 +24,10 @@ class MediaContent:
     height: Optional[int] = None
     duration: Optional[int] = None
     title: Optional[str] = None
+    description: Optional[str] = None
     cover: Optional[Path] = None
     full_cover: Optional[Path] = None
     performer: Optional[str] = None
     is_blurred: bool | None = None
+    is_lossless: bool = False  # True only when actual lossless (FLAC) was delivered
 

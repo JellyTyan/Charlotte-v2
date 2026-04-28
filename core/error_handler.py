@@ -21,10 +21,11 @@ async def global_error_handler(event: ErrorEvent):
 
     # Get message from update (can be from message or callback_query)
     message = None
-    if hasattr(event, 'message'):
-        message = event.message
-    elif hasattr(event, 'callback_query') and event.callback_query:
-        message = event.callback_query.message
+    update = event.update
+    if update.message:
+        message = update.message
+    elif update.callback_query:
+        message = update.callback_query.message
 
     if not message:
         logger.error(f"Error without message context: {exception}")
@@ -39,16 +40,16 @@ async def global_error_handler(event: ErrorEvent):
 
     # Get user/chat for locale
     user = None
-    if hasattr(event, 'from_user'):
-        user = event.from_user
-    elif hasattr(event, 'callback_query') and event.callback_query:
-        user = event.callback_query.from_user
+    if update.message and update.message.from_user:
+        user = update.message.from_user
+    elif update.callback_query and update.callback_query.from_user:
+        user = update.callback_query.from_user
 
     chat = None
-    if hasattr(event, 'chat'):
-        chat = event.chat
-    elif message:
-        chat = message.chat
+    if update.message and update.message.chat:
+        chat = update.message.chat
+    elif update.callback_query and update.callback_query.message:
+        chat = update.callback_query.message.chat
 
     lang = "en"
 

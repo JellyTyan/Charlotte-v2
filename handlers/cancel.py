@@ -13,8 +13,4 @@ async def cancel_command(message: types.Message, state: FSMContext, i18n: Transl
     if user is None:
         return
 
-    canceled = await task_manager.cancel_user_tasks(user.id)
-    if canceled:
-        await message.answer(i18n.get("download-cancel"))
-    else:
-        await message.answer(i18n.get("download-no-found"))
+    task_manager.cancel_user(user.id)

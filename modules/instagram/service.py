@@ -281,4 +281,13 @@ class InstagramService:
         )
 
     async def get_info(self, url: str) -> Optional[MediaMetadata]:
-        return None
+        logger.debug(f"Getting info for AppleMusic URL: {url}")
+
+        if not self.arq:
+            raise BotError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message="ARQ pool is required",
+                service=Services.APPLE_MUSIC,
+                critical=True,
+                is_logged=True
+            )
