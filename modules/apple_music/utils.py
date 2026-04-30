@@ -156,7 +156,7 @@ async def get_playlist_info(playlist_id: str, token: str, region_code: str = "us
                 cover=track_cover,
                 full_size_cover=track_full_cover,
                 media_type='track',
-                cache_key=make_cache_key(track_attrs['url']),
+                cache_key=get_cache_key(track_attrs['url']),
                 extra={
                     'genres': genres,
                     'release_date': release_date,
@@ -257,7 +257,7 @@ async def get_album_info(album_id: str, token: str, region_code: str = "us") -> 
                 cover=track_cover,
                 full_size_cover=track_full_cover,
                 media_type='track',
-                cache_key=make_cache_key(track_attrs['url']),
+                cache_key=get_cache_key(track_attrs['url']),
                 extra={
                     'genres': genres,
                     'release_date': release_date,
@@ -282,7 +282,7 @@ async def get_album_info(album_id: str, token: str, region_code: str = "us") -> 
         )
 
 
-def make_cache_key(url: str) -> str | None:
+def get_cache_key(url: str) -> str | None:
     patterns = [
         r"music\.apple\.com/[a-z]{2}/song/(?:[^/]+/)?(?P<id>\d+)",
         r"music\.apple\.com/[a-z]{2}/album/(?:[^/]+/)?\d+.*?[?&]i=(?P<id>\d+)",

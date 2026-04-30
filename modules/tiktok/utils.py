@@ -6,6 +6,7 @@ import os
 import random
 import shutil
 import time
+import re
 from typing import Optional
 
 from curl_cffi.requests import AsyncSession
@@ -185,7 +186,14 @@ async def convert_video(input_path: str, output_path: str) -> bool:
         return False
 
 def get_cache_key(url: str) -> str:
-    hashed = hashlib.md5(url.encode('utf-8')).hexdigest()
+    # Try to extract Video ID: /video/123 or /photo/123
+    match = re.search(r"/(?:video|photo)/(\d+)", url)
+    if match:
+        return f"tt:{match.group(1)}"
+        
+    # Fallback and parameter stripping (for short links like vm.tiktok.com)
+    clean_url = url.split('?')[0].rstrip('/')
+    hashed = hashlib.md5(clean_url.encode('utf-8')).hexdigest()
     return f"tt:{hashed}"
 
 async def cache_check(db_session: DbAsyncSession, key: str) -> list[MediaContent] | None:

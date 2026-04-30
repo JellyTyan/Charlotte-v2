@@ -194,7 +194,7 @@ async def get_playlist_info(playlist_id: int) -> MediaMetadata:
         )
 
 
-def make_cache_key(url: str) -> str | None:
+def get_cache_key(url: str) -> str | None:
     """Build a Deezer cache key from a track URL."""
     match = re.search(r"/track/(\d+)", url)
     if match:
