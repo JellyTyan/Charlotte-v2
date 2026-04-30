@@ -132,7 +132,14 @@ def get_best_video(video_list: Dict[str, Any]) -> Optional[str]:
     return None
 
 def get_cache_key(url: str) -> str:
-    hashed = hashlib.md5(url.encode('utf-8')).hexdigest()
+    # Try to extract Pin ID
+    match = re.search(r"/pin/(\d+)", url)
+    if match:
+        return f"pin:{match.group(1)}"
+        
+    # Fallback and parameter stripping
+    clean_url = url.split('?')[0].rstrip('/')
+    hashed = hashlib.md5(clean_url.encode('utf-8')).hexdigest()
     return f"pin:{hashed}"
 
 async def cache_check(db_session: DbAsyncSession, key: str) -> list[MediaContent] | None:

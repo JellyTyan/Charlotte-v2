@@ -408,7 +408,7 @@ async def fetch_spotify_token(config: Config):
         )
 
 
-def make_cache_key(url: str) -> str | None:
+def get_cache_key(url: str) -> str | None:
     """Build a Spotify cache key from a track URL."""
     match = re.search(r"/track/([\w-]+)", url)
     if match:

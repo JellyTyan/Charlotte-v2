@@ -1,4 +1,5 @@
 import logging
+import hashlib
 
 from curl_cffi.requests import AsyncSession
 import re
@@ -133,6 +134,22 @@ async def get_playlist_info(id: int):
             items=items,
         )
 
+
+def get_cache_key(url: str) -> str | None:
+    """Build a SoundCloud cache key from a track URL."""
+    # Standard: soundcloud.com/user/track
+    # Short: on.soundcloud.com/ABC
+    match = re.search(r"soundcloud\.com/([^/?#]+/[^/?#]+)", url)
+    if match:
+        return f"sc:{match.group(1)}"
+    
+    # Fallback for short links (hash the URL without params)
+    if "on.soundcloud.com" in url:
+        clean_url = url.split('?')[0].rstrip('/')
+        hashed = hashlib.md5(clean_url.encode('utf-8')).hexdigest()
+        return f"sc:{hashed}"
+        
+    return None
 
 async def cache_check(session, cache_key: str) -> MediaContent | None:
     """Check DB cache for a previously sent SoundCloud track and return a MediaContent if found."""

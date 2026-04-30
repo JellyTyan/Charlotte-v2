@@ -1,5 +1,6 @@
 import logging
 import hashlib
+import re
 from curl_cffi.requests import AsyncSession
 from sqlalchemy.ext.asyncio import AsyncSession as DbAsyncSession
 from storage.db.crud import get_media_cache
@@ -37,7 +38,14 @@ async def get_post_info(url: str):
         return data[0]["data"]["children"][0]["data"]
 
 def get_cache_key(url: str) -> str:
-    hashed = hashlib.md5(url.encode('utf-8')).hexdigest()
+    # Try to extract Post ID: /comments/ABC or /gallery/ABC or /s/ABC
+    match = re.search(r"/(?:comments|gallery|s)/([A-Za-z0-9_-]+)", url)
+    if match:
+        return f"rd:{match.group(1)}"
+        
+    # Fallback and parameter stripping
+    clean_url = url.split('?')[0].rstrip('/')
+    hashed = hashlib.md5(clean_url.encode('utf-8')).hexdigest()
     return f"rd:{hashed}"
 
 async def cache_check(db_session: DbAsyncSession, key: str) -> list[MediaContent] | None:

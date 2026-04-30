@@ -521,7 +521,14 @@ async def _fetch_post_data(graphql_url: str, url: str, shortcode: str, cookie_fi
         return post_data
 
 def get_cache_key(url: str) -> str:
-    hashed = hashlib.md5(url.encode('utf-8')).hexdigest()
+    # Try to extract shortcode: /p/ABC/, /reel/ABC/, /reels/ABC/, /tv/ABC/
+    match = re.search(r"/(?:p|reels?|tv)/([A-Za-z0-9_-]+)", url)
+    if match:
+        return f"ig:{match.group(1)}"
+    
+    # Fallback for other formats, but at least strip query parameters
+    clean_url = url.split('?')[0].rstrip('/')
+    hashed = hashlib.md5(clean_url.encode('utf-8')).hexdigest()
     return f"ig:{hashed}"
 
 async def cache_check(db_session: DbAsyncSession, key: str) -> list[MediaContent] | None:

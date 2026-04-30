@@ -320,3 +320,11 @@ async def cache_check(session, cache_key: str) -> MediaContent | None:
             duration=cached.data.duration
         )
     return None
+
+
+def get_cache_key(url: str) -> str:
+    """Generate a unique cache key based on the URL and the selected format (video quality or audio)."""
+    match_track = re.search(r"watch\?v=([^&]+)", url)
+    video_id = match_track.group(1) if match_track else url
+
+    return f"ytmusic:{video_id}"

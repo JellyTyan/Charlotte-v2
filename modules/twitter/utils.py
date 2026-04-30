@@ -1,6 +1,6 @@
 import logging
 import hashlib
-
+import re
 from curl_cffi.requests import AsyncSession
 from sqlalchemy.ext.asyncio import AsyncSession as DbAsyncSession
 from storage.db.crud import get_media_cache
@@ -95,7 +95,14 @@ async def get_tweet_info(
         else:
             raise
 def get_cache_key(url: str) -> str:
-    hashed = hashlib.md5(url.encode('utf-8')).hexdigest()
+    # Try to extract Tweet ID
+    match = re.search(r"status/(\d+)", url)
+    if match:
+        return f"tw:{match.group(1)}"
+        
+    # Fallback and parameter stripping
+    clean_url = url.split('?')[0].rstrip('/')
+    hashed = hashlib.md5(clean_url.encode('utf-8')).hexdigest()
     return f"tw:{hashed}"
 
 async def cache_check(db_session: DbAsyncSession, key: str) -> list[MediaContent] | None:
