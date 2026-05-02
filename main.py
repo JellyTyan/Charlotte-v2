@@ -112,6 +112,7 @@ async def main():
     #     await asyncio.Event().wait()
     # else:
     logger.info("🎉 Bot successfully started and ready to receive messages!")
+    await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot, skip_updates=True)
 
 if __name__ == "__main__":
