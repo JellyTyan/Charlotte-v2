@@ -3,6 +3,7 @@ import logging
 from aiogram import F, Router
 from aiogram.enums import ParseMode
 from aiogram.types import FSInputFile, Message
+from aiogram.utils.chat_action import ChatActionSender
 from fluentogram import TranslatorRunner
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,9 +30,6 @@ DEEZER_REGEX = r"^https?:\/\/(?:www\.deezer\.com\/[a-z]{2}\/(track|album|playlis
 
 @deezer_router.message(F.text.regexp(DEEZER_REGEX))
 async def deezer_handler(message: Message, config: Config, i18n: TranslatorRunner, db_session: AsyncSession):
-    if not message.text or not message.from_user:
-        return
-
     url = message.text
     chat_id = message.chat.id
     user_id = message.from_user.id
@@ -48,15 +46,16 @@ async def deezer_handler(message: Message, config: Config, i18n: TranslatorRunne
     service = DeezerService(arq=arq)
 
     # --- Fetch metadata ---
-    media_metadata = await service.get_info(url, config=config)
-    if not media_metadata:
-        raise BotError(
-            code=ErrorCode.METADATA_ERROR,
-            message="Failed to get metadata",
-            url=url,
-            service=Services.DEEZER,
-            is_logged=True
-        )
+    async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=message.chat.id):
+        media_metadata = await service.get_info(url, config=config)
+        if not media_metadata:
+            raise BotError(
+                code=ErrorCode.METADATA_ERROR,
+                message="Failed to get metadata",
+                url=url,
+                service=Services.DEEZER,
+                is_logged=True
+            )
 
     # =========================================================================
     # SINGLE TRACK
@@ -87,50 +86,48 @@ async def deezer_handler(message: Message, config: Config, i18n: TranslatorRunne
             await send_manager.send(message, [cached], service="deezer", db_session=db_session)
             return
 
-        if message.bot:
-            await message.bot.send_chat_action(chat_id, "record_audio")
-
-        try:
+        async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=message.chat.id):
             try:
-                media_content = await task_manager.run_download(
-                    user_id=user_id,
-                    url=url,
-                    coro=service.download(media_metadata, lossless_mode=lossless_mode)
-                )
-            except BotError as e:
-                if e.code == ErrorCode.LOSSLESS_UNAVAILABLE:
-                    # Tidal недоступен — проверяем дефолтный кэш
-                    logger.info(f"Lossless unavailable for {media_metadata.cache_key}, checking default cache")
-                    if cache_key_default:
-                        default_cached = await cache_check(db_session, cache_key_default)
-                        if default_cached:
-                            logger.info(f"Serving default from cache for {media_metadata.cache_key}")
-                            send_manager = MediaSender()
-                            await send_manager.send(message, [default_cached], service="deezer", db_session=db_session)
-                            return
-                    # Дефолтного кэша нет — скачиваем стандарт
+                try:
                     media_content = await task_manager.run_download(
                         user_id=user_id,
                         url=url,
-                        coro=service.download(media_metadata, lossless_mode=False)
+                        coro=service.download(media_metadata, lossless_mode=lossless_mode)
                     )
-                else:
-                    raise e
+                except BotError as e:
+                    if e.code == ErrorCode.LOSSLESS_UNAVAILABLE:
+                        # Tidal недоступен — проверяем дефолтный кэш
+                        logger.info(f"Lossless unavailable for {media_metadata.cache_key}, checking default cache")
+                        if cache_key_default:
+                            default_cached = await cache_check(db_session, cache_key_default)
+                            if default_cached:
+                                logger.info(f"Serving default from cache for {media_metadata.cache_key}")
+                                send_manager = MediaSender()
+                                await send_manager.send(message, [default_cached], service="deezer", db_session=db_session)
+                                return
+                        # Дефолтного кэша нет — скачиваем стандарт
+                        media_content = await task_manager.run_download(
+                            user_id=user_id,
+                            url=url,
+                            coro=service.download(media_metadata, lossless_mode=False)
+                        )
+                    else:
+                        raise e
 
-            if media_content:
-                send_manager = MediaSender()
-                if media_content and media_content[0].is_lossless and cache_key_lossless:
-                    await send_manager.send(message, media_content, service="deezer",
-                                            cache_key=cache_key_lossless, db_session=db_session)
-                elif cache_key_default:
-                    await send_manager.send(message, media_content, service="deezer",
-                                            cache_key=cache_key_default, db_session=db_session)
-                else:
-                    await send_manager.send(message, media_content, service="deezer", db_session=db_session)
+                if media_content:
+                    send_manager = MediaSender()
+                    if media_content and media_content[0].is_lossless and cache_key_lossless:
+                        await send_manager.send(message, media_content, service="deezer",
+                                                cache_key=cache_key_lossless, db_session=db_session)
+                    elif cache_key_default:
+                        await send_manager.send(message, media_content, service="deezer",
+                                                cache_key=cache_key_default, db_session=db_session)
+                    else:
+                        await send_manager.send(message, media_content, service="deezer", db_session=db_session)
 
-        except BotError as e:
-            await log_download_event(db_session, user_id, Services.DEEZER, 'failed_download')
-            raise e
+            except BotError as e:
+                await log_download_event(db_session, user_id, Services.DEEZER, 'failed_download')
+                raise e
 
     # =========================================================================
     # ALBUM / PLAYLIST
@@ -193,11 +190,12 @@ async def deezer_handler(message: Message, config: Config, i18n: TranslatorRunne
 
                 # Download the specific track URL (NOT the playlist URL)
                 try:
-                    media_content = await task_manager.run_download(
-                        user_id=user_id,
-                        url=track_meta.url,
-                        coro=service.download(track_meta, lossless_mode=lossless_mode)
-                    )
+                    async with ChatActionSender.record_voice(bot=message.bot, chat_id=message.chat.id):
+                        media_content = await task_manager.run_download(
+                            user_id=user_id,
+                            url=track_meta.url,
+                            coro=service.download(track_meta, lossless_mode=lossless_mode)
+                        )
                 except BotError as e:
                     if e.code == ErrorCode.LOSSLESS_UNAVAILABLE:
                         # Tidal недоступен — проверяем дефолтный кэш
@@ -210,11 +208,12 @@ async def deezer_handler(message: Message, config: Config, i18n: TranslatorRunne
                                                         service="deezer", db_session=db_session)
                                 continue
                         # Дефолтного кэша нет — скачиваем стандарт
-                        media_content = await task_manager.run_download(
-                            user_id=user_id,
-                            url=track_meta.url,
-                            coro=service.download(track_meta, lossless_mode=False)
-                        )
+                        async with ChatActionSender.record_voice(bot=message.bot, chat_id=message.chat.id):
+                            media_content = await task_manager.run_download(
+                                user_id=user_id,
+                                url=track_meta.url,
+                                coro=service.download(track_meta, lossless_mode=False)
+                            )
                     else:
                         raise e
 

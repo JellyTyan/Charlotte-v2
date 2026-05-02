@@ -3,6 +3,7 @@ import logging
 from aiogram import F, Router
 from aiogram.enums import ParseMode
 from aiogram.types import FSInputFile, Message
+from aiogram.utils.chat_action import ChatActionSender
 from fluentogram import TranslatorRunner
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,19 +46,16 @@ async def ytmusic_handler(message: Message, config: Config, i18n: TranslatorRunn
     arq = await get_arq_pool('light')
     service = YTMusicService(arq=arq)
 
-    if message.bot:
-        await message.bot.send_chat_action(chat_id, "choose_sticker")
-
-    # --- Fetch metadata ---
-    media_metadata = await service.get_info(url, config=config)
-    if not media_metadata:
-        raise BotError(
-            code=ErrorCode.METADATA_ERROR,
-            message="Failed to get metadata",
-            url=url,
-            service=Services.YTMUSIC,
-            is_logged=True
-        )
+    async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=chat_id):
+        media_metadata = await service.get_info(url, config=config)
+        if not media_metadata:
+            raise BotError(
+                code=ErrorCode.METADATA_ERROR,
+                message="Failed to get metadata",
+                url=url,
+                service=Services.YTMUSIC,
+                is_logged=True
+            )
 
     # =========================================================================
     # SINGLE TRACK
@@ -82,15 +80,13 @@ async def ytmusic_handler(message: Message, config: Config, i18n: TranslatorRunn
                 await send_manager.send(message, [cached], service="ytmusic", db_session=db_session)
                 return
 
-        if message.bot:
-            await message.bot.send_chat_action(chat_id, "record_audio")
-
         try:
-            media_content = await task_manager.run_download(
-                user_id=user_id,
-                url=url,
-                coro=service.download(url)
-            )
+            async with ChatActionSender.record_voice(bot=message.bot, chat_id=chat_id):
+                media_content = await task_manager.run_download(
+                    user_id=user_id,
+                    url=url,
+                    coro=service.download(url)
+                )
 
             if media_content:
                 send_manager = MediaSender()
@@ -156,11 +152,12 @@ async def ytmusic_handler(message: Message, config: Config, i18n: TranslatorRunn
                         continue
 
                 # Download using track URL
-                media_content = await task_manager.run_download(
-                    user_id=user_id,
-                    url=track_meta.url,
-                    coro=service.download(track_meta.url)
-                )
+                async with ChatActionSender.record_voice(bot=message.bot, chat_id=chat_id):
+                    media_content = await task_manager.run_download(
+                        user_id=user_id,
+                        url=track_meta.url,
+                        coro=service.download(track_meta.url)
+                    )
 
                 if media_content:
                     await send_manager.send(message, media_content, skip_reaction=True,

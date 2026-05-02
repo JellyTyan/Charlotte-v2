@@ -3,6 +3,7 @@ import logging
 from aiofiles import os as aios
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, FSInputFile, Message
+from aiogram.utils.chat_action import ChatActionSender
 from fluentogram import TranslatorRunner
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,31 +32,24 @@ NICOVIDEO_REGEX = r"https?://(?:www\.)?nicovideo\.jp/watch/\S+"
 
 @nicovideo_router.message(F.text.regexp(NICOVIDEO_REGEX))
 async def nicovideo_handler(message: Message, i18n: TranslatorRunner, db_session: AsyncSession):
-    if not message.text or not message.from_user:
-        return
-
     url = message.text
-    chat_id = message.chat.id
-
-    if message.bot:
-        await message.bot.send_chat_action(chat_id, "find_location")
 
     process_message = await message.reply(i18n.get('processing'))
 
     arq = await get_arq_pool('heavy')
     service = NicoVideoService(arq=arq)
 
-    media_metadata = await service.get_info(url)
-
-    if media_metadata is None:
-        await process_message.delete()
-        raise BotError(
-            code=ErrorCode.METADATA_ERROR,
-            message="Failed to get NicoVideo metadata",
-            url=url,
-            service=Services.NICOVIDEO,
-            is_logged=True
-        )
+    async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=message.chat.id):
+        media_metadata = await service.get_info(url)
+        if media_metadata is None:
+            await process_message.delete()
+            raise BotError(
+                code=ErrorCode.METADATA_ERROR,
+                message="Failed to get NicoVideo metadata",
+                url=url,
+                service=Services.NICOVIDEO,
+                is_logged=True
+            )
 
     caption = f"<b>{media_metadata.title}</b>\n\n"
     if media_metadata.performer:
@@ -151,16 +145,15 @@ async def process_nicovideo_download(
         await send_manager.send(message, cached, service="nicovideo", db_session=db_session)
         return
 
-    if message.bot:
-        action = "record_audio" if media_type == "audio" else "record_video"
-        await message.bot.send_chat_action(message.chat.id, action)
+    action = "record_audio" if media_type == "audio" else "record_video"
 
     try:
-        media_content = await task_manager.run_download(
-            user_id=user_id,
-            url=url,
-            coro=service.download(url, video_id=video_id, audio_id=audio_id, media_type=media_type)
-        )
+        async with ChatActionSender(bot=message.bot, chat_id=message.chat.id, action=action):
+            media_content = await task_manager.run_download(
+                user_id=user_id,
+                url=url,
+                coro=service.download(url, video_id=video_id, audio_id=audio_id, media_type=media_type)
+            )
 
         if media_content:
             await send_manager.send(
