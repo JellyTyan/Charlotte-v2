@@ -22,5 +22,6 @@ def setup_logger():
     logger.setLevel(logging.INFO)
     logger.addHandler(file_handler)
     logger.addHandler(console_handler)
+    logging.getLogger("aiogram.event").setLevel(logging.WARNING)
 
     return logging.getLogger(__name__)
