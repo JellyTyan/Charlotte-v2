@@ -11,8 +11,8 @@ from aiogram import types, Bot
 from aiogram.utils.media_group import MediaGroupBuilder
 from aiogram.exceptions import TelegramEntityTooLarge, TelegramRetryAfter
 from sqlalchemy.ext.asyncio import AsyncSession
+from aiogram.utils.chat_action import ChatActionSender
 
-# Твои импорты (предполагается, что они настроены корректно)
 from utils import delete_files, truncate_string, translate_text
 from models.media import MediaContent, MediaType
 from models.errors import BotError, ErrorCode
@@ -213,13 +213,6 @@ class MediaSender:
         """Универсальный и безопасный вызов любого метода aiogram"""
         method = getattr(target_obj, method_name)
         return await method(**kwargs)
-
-    async def _safe_send_chat_action(self, bot: Bot, chat_id: int, action: str) -> None:
-        """Статусы 'Печатает...', 'Отправляет видео...' (ошибки игнорируются)"""
-        try:
-            await bot.send_chat_action(chat_id, action)
-        except Exception as e:
-            logger.debug(f"Failed to send chat action {action}: {e}")
 
     # ==========================================
     # ДАМП В КАНАЛ (КЭШИРОВАНИЕ)
@@ -437,10 +430,8 @@ class MediaSender:
                 )
 
             for audio in audio_items:
-                await self._safe_send_chat_action(
-                    message.bot, message.chat.id, "upload_voice"
-                )
-                await self._send_audio(message, audio, settings, service, caption, show_ad)
+                async with ChatActionSender.upload_voice(bot=message.bot, chat_id=message.chat.id):
+                    await self._send_audio(message, audio, settings, service, caption, show_ad)
 
             for gif in gif_items:
                 await self._send_gif(message, gif, settings, service, caption, show_ad)
@@ -552,16 +543,15 @@ class MediaSender:
 
             # Отправка альбома
             action = "upload_document" if send_as_raw else "upload_video"
-            if message.bot:
-                await self._safe_send_chat_action(message.bot, message.chat.id, action)
 
             try:
-                sent_messages = await self._safe_send(
-                    message,
-                    "answer_media_group",
-                    media=media_group.build(),
-                    disable_notification=not settings.profile.notifications,
-                )
+                async with ChatActionSender(bot=message.bot, chat_id=message.chat.id, action=action):
+                    sent_messages = await self._safe_send(
+                        message,
+                        "answer_media_group",
+                        media=media_group.build(),
+                        disable_notification=not settings.profile.notifications,
+                    )
                 # Кэшируем новые file_id, если их не было
                 if isinstance(sent_messages, list):
                     for item, sent_msg in zip(group_items, sent_messages):
@@ -683,9 +673,6 @@ class MediaSender:
         action = "upload_document" if send_as_raw else "upload_video"
         method = "answer_document" if send_as_raw else "answer_animation"
 
-        if message.bot:
-            await self._safe_send_chat_action(message.bot, message.chat.id, action)
-
         final_caption = ""
         if caption and getattr(service_settings, "caption", False):
             if getattr(service_settings, "translate_caption", False):
@@ -718,11 +705,12 @@ class MediaSender:
             kwargs["height"] = gif.height
             kwargs["duration"] = gif.duration
 
-        sent_msg = await self._safe_send(
-            message,
-            method,
-            **kwargs
-        )
+        async with ChatActionSender(bot=message.bot, chat_id=message.chat.id, action=action):
+            sent_msg = await self._safe_send(
+                message,
+                method,
+                **kwargs
+            )
 
         # Обновляем кэш
         if send_as_raw and sent_msg.document:

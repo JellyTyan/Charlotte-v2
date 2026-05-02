@@ -2,6 +2,7 @@ import logging
 
 from aiogram import F, Router
 from aiogram.types import Message
+from aiogram.utils.chat_action import ChatActionSender
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.errors import BotError
@@ -21,33 +22,28 @@ PINTEREST_REGEX = r"https?://(?:www\.)?(?:pinterest\.com/[\w/-]+|pin\.it/[A-Za-z
 
 @pinterest_router.message(F.text.regexp(PINTEREST_REGEX))
 async def pinterest_handler(message: Message, db_session: AsyncSession):
-    if not message.text or not message.from_user:
-        return
-
     url = message.text
-    chat_id = message.chat.id
     user_id = message.from_user.id
 
-    if message.bot:
-        await message.bot.send_chat_action(chat_id, "choose_sticker")
+    async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=message.chat.id):
+        send_manager = MediaSender()
+        cache_key = get_cache_key(url)
 
-    send_manager = MediaSender()
-    cache_key = get_cache_key(url)
-
-    cached = await cache_check(db_session, cache_key)
-    if cached:
-        await send_manager.send(message, cached, service="pinterest", db_session=db_session)
-        return
+        cached = await cache_check(db_session, cache_key)
+        if cached:
+            await send_manager.send(message, cached, service="pinterest", db_session=db_session)
+            return
 
     arq = await get_arq_pool('light')
     service = PinterestService(arq=arq)
 
     try:
-        media_content = await task_manager.run_download(
-            user_id=user_id,
-            url=url,
-            coro=service.download(url)
-        )
+        async with ChatActionSender.record_video_note(bot=message.bot, chat_id=message.chat.id):
+            media_content = await task_manager.run_download(
+                user_id=user_id,
+                url=url,
+                coro=service.download(url)
+            )
 
         if media_content:
             await send_manager.send(message, media_content, service="pinterest", cache_key=cache_key, db_session=db_session)

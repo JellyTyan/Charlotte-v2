@@ -1,5 +1,6 @@
 from aiogram import F, Router
 from aiogram.types import Message
+from aiogram.utils.chat_action import ChatActionSender
 from fluentogram import TranslatorRunner
 from sqlalchemy.ext.asyncio import AsyncSession
 import logging
@@ -30,24 +31,22 @@ async def twitter_handler(message: Message, config: Config, i18n: TranslatorRunn
     chat_id = message.chat.id
     user_id = message.from_user.id
 
-    if message.bot:
-        await message.bot.send_chat_action(chat_id, "choose_sticker")
+    async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=chat_id):
+        send_manager = MediaSender()
+        cache_key = get_cache_key(url)
 
-    send_manager = MediaSender()
-    cache_key = get_cache_key(url)
+        cached = await cache_check(db_session, cache_key)
+        if cached:
+            await send_manager.send(message, cached, service="twitter", db_session=db_session)
+            return
 
-    cached = await cache_check(db_session, cache_key)
-    if cached:
-        await send_manager.send(message, cached, service="twitter", db_session=db_session)
-        return
+        allow_nsfw = True
+        if chat_id < 0:
+            settings = await get_chat_settings(db_session, chat_id)
+            allow_nsfw = settings.profile.allow_nsfw
 
-    allow_nsfw = True
-    if chat_id < 0:
-        settings = await get_chat_settings(db_session, chat_id)
-        allow_nsfw = settings.profile.allow_nsfw
-
-    user = await get_user(db_session, user_id)
-    is_premium = user.is_premium if user else False
+        user = await get_user(db_session, user_id)
+        is_premium = user.is_premium if user else False
 
     arq = await get_arq_pool('light')
     service = TwitterService(arq=arq)
@@ -58,11 +57,12 @@ async def twitter_handler(message: Message, config: Config, i18n: TranslatorRunn
         coro = service.download(url, allow_nsfw=allow_nsfw)
 
     try:
-        media_content = await task_manager.run_download(
-            user_id=user_id,
-            url=url,
-            coro=coro
-        )
+        async with ChatActionSender.record_video_note(bot=message.bot, chat_id=chat_id):
+            media_content = await task_manager.run_download(
+                user_id=user_id,
+                url=url,
+                coro=coro
+            )
 
         if media_content:
             await send_manager.send(message, media_content, service="twitter", cache_key=cache_key, db_session=db_session)

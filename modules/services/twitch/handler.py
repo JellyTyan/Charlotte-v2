@@ -1,6 +1,7 @@
 import logging
 from aiogram import F, Router
 from aiogram.types import Message
+from aiogram.utils.chat_action import ChatActionSender
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.errors import BotError, ErrorCode
@@ -28,30 +29,29 @@ async def twitch_handler(message: Message, db_session: AsyncSession):
 
     user_id = message.from_user.id
     url = message.text.strip()
-    
-    send_manager = MediaSender()
 
-    cache_key = get_cache_key(url)
-    if not cache_key:
-        return
+    async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=message.chat.id):
+        send_manager = MediaSender()
 
-    cached = await cache_check(db_session, cache_key)
-    if cached:
-        await send_manager.send(message, cached, service="twitch", db_session=db_session)
-        return
+        cache_key = get_cache_key(url)
+        if not cache_key:
+            return
+
+        cached = await cache_check(db_session, cache_key)
+        if cached:
+            await send_manager.send(message, cached, service="twitch", db_session=db_session)
+            return
 
     arq = await get_arq_pool("heavy")
     service = TwitchService(arq=arq)
 
-    if message.bot:
-        await message.bot.send_chat_action(message.chat.id, "choose_sticker")
-
     try:
-        media_content = await task_manager.run_download(
-            user_id=user_id,
-            url=url,
-            coro=service.download(url)
-        )
+        async with ChatActionSender.record_video_note(bot=message.bot, chat_id=message.chat.id):
+            media_content = await task_manager.run_download(
+                user_id=user_id,
+                url=url,
+                coro=service.download(url)
+            )
 
         if media_content:
             await send_manager.send(message, media_content, service="twitch", cache_key=cache_key, db_session=db_session)

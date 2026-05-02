@@ -2,6 +2,7 @@ import logging
 
 from aiogram import F, Router
 from aiogram.types import Message
+from aiogram.utils.chat_action import ChatActionSender
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.errors import BotError
@@ -29,31 +30,30 @@ async def reddit_handler(message: Message, db_session: AsyncSession):
     chat_id = message.chat.id
     user_id = message.from_user.id
 
-    if message.bot:
-        await message.bot.send_chat_action(chat_id, "choose_sticker")
+    async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=message.chat.id):
+        send_manager = MediaSender()
+        cache_key = get_cache_key(url)
 
-    send_manager = MediaSender()
-    cache_key = get_cache_key(url)
+        cached = await cache_check(db_session, cache_key)
+        if cached:
+            await send_manager.send(message, cached, service="reddit", db_session=db_session)
+            return
 
-    cached = await cache_check(db_session, cache_key)
-    if cached:
-        await send_manager.send(message, cached, service="reddit", db_session=db_session)
-        return
+        allow_nsfw = True
+        if chat_id < 0:
+            settings = await get_chat_settings(db_session, chat_id)
+            allow_nsfw = settings.profile.allow_nsfw
 
-    allow_nsfw = True
-    if chat_id < 0:
-        settings = await get_chat_settings(db_session, chat_id)
-        allow_nsfw = settings.profile.allow_nsfw
-
-    arq = await get_arq_pool('light')
-    service = RedditService(arq=arq)
+        arq = await get_arq_pool('light')
+        service = RedditService(arq=arq)
 
     try:
-        media_content = await task_manager.run_download(
-            user_id=user_id,
-            url=url,
-            coro=service.download(url, allow_nsfw=allow_nsfw)
-        )
+        async with ChatActionSender.record_video_note(bot=message.bot, chat_id=message.chat.id):
+            media_content = await task_manager.run_download(
+                user_id=user_id,
+                url=url,
+                coro=service.download(url, allow_nsfw=allow_nsfw)
+            )
 
         if media_content:
             await send_manager.send(message, media_content, service="reddit", cache_key=cache_key, db_session=db_session)
