@@ -56,6 +56,8 @@ class YTMusicService:
                             media_type="track",
                             cache_key=f"ytmusic:{video_id}"
                         )
+                    else:
+                        raise ValueError("videoDetails not found in response")
                 except Exception as e:
                     if attempt == 2:
                         logger.warning(f"ytmusicapi failed, using yt-dlp fallback: {e}")
@@ -65,15 +67,15 @@ class YTMusicService:
                             url=url,
                             extract_only=True,
                             cookies_file=random_cookie_file("youtube"),
-                            _queue_name='light'
+                            _queue_name='heavy'
                         )
                         try:
                             info = await job.result()
-                        except Exception as e:
+                        except Exception as dl_e:
                             raise BotError(
                                 code=ErrorCode.METADATA_ERROR,
                                 service=Services.YTMUSIC,
-                                message=f"Failed to fetch YTMusic info via yt-dlp: {e}",
+                                message=f"Failed to fetch YTMusic info via yt-dlp: {dl_e}",
                                 url=url,
                                 critical=True,
                                 is_logged=True
