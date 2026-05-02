@@ -18,7 +18,8 @@ from models.settings import ChatSettingsJson, UserSettingsJson
 from models.service_list import Services
 from storage.db.crud import update_user_settings, update_chat_settings, get_user_settings, get_chat_settings, create_user, create_chat
 from middlewares.button_owner import register_message_owner
-from core.loader import dp
+from aiogram import Router
+router = Router()
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -58,7 +59,8 @@ DESC_MAPPING = {
     "send_covers": "send_music_covers",
     "lossless": "lossless_mode",
     "negativity": "negativity_mode",
-    "news_spam": "news_spam"
+    "news_spam": "news_spam",
+    "bot_sign": "bot_sign"
 }
 
 def get_language_flag(code: str) -> str:
@@ -136,6 +138,13 @@ def build_main_keyboard(settings, i18n: TranslatorRunner, is_group: bool = False
             InlineKeyboardButton(
                 text=i18n.btn.allow.nsfw(is_enabled='true' if settings.profile.allow_nsfw else 'false'),
                 callback_data="menu_profile_allow_nsfw"
+            )
+        ])
+    else:
+        keyboards.insert(-1, [
+            InlineKeyboardButton(
+                text=i18n.btn.bot.sign(is_enabled='true' if settings.profile.bot_sign else 'false'),
+                callback_data="menu_profile_bot_sign"
             )
         ])
     return InlineKeyboardMarkup(inline_keyboard=keyboards)
@@ -240,7 +249,7 @@ async def safe_edit_text(callback: CallbackQuery, text: str, reply_markup: Inlin
 # === Handlers === #
 
 # Main settings
-@dp.message(Command("settings"))
+@router.message(Command("settings"))
 async def settings_command(message: Message, i18n: TranslatorRunner, db_session: AsyncSession) -> None:
     chat = message.chat
     if message.bot is None or message.from_user is None:
@@ -265,7 +274,7 @@ async def settings_command(message: Message, i18n: TranslatorRunner, db_session:
         await register_message_owner(sent, message.from_user.id)
 
 # Comeback
-@dp.callback_query(lambda c: c.data == "settings_main")
+@router.callback_query(lambda c: c.data == "settings_main")
 async def settings_main(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
     if callback.message is None: return
     settings, is_group = await get_settings_obj(db_session, callback.message.chat.id, callback.from_user.id)
@@ -273,7 +282,7 @@ async def settings_main(callback: CallbackQuery, i18n: TranslatorRunner, db_sess
     await callback.answer()
 
 # Service settings: choosing one
-@dp.callback_query(lambda c: c.data == "settings_services")
+@router.callback_query(lambda c: c.data == "settings_services")
 async def settings_services_menu(callback: CallbackQuery, i18n: TranslatorRunner):
     if callback.message is None: return
     text = i18n.settings.select.service()
@@ -281,7 +290,7 @@ async def settings_services_menu(callback: CallbackQuery, i18n: TranslatorRunner
     await callback.answer()
 
 # Service settings
-@dp.callback_query(lambda c: c.data.startswith("settings_svc_"))
+@router.callback_query(lambda c: c.data.startswith("settings_svc_"))
 async def settings_svc_menu(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
     if callback.message is None: return
     if callback.data is None: return
@@ -292,7 +301,7 @@ async def settings_svc_menu(callback: CallbackQuery, i18n: TranslatorRunner, db_
     await safe_edit_text(callback, text, build_service_settings_keyboard(settings, service, i18n))
     await callback.answer()
 
-@dp.callback_query(lambda c: c.data.startswith("menu_profile_"))
+@router.callback_query(lambda c: c.data.startswith("menu_profile_"))
 async def menu_profile_setting(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
     if callback.message is None: return
     if callback.data is None: return
@@ -319,7 +328,7 @@ async def menu_profile_setting(callback: CallbackQuery, i18n: TranslatorRunner, 
     await safe_edit_text(callback, text, kb)
     await callback.answer()
 
-@dp.callback_query(lambda c: c.data.startswith("menu_service_"))
+@router.callback_query(lambda c: c.data.startswith("menu_service_"))
 async def menu_service_setting(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
     if callback.message is None or callback.data is None: return
     parts = callback.data.replace("menu_service_", "").split("_")
@@ -358,7 +367,7 @@ async def menu_service_setting(callback: CallbackQuery, i18n: TranslatorRunner, 
     await safe_edit_text(callback, text, kb)
     await callback.answer()
 
-@dp.callback_query(lambda c: c.data.startswith("block_svc_"))
+@router.callback_query(lambda c: c.data.startswith("block_svc_"))
 async def menu_service_block(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
     if callback.message is None or callback.data is None: return
 
@@ -382,7 +391,7 @@ async def menu_service_block(callback: CallbackQuery, i18n: TranslatorRunner, db
     await safe_edit_text(callback, text, build_service_settings_keyboard(settings, service, i18n))
     await callback.answer()
 
-@dp.callback_query(lambda c: c.data.startswith("toggle_profile_"))
+@router.callback_query(lambda c: c.data.startswith("toggle_profile_"))
 async def apply_profile_setting(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
     if callback.message is None or callback.data is None: return
     data = callback.data.replace("toggle_profile_", "")
@@ -391,6 +400,14 @@ async def apply_profile_setting(callback: CallbackQuery, i18n: TranslatorRunner,
     new_value = data[last_uscores+1:] == "True"
 
     chat_id = callback.message.chat.id
+    
+    if key == "bot_sign" and new_value == False:
+        from storage.db.crud import get_user
+        user = await get_user(db_session, callback.from_user.id)
+        if not user or not user.is_premium:
+            await callback.answer("🌟 Disabling the Bot Ad requires an active Sponsorship (100 Stars)!", show_alert=True)
+            return
+
     settings, is_group = await get_settings_obj(db_session, chat_id, callback.from_user.id)
     setattr(settings.profile, key, new_value)
     await save_settings_obj(db_session, chat_id, callback.from_user.id, settings)
@@ -400,7 +417,7 @@ async def apply_profile_setting(callback: CallbackQuery, i18n: TranslatorRunner,
     await safe_edit_text(callback, text, build_back_keyboard(i18n, "settings_main"))
     await callback.answer(i18n.get('setting-updated'))
 
-@dp.callback_query(lambda c: c.data.startswith("toggle_service_"))
+@router.callback_query(lambda c: c.data.startswith("toggle_service_"))
 async def apply_service_setting(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
     if callback.message is None or callback.data is None: return
 
@@ -429,7 +446,7 @@ async def apply_service_setting(callback: CallbackQuery, i18n: TranslatorRunner,
     await callback.answer(i18n.get('setting-updated'))
 
 
-@dp.callback_query(lambda c: c.data == "settings_lang")
+@router.callback_query(lambda c: c.data == "settings_lang")
 async def settings_lang_menu(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
     if callback.message is None: return
     settings, _ = await get_settings_obj(db_session, callback.message.chat.id, callback.from_user.id)
@@ -456,7 +473,7 @@ async def settings_lang_menu(callback: CallbackQuery, i18n: TranslatorRunner, db
     await safe_edit_text(callback, text, kb)
     await callback.answer()
 
-@dp.callback_query(lambda c: c.data.startswith("settings_lang_set_"))
+@router.callback_query(lambda c: c.data.startswith("settings_lang_set_"))
 async def settings_lang_set(callback: CallbackQuery, state: FSMContext, i18n: TranslatorRunner, db_session: AsyncSession):
     if callback.message is None or callback.data is None: return
     lang = callback.data.replace("settings_lang_set_", "")
@@ -470,7 +487,7 @@ async def settings_lang_set(callback: CallbackQuery, state: FSMContext, i18n: Tr
     await callback.answer(i18n.get('language-updated'))
 
 
-@dp.callback_query(lambda c: c.data == "settings_title_language")
+@router.callback_query(lambda c: c.data == "settings_title_language")
 async def settings_title_language_menu(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
     if callback.message is None: return
     settings, _ = await get_settings_obj(db_session, callback.message.chat.id, callback.from_user.id)
@@ -495,7 +512,7 @@ async def settings_title_language_menu(callback: CallbackQuery, i18n: Translator
     await safe_edit_text(callback, i18n.get('pick-title-language'), kb)
     await callback.answer()
 
-@dp.callback_query(lambda c: c.data.startswith("settings_title_lang_set_"))
+@router.callback_query(lambda c: c.data.startswith("settings_title_lang_set_"))
 async def settings_title_language_set(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
     if callback.message is None or callback.data is None: return
     lang = callback.data.replace("settings_title_lang_set_", "")

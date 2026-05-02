@@ -412,6 +412,20 @@ class MediaSender:
                     else await get_user_settings(db_session, message.chat.id)
                 )
 
+            is_premium = False
+            show_ad = True
+            if db_session and message.from_user:
+                from storage.db.crud import get_user
+                user = await get_user(db_session, message.from_user.id)
+                is_premium = user.is_premium if user else False
+                
+                user_settings = await get_user_settings(db_session, message.from_user.id)
+                if user_settings:
+                    if is_premium:
+                        show_ad = user_settings.profile.bot_sign
+                    else:
+                        show_ad = True
+
             logger.info(
                 f"Sending to {message.chat.id}: {len(media_items)} media, {len(audio_items)} audio, {len(gif_items)} gif"
             )
@@ -419,17 +433,17 @@ class MediaSender:
             # 6. Отправка пользователю
             if media_items:
                 await self._send_media_group(
-                    message, media_items, caption, settings, service
+                    message, media_items, caption, settings, service, show_ad
                 )
 
             for audio in audio_items:
                 await self._safe_send_chat_action(
                     message.bot, message.chat.id, "upload_voice"
                 )
-                await self._send_audio(message, audio, settings, service)
+                await self._send_audio(message, audio, settings, service, caption, show_ad)
 
             for gif in gif_items:
-                await self._send_gif(message, gif, settings, service)
+                await self._send_gif(message, gif, settings, service, caption, show_ad)
 
             # 7. Реакции
             if settings.profile.reactions and not skip_reaction:
@@ -480,6 +494,7 @@ class MediaSender:
         caption: Optional[str],
         settings: Union[UserSettingsJson, ChatSettingsJson],
         service: Optional[str] = None,
+        show_ad: bool = True,
     ) -> None:
         if not content:
             return
@@ -494,12 +509,24 @@ class MediaSender:
             media_group = MediaGroupBuilder()
 
             # Обработка подписи и перевода (только для первого элемента)
-            if caption and i == 0 and getattr(service_settings, "caption", False):
-                if getattr(service_settings, "translate_caption", False):
-                    caption = await translate_text(
-                        caption, str(settings.profile.title_language)
-                    )
-                media_group.caption = truncate_string(caption, 1024)
+            if i == 0:
+                final_caption = ""
+                if caption and getattr(service_settings, "caption", False):
+                    if getattr(service_settings, "translate_caption", False):
+                        caption = await translate_text(
+                            caption, str(settings.profile.title_language)
+                        )
+                    final_caption = truncate_string(caption, 1000)
+                
+                if show_ad:
+                    ad_text = "\n\n<a href='https://t.me/CharlotteFox_Bot'>Charlotte 🧡</a>"
+                    if final_caption:
+                        final_caption += ad_text
+                    else:
+                        final_caption = ad_text
+                
+                if final_caption:
+                    media_group.caption = final_caption
 
             # Сборка альбома
             for item in group_items:
@@ -568,9 +595,30 @@ class MediaSender:
         audio: MediaContent,
         settings: Union[UserSettingsJson, ChatSettingsJson],
         service: Optional[str] = None,
+        caption: Optional[str] = None,
+        show_ad: bool = True,
     ) -> None:
         self._check_file_size(audio, is_audio=True)
         media_input = self._get_input_media(audio, as_document=False)
+
+        service_settings = getattr(settings.services, service, None) if service else None
+        final_caption = ""
+        if caption and getattr(service_settings, "caption", False):
+            if getattr(service_settings, "translate_caption", False):
+                caption = await translate_text(
+                    caption, str(settings.profile.title_language)
+                )
+            final_caption = truncate_string(caption, 1000)
+
+        if show_ad:
+            ad_text = "\n\n<a href='https://t.me/CharlotteFox_Bot'>Charlotte 🧡</a>"
+            if final_caption:
+                final_caption += ad_text
+            else:
+                final_caption = ad_text
+                
+        if not final_caption:
+            final_caption = None
 
         try:
             sent_msg = await self._safe_send(
@@ -584,6 +632,7 @@ class MediaSender:
                 title=audio.title,
                 duration=audio.duration,
                 performer=audio.performer,
+                caption=final_caption
             )
             if sent_msg.audio:
                 audio.telegram_file_id = sent_msg.audio.file_id
@@ -620,6 +669,8 @@ class MediaSender:
         gif: MediaContent,
         settings: Union[UserSettingsJson, ChatSettingsJson],
         service: Optional[str] = None,
+        caption: Optional[str] = None,
+        show_ad: bool = True,
     ) -> None:
         service_settings = (
             getattr(settings.services, service, None) if service else None
@@ -635,8 +686,27 @@ class MediaSender:
         if message.bot:
             await self._safe_send_chat_action(message.bot, message.chat.id, action)
 
+        final_caption = ""
+        if caption and getattr(service_settings, "caption", False):
+            if getattr(service_settings, "translate_caption", False):
+                caption = await translate_text(
+                    caption, str(settings.profile.title_language)
+                )
+            final_caption = truncate_string(caption, 1000)
+
+        if show_ad:
+            ad_text = "\n\n<a href='https://t.me/CharlotteFox_Bot'>Charlotte 🧡</a>"
+            if final_caption:
+                final_caption += ad_text
+            else:
+                final_caption = ad_text
+                
+        if not final_caption:
+            final_caption = None
+
         kwargs = {
             "disable_notification": not settings.profile.notifications,
+            "caption": final_caption
         }
         if send_as_raw:
             kwargs["document"] = media_input

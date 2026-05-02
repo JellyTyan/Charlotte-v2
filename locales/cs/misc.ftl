@@ -44,3 +44,30 @@ invalid-callback = ❌ Jejda! Toto tlačítko už vypršelo.
 url-expired = ⏰ Odkaz vypršel. Zkus to znovu s novým!
 setting-changed = ⚙️ Nastavení *{ $setting }* bylo { $status }!
 premium-granted = 🎉 Great news! The owner has granted you free access to premium features. Enjoy unlimited downloads!
+
+
+# System & Payment Localization
+sponsor-alert = 🌟 30 dní Premium za 100 Hvězd!
+sponsor-invoice-title = Sponzor Premium (30 Dní)
+sponsor-invoice-desc = Získejte 30 dní prémiového přístupu! Žádné reklamy a funkce navíc.
+sponsor-success = 🎉 Děkujeme za vaši podporu! Bylo vám uděleno 30 dní Sponzor Premium 🌟
+support-invoice-title = Darovat 50 Hvězd
+support-invoice-desc = Podpořte vývoj Charlotte!
+support-success = 🎉 Moc děkujeme za vaši podporu! 🧡
+support-invalid-amount = ❌ Částka musí být mezi 1 a 100 000 Hvězdami. Zkuste to prosím znovu:
+support-invalid-number = ❌ Zadejte prosím platné číslo mezi 1 a 100 000:
+payment-invalid-data = ⚠️ Chyba: Neplatné platební údaje.
+payment-invalid-format = ⚠️ Chyba: Neplatný formát dat.
+payment-link-expired = ⚠️ Chyba: Odkaz vypršel. Zkuste to prosím znovu.
+payment-success-download = ✅ Děkujeme za podporu Charlotte! Zahajuji stahování...
+payment-error-refund = ❌ Chyba při zpracování vašeho požadavku. Vracíme peníze...
+premium-expired = ⚠️ Vaše Sponzor Premium vypršelo! Můžete si ho kdykoli obnovit. 🌟
+bot-ad-disable-alert = 🌟 Vypnutí reklamy robota vyžaduje aktivní Sponzorství (100 Hvězd)!
+download-failed-refund = ❌ Stahování se nezdařilo. Vaše platba byla vrácena.
+not-your-request = ❌ Toto není váš požadavek
+action-cancelled = 🛑 Zrušeno
+banned-global = 🚫 Jste globálně zabanováni.
+banned-chat = 🚫 V tomto chatu jste zabanováni.
+too-many-requests = ⏳ Příliš mnoho požadavků. Prosím čekejte.
+menu-not-yours = ⚠️ S tímto menu nemůžete interagovat.
+general-error = ❌ Došlo k chybě. Zkuste to prosím později.
