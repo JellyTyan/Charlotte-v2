@@ -6,19 +6,21 @@ from storage.db.crud import get_chat_settings
 from models.settings import ChatSettingsJson
 
 SERVICE_PATTERNS = {
-    "youtube": r"https?://(?:www\.)?(?:m\.)?(?:youtu\.be/|youtube\.com/(?:shorts/|watch\?v=))",
-    "tiktok": r"https?://(?:www\.)?(?:vm\.)?tiktok\.com/",
+    "applemusic": r"https?://music\.apple\.com/",
+    "bluesky": r"https:\/\/bsky\.app\/profile\/[^\/]+\/post\/[a-z0-9]+",
+    "deezer": r"https?:\/\/(?:www\.|link\.)?deezer\.com/",
     "instagram": r"https?://(?:www\.)?instagram\.com/",
-    "twitter": r"https?://(?:www\.)?(?:twitter\.com|x\.com)/",
+    "nicovideo": r"https?://(?:www\.)?nicovideo\.com/",
+    "pinterest": r"https?://(?:www\.)?pinterest\.com/",
+    "pixiv": r"https?://(?:www\.)?pixiv\.net/",
     "reddit": r"https?://(?:www\.)?reddit\.com/",
     "soundcloud": r"https?://(?:www\.)?soundcloud\.com/",
     "spotify": r"https?://open\.spotify\.com/",
-    "applemusic": r"https?://music\.apple\.com/",
-    "deezer": r"https?:\/\/(?:www\.|link\.)?deezer\.com/",
-    "pinterest": r"https?://(?:www\.)?pinterest\.com/",
-    "pixiv": r"https?://(?:www\.)?pixiv\.net/",
+    "tiktok": r"https?://(?:www\.)?(?:vm\.)?tiktok\.com/",
+    "twitch": r"https?://(?:www\.)?twitch\.com/",
+    "twitter": r"https?://(?:www\.)?(?:twitter\.com|x\.com)/",
+    "youtube": r"https?://(?:www\.)?(?:m\.)?(?:youtu\.be/|youtube\.com/(?:shorts/|watch\?v=))",
     "ytmusic": r"https?://music\.youtube\.com/",
-    "bluesky": r"https:\/\/bsky\.app\/profile\/[^\/]+\/post\/[a-z0-9]+",
 }
 
 def detect_service(text: str) -> str | None:
@@ -40,8 +42,10 @@ class ServiceBlockMiddleware(BaseMiddleware):
         if event.chat.id < 0:
             service = detect_service(event.text)
             if service:
-                settings = await get_chat_settings(event.chat.id)
-                if isinstance(settings, ChatSettingsJson) and service in settings.profile.blocked_services:
-                    return
+                session = data.get("db_session")
+                if session:
+                    settings = await get_chat_settings(session, event.chat.id)
+                    if isinstance(settings, ChatSettingsJson) and service in settings.profile.blocked_services:
+                        return
         
         return await handler(event, data)

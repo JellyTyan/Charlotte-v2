@@ -1,157 +1,43 @@
 import asyncio
-import logging
 from collections import defaultdict
-from typing import Dict
-
-from aiogram.types import ReactionTypeEmoji
-
-logger = logging.getLogger(__name__)
 
 
 class TaskManager:
     def __init__(self):
-        # Separate semaphores for download and send operations
-        self._download_semaphores: Dict[int, asyncio.Semaphore] = defaultdict(lambda: asyncio.Semaphore(1))
-        self._send_semaphores: Dict[int, asyncio.Semaphore] = defaultdict(lambda: asyncio.Semaphore(1))
-        self._user_tasks: Dict[int, list] = defaultdict(list)
-        self._pending_urls = defaultdict(set)
+        self._user_semaphores = defaultdict(lambda: asyncio.Semaphore(1))
+        self._global_semaphore = asyncio.Semaphore(10)
 
-    async def add_task(self, user_id: int, download_coro, message=None, url=None):
-        """Add download task to user's download queue
+        self._cancelled_users = set()
+        self._active_tasks = {}
 
-        Args:
-            user_id: User ID
-            download_coro: Coroutine that downloads media and returns content
-            message: Optional message for reaction
-            url: Optional URL for duplicate detection
+    async def run_download(self, user_id: int, url: str, coro):
+        self._cancelled_users.discard(user_id)
 
-        Returns:
-            Task object
-        """
-        if url and url in self._pending_urls[user_id]:
-            logger.warning(f"Duplicate request ignored for user {user_id}")
-            return None
+        async with self._user_semaphores[user_id]:
+            async with self._global_semaphore:
+                task = asyncio.create_task(coro)
+                self._active_tasks[user_id] = task
 
-        if url:
-            self._pending_urls[user_id].add(url)
-
-        # Initial reaction if enabled (before queue)
-        if message:
-            try:
-                await message.react([ReactionTypeEmoji(emoji="👍")])
-            except Exception as e:
-                logger.warning(f"Failed to set initial reaction: {e}")
-
-        async def download_wrapper():
-            async with self._download_semaphores[user_id]:
-                logger.debug(f"[DOWNLOAD] User {user_id} - Download semaphore acquired")
                 try:
-                    result = await download_coro
-                    logger.debug(f"[DOWNLOAD] User {user_id} - Download complete, semaphore released")
-                    return result
-                except Exception as e:
-                    logger.error(f"Download task failed for user {user_id}: {e}", exc_info=True)
-                    # Handle error manually if message provided
-                    if message:
-                        from models.errors import BotError
-                        if isinstance(e, BotError):
-                            await self._handle_bot_error(e, message, user_id)
-                    raise
+                    return await task
+                except asyncio.CancelledError:
+                    from models.errors import BotError, ErrorCode
+
+                    raise BotError(code=ErrorCode.DOWNLOAD_CANCELLED, message="Загрузка отменена пользователем.")
                 finally:
-                    # Remove URL from pending after download completes
-                    if url:
-                        self._pending_urls[user_id].discard(url)
+                    self._active_tasks.pop(user_id, None)
 
-        task = asyncio.create_task(download_wrapper())
-        self._user_tasks[user_id].append(task)
-        self._user_tasks[user_id] = [t for t in self._user_tasks[user_id] if not t.done()]
-        return task
+    def cancel_user(self, user_id: int):
+        self._cancelled_users.add(user_id)
 
-    async def add_send_task(self, user_id: int, send_coro):
-        """Add send task to user's send queue
+        if user_id in self._active_tasks:
+            self._active_tasks[user_id].cancel()
 
-        Args:
-            user_id: User ID
-            send_coro: Coroutine that sends media to Telegram
-
-        Returns:
-            Task object
-        """
-        async def send_wrapper():
-            async with self._send_semaphores[user_id]:
-                logger.debug(f"[SEND] User {user_id} - Send semaphore acquired")
-                try:
-                    result = await send_coro
-                    logger.debug(f"[SEND] User {user_id} - Send complete, semaphore released")
-                    return result
-                except Exception as e:
-                    logger.error(f"Send task failed for user {user_id}: {e}", exc_info=True)
-                    raise
-
-        task = asyncio.create_task(send_wrapper())
-        self._user_tasks[user_id].append(task)
-        self._user_tasks[user_id] = [t for t in self._user_tasks[user_id] if not t.done()]
-        return task
-
-    async def _handle_bot_error(self, exception, message, user_id: int):
-        """Handle BotError and send message to user"""
-        from core.loader import bot, dp
-        from core.config import Config
-        from aiogram.enums import ParseMode
-        from models.errors import ErrorCode
-
-        config = Config()
-        hub = dp.workflow_data.get("_translator_hub")
-        if not hub:
-            await message.answer("❌ An error occurred. Please try again later.")
-            return
-
-        # Get user settings for locale
-        from storage.db.crud import get_user_settings, get_chat_settings
-        if message.chat.id < 0:
-            settings = await get_chat_settings(message.chat.id)
-        else:
-            settings = await get_user_settings(user_id)
-        lang = settings.profile.language if settings else "en"
-        i18n = hub.get_translator_by_locale(lang)
-
-        # Get error message
-        from utils.error_messages import get_i18n_error_message
-        error_message = get_i18n_error_message(exception.code, i18n)
-
-        if error_message:
-            await message.answer(error_message)
-
-        # Log failed statistics
-        if hasattr(exception, 'service') and exception.service:
-            if hasattr(exception, 'is_logged') and exception.is_logged:
-                from utils.statistics_helper import log_download_event
-                await log_download_event(user_id, exception.service, 'failed')
-
-        # Send to admin if critical
-        if exception.critical and config.ADMIN_ID:
-            await bot.send_message(
-                config.ADMIN_ID,
-                f"Sorry, there was an error:\n{exception.url}\n\n<pre>{exception.message}</pre>",
-                parse_mode=ParseMode.HTML
-            )
-
-    def get_active_count(self, user_id: int) -> int:
-        """Get number of active tasks for user"""
-        self._user_tasks[user_id] = [t for t in self._user_tasks[user_id] if not t.done()]
-        return len(self._user_tasks[user_id])
-
-    async def cancel_user_tasks(self, user_id: int) -> int:
-        """Cancel all tasks for user"""
-        tasks = self._user_tasks.get(user_id, [])
-        cancelled_count = 0
-        for task in tasks:
-            if not task.done():
-                task.cancel()
-                cancelled_count += 1
-        self._user_tasks[user_id] = []
-        logger.info(f"Cancelled {cancelled_count} tasks for user {user_id}")
-        return cancelled_count
+    def is_cancelled(self, user_id: int) -> bool:
+        if user_id in self._cancelled_users:
+            self._cancelled_users.remove(user_id)
+            return True
+        return False
 
 
 task_manager = TaskManager()

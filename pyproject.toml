@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = [""]
+exclude = ["logs*", "storage*", "temp*", "tests*", "backups*"]
+
+[project]
+name = "charlotte"
+version = "1.0.0"
+requires-python = ">=3.11"
+
+# Core
+dependencies = [
+    "aiofiles",
+    "arq==0.27.0",
+    "curl_cffi==0.15.0"
+]
+
+# Specific
+[project.optional-dependencies]
+bot = [
+    "aiogram[i18n]==3.27.0",
+    "fluentogram==1.2.1",
+    "python-dotenv==1.2.2",
+    "sqlalchemy==2.0.49",
+    "asyncpg==0.31.0",
+    "greenlet==3.4.0",
+    "redis~=5.3.1",
+    "fluentogram==1.2.1",
+    "alembic==1.18.4",
+    "translators~=6.0.1",
+    "ytmusicapi==1.11.0",
+]
+worker = [
+    "Pillow==12.2.0",
+    "pillow-heif==1.3.0",
+    "beautifulsoup4==4.14.3",
+    "mutagen==1.47.0",
+    "gallery-dl",
+    "yt-dlp[default,curl-cffi]",
+    "yt-dlp-ejs",
+]
+
+# Dev
+[dependency-groups]
+dev = [
+    "ruff",
+    "mypy",
+]

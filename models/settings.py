@@ -2,7 +2,6 @@ from typing import List
 
 from pydantic import BaseModel, Field
 
-
 class ProfileSettings(BaseModel):
     language: str = "en"
     title_language: str = "en"
@@ -10,6 +9,7 @@ class ProfileSettings(BaseModel):
     reactions: bool = False
     negativity: bool = False
     news_spam: bool = False
+    bot_sign: bool = True
 
 
 
@@ -58,11 +58,12 @@ class ChatProfileSettings(BaseModel):
     notifications: bool = True
     reactions: bool = True
     negativity: bool = False
-    allow_playlists: bool = True # todo implement
-    allow_nsfw: bool = False # todo implement
+    allow_playlists: bool = True
+    allow_nsfw: bool = False
     blocked_services: set[str] = Field(default_factory=set)
     banned_users: set[int] = Field(default_factory=set) # todo implement
     news_spam: bool = False
+    bot_sign : bool = True # todo implement
 
 
 class ChatServicesSettings(BaseModel):

@@ -2,12 +2,13 @@
 
 import os
 from dataclasses import dataclass
-
+# todo pydantic settings
 @dataclass
 class Config:
     DATABASE_URL: str = os.getenv("DATABASE_URL", os.getenv("DB_URL", "sqlite:///charlotte.db"))
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379")
     ADMIN_ID: int = int(os.getenv("ADMIN_ID", 0))
+    DUMP_CHANNEL_ID:int = int(os.getenv("DUMP_CHANNEL_ID", 0))
     APPLE_MUSIC_TOKEN: str = os.getenv("APPLEMUSIC_DEV_TOKEN", "")
     TWITTER_CSRF_TOKEN: str = os.getenv("CSRF_TOKEN", "")
     TWITTER_AUTH_TOKEN: str = os.getenv("AUTH_TOKEN", "")
@@ -17,6 +18,12 @@ class Config:
     TELEGRAM_API_HASH: str = os.getenv("TELEGRAM_API_HASH", "")
     TELEGRAM_LOCAL: bool = os.getenv("TELEGRAM_LOCAL", "False").lower() == "true"
     TELEGRAM_SERVER_URL: str = os.getenv("TELEGRAM_SERVER_URL", "http://nginx:80")
+    
+    # Webhook Config
+    WEBHOOK_HOST: str = os.getenv("WEBHOOK_HOST", "http://nginx:80")
+    WEBHOOK_PATH: str = os.getenv("WEBHOOK_PATH", "/webhook")
+    WEBAPP_HOST: str = os.getenv("WEBAPP_HOST", "0.0.0.0")
+    WEBAPP_PORT: int = int(os.getenv("WEBAPP_PORT", "8000"))
 
     _instance = None
 

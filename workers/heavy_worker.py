@@ -4,6 +4,7 @@ import logging
 import os
 import shutil
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -19,6 +20,9 @@ from PIL import Image
 from io import BytesIO
 
 logger = logging.getLogger(__name__)
+
+# Dedicated executor for subprocess operations
+_subprocess_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="ffmpeg")
 
 
 # ============================================================================
@@ -157,7 +161,103 @@ async def universal_ytdlp_extract(
         except yt_dlp.utils.DownloadError as e:
             raise Exception(str(e))
 
-    return await loop.run_in_executor(None, process)
+    return await loop.run_in_executor(_subprocess_executor, process)
+
+
+async def ytdlp_trim_extract(
+    ctx,
+    url: str,
+    start_sec: int,
+    end_sec: int,
+    format_selector: Optional[str] = None,
+    output_template: Optional[str] = None,
+    output_dir: Optional[str] = None,
+    cookies_file: Optional[str] = None,
+    extra_opts: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Download a trimmed segment of a video using yt-dlp download_ranges.
+
+    Unlike universal_ytdlp_extract, download_range_func is built locally
+    because it is not JSON-serializable and cannot be passed through Redis/ARQ.
+
+    Args:
+        ctx: ARQ context
+        url: Media URL
+        start_sec: Clip start position in seconds
+        end_sec: Clip end position in seconds
+        format_selector: yt-dlp format selector string
+        output_template: Output filename template
+        output_dir: Output directory
+        cookies_file: Path to cookies file
+        extra_opts: Additional yt-dlp options (JSON-serializable only)
+
+    Returns:
+        dict with keys: info, filepath, title, duration, thumbnail
+    """
+    from yt_dlp.utils import download_range_func as _download_range_func
+
+    logger.info(f"yt-dlp TRIM: {url} [{start_sec}s – {end_sec}s]")
+
+    loop = asyncio.get_running_loop()
+
+    def process():
+        ydl_opts: Dict[str, Any] = {
+            "quiet": False,
+            "no_warnings": False,
+            "extract_flat": False,
+            "noplaylist": True,
+            # Core trim options — built here so they are never serialized
+            "download_ranges": _download_range_func(None, [(start_sec, end_sec)]),
+            "force_keyframes_at_cuts": True,
+        }
+
+        if cookies_file and os.path.exists(cookies_file):
+            ydl_opts["cookiefile"] = cookies_file
+
+        if output_dir:
+            Path(output_dir).mkdir(parents=True, exist_ok=True)
+            ydl_opts["paths"] = {"home": output_dir}
+
+        if output_template:
+            ydl_opts["outtmpl"] = output_template
+
+        if format_selector:
+            ydl_opts["format"] = format_selector
+
+        if extra_opts:
+            # Strip any non-serializable keys that might have leaked in
+            safe_keys = {k: v for k, v in extra_opts.items()
+                         if k not in ("download_ranges", "force_keyframes_at_cuts")}
+            ydl_opts.update(safe_keys)
+
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+
+                clean_info = {
+                    "id": info.get("id"),
+                    "title": info.get("title"),
+                    "uploader": info.get("uploader"),
+                    "duration": info.get("duration"),
+                    "thumbnail": info.get("thumbnail"),
+                    "ext": info.get("ext"),
+                    "width": info.get("width"),
+                    "height": info.get("height"),
+                }
+
+                filepath = ydl.prepare_filename(info)
+                return {
+                    "info": clean_info,
+                    "filepath": filepath,
+                    "title": info.get("title"),
+                    "duration": info.get("duration"),
+                    "thumbnail": info.get("thumbnail"),
+                }
+        except yt_dlp.utils.DownloadError as e:
+            raise Exception(str(e))
+
+    return await loop.run_in_executor(_subprocess_executor, process)
 
 
 async def universal_gallery_dl(
@@ -211,50 +311,48 @@ async def universal_gallery_dl(
             cmd.extend([f"--{key}", str(value)])
 
     cmd.append(url)
-    try:
-        logger.debug(f"Running gallery-dl: {' '.join(cmd)}")
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        stdout, stderr = await proc.communicate()
+    
+    logger.debug(f"Running gallery-dl: {' '.join(cmd)}")
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    stdout, stderr = await proc.communicate()
 
-        if proc.returncode != 0:
-            logger.error(f"gallery-dl error: {stderr.decode()}")
-            raise Exception(f"gallery-dl error: {stderr.decode()}")
+    if proc.returncode != 0:
+        logger.error(f"gallery-dl error: {stderr.decode()}")
+        raise Exception(f"gallery-dl error: {stderr.decode()}")
 
-        output = stdout.decode().strip()
-        if not output:
-            raise Exception(f"gallery-dl error: {stderr.decode()}")
+    output = stdout.decode().strip()
+    if not output:
+        raise Exception(f"gallery-dl error: {stderr.decode()}")
 
-        if extract_only:
-            try:
-                data = json.loads(output)
-                if isinstance(data, list) and len(data) > 0:
-                    first_item = data[0]
-                    if isinstance(first_item, list) and len(first_item) > 1:
-                        items.append(first_item[1])
-                    else:
-                        raise Exception(f"Structure mismatch: {stderr.decode()}")
-            except json.JSONDecodeError:
-                lines = output.splitlines()
-                for line in lines:
-                    try:
-                        line_json = json.loads(line)
-                        if isinstance(line_json, list) and len(line_json) > 1:
-                            items.append(line_json[1])
-                    except:
-                        pass
-                if not items:
+    if extract_only:
+        try:
+            data = json.loads(output)
+            if isinstance(data, list) and len(data) > 0:
+                first_item = data[0]
+                if isinstance(first_item, list) and len(first_item) > 1:
+                    items.append(first_item[1])
+                else:
                     raise Exception(f"Structure mismatch: {stderr.decode()}")
-        else:
-            # Parse downloaded files from stdout
-            for line in output.strip().split('\n'):
-                if line and os.path.exists(line):
-                    files.append(line)
-    except Exception as e:
-        logger.error(f"Error executing gallery-dl: {e}")
+        except json.JSONDecodeError:
+            lines = output.splitlines()
+            for line in lines:
+                try:
+                    line_json = json.loads(line)
+                    if isinstance(line_json, list) and len(line_json) > 1:
+                        items.append(line_json[1])
+                except:
+                    pass
+            if not items:
+                raise Exception(f"Structure mismatch: {stderr.decode()}")
+    else:
+        # Parse downloaded files from stdout
+        for line in output.strip().split('\n'):
+            if line and os.path.exists(line):
+                files.append(line)
 
     return {
         "items": items,
@@ -297,6 +395,8 @@ async def universal_ffmpeg_process(
     options = options or {}
 
     def process():
+        concat_file = None
+        
         if operation == "convert_audio":
             codec = options.get("codec", "libmp3lame")
             bitrate = options.get("bitrate", "192k")
@@ -386,7 +486,7 @@ async def universal_ffmpeg_process(
                 "-show_streams", "-show_format",
                 input_file
             ]
-            probe_result = subprocess.run(probe_cmd, capture_output=True, text=True)
+            probe_result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=30)
 
             rotation = 0
             width = 0
@@ -442,33 +542,38 @@ async def universal_ffmpeg_process(
                     "-y", output_file
                 ]
 
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            if result.returncode != 0:
-                raise Exception(f"FFmpeg failed: {result.stderr}")
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+                if result.returncode != 0:
+                    raise Exception(f"FFmpeg failed: {result.stderr}")
 
-            # Create thumbnail if requested
-            thumb_path = None
-            if options and options.get('create_thumbnail'):
-                thumb_path = options.get('thumbnail_path')
-                if thumb_path:
-                    thumb_cmd = [
-                        "ffmpeg", "-i", output_file,
-                        "-ss", "00:00:01", "-vframes", "1",
-                        "-s", f"{width}x{height}",
-                        "-y", thumb_path
-                    ]
-                    thumb_result = subprocess.run(thumb_cmd, capture_output=True, text=True)
-                    if thumb_result.returncode != 0:
-                        logger.warning(f"Thumbnail creation failed: {thumb_result.stderr}")
-                        thumb_path = None
+                # Create thumbnail if requested
+                thumb_path = None
+                if options and options.get('create_thumbnail'):
+                    thumb_path = options.get('thumbnail_path')
+                    if thumb_path:
+                        thumb_cmd = [
+                            "ffmpeg", "-i", output_file,
+                            "-ss", "00:00:01", "-vframes", "1",
+                            "-s", f"{width}x{height}",
+                            "-y", thumb_path
+                        ]
+                        thumb_result = subprocess.run(thumb_cmd, capture_output=True, text=True, timeout=30)
+                        if thumb_result.returncode != 0:
+                            logger.warning(f"Thumbnail creation failed: {thumb_result.stderr}")
+                            thumb_path = None
 
-            return {
-                'path': output_file,
-                'width': width,
-                'height': height,
-                'duration': duration,
-                'thumbnail': thumb_path
-            }
+                return {
+                    'path': output_file,
+                    'width': width,
+                    'height': height,
+                    'duration': duration,
+                    'thumbnail': thumb_path
+                }
+            finally:
+                # Clean up concat file if it was created
+                if concat_file and os.path.exists(concat_file):
+                    os.remove(concat_file)
 
         elif operation == "get_info":
             # Get video info using ffprobe
@@ -478,7 +583,7 @@ async def universal_ffmpeg_process(
                 "-show_format", "-show_streams",
                 input_file
             ]
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             if result.returncode != 0:
                 raise Exception(f"ffprobe failed: {result.stderr}")
 
@@ -515,20 +620,19 @@ async def universal_ffmpeg_process(
         else:
             raise ValueError(f"Unknown operation: {operation}")
 
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
 
-        if result.returncode != 0:
-            raise Exception(f"FFmpeg failed: {result.stderr}")
+            if result.returncode != 0:
+                raise Exception(f"FFmpeg failed: {result.stderr}")
 
-        # Clean up concat file if created
-        if operation == "concat":
-            concat_file = output_file + ".concat.txt"
-            if os.path.exists(concat_file):
+            return output_file
+        finally:
+            # Clean up concat file if created
+            if concat_file and os.path.exists(concat_file):
                 os.remove(concat_file)
 
-        return output_file
-
-    return await loop.run_in_executor(None, process)
+    return await loop.run_in_executor(_subprocess_executor, process)
 
 
 # ============================================================================
@@ -552,10 +656,15 @@ async def universal_metadata_update(
 
     Args:
         ctx: ARQ context
-        file_path: Audio file path
-        metadata: Metadata dict (title, artist, album, date, etc.)
-        cover_file: Optional cover art file path
-        ...
+        audio_file: Audio file path
+        title: Song title
+        artist: Artist name
+        cover_file: Cover art file path
+        album_name: Album name
+        orchestra_name: Group name
+        track_number: Track number in disc/album
+        genre_name: Genre Name
+        date: Release Date
 
     Returns:
         bool: Success status
@@ -678,6 +787,7 @@ class WorkerSettings:
     functions = [
         # Media extraction
         universal_ytdlp_extract,
+        ytdlp_trim_extract,
         universal_gallery_dl,
         # Media processing
         universal_ffmpeg_process,
@@ -686,3 +796,6 @@ class WorkerSettings:
     ]
     redis_settings = RedisSettings(host='redis', port=6379)
     queue_name = 'heavy'
+    max_jobs = 4
+    job_timeout = 300
+    keep_result_s = 600

@@ -1,8 +1,9 @@
 import datetime
-from sqlalchemy import BigInteger, Boolean, Date, Integer, String, ForeignKey, ARRAY, DateTime, JSON
+from datetime import timezone
+from typing import Any
+from sqlalchemy import BigInteger, Boolean, Date, Integer, String, DateTime, JSON, Text
 from sqlalchemy.ext.asyncio import AsyncAttrs
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from typing import List
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(AsyncAttrs, DeclarativeBase):
@@ -14,12 +15,23 @@ class Users(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(BigInteger, unique=True)
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
-    is_premium: Mapped[bool] = mapped_column(Boolean, default=False)
     is_lifetime_premium: Mapped[bool] = mapped_column(Boolean, default=False)
     stars_donated: Mapped[int] = mapped_column(Integer, default=0)
-    premium_ends: Mapped[datetime.date] = mapped_column(Date, default=datetime.date.today)
+    premium_ends: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=True)
     last_used: Mapped[datetime.date] = mapped_column(Date, default=datetime.date.today, nullable=True)
     settings_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    @property
+    def is_premium(self) -> bool:
+        if self.is_lifetime_premium:
+            return True
+        if not self.premium_ends:
+            return False
+        # If premium_ends is naive, compare with naive utcnow
+        now = datetime.datetime.now(timezone.utc)
+        if self.premium_ends.tzinfo is None:
+            now = now.replace(tzinfo=None)
+        return self.premium_ends > now
 
 
 class Chats(Base):
@@ -64,4 +76,30 @@ class Payment(Base):
     status: Mapped[str] = mapped_column(String(32), default="completed")
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.datetime.now, nullable=False
+    )
+
+
+class MediaCache(Base):
+    __tablename__ = "mediacache"
+
+    media_id: Mapped[int] = mapped_column(primary_key=True)
+
+    # Unique key like "yt:dQw4w9WgXcQ" or "ig:p_123")
+    cache_key: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+
+    # ID file in Telgeram. May be null if gallery
+    telegram_file_id: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # ID raw file in Telegram.
+    telegram_document_file_id: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    media_type: Mapped[str] = mapped_column(String, nullable=False)  # 'video', 'audio', 'gallery'
+    platform: Mapped[str] = mapped_column(String, nullable=False)  # 'youtube', 'instagram', 'tiktok'
+
+    data: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(timezone.utc),
+        nullable=False
     )

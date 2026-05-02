@@ -2,7 +2,7 @@ from collections import defaultdict
 import time
 from aiogram import BaseMiddleware
 from aiogram.types import Message
-
+# todo use redis with TTL instead
 class RateLimiter(BaseMiddleware):
     def __init__(self, rate: int = 10, per: int = 60):
         self.rate = rate

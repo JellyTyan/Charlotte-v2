@@ -16,8 +16,10 @@ class ServiceUseMiddleware(BaseMiddleware):
             return
 
         # Check is banned
-        user = await get_user(event.from_user.id)
-        if user and user.is_banned:
-            return
+        session = data.get("db_session")
+        if session and event.from_user:
+            user = await get_user(session, event.from_user.id)
+            if user and user.is_banned:
+                return
 
         return await handler(event, data)

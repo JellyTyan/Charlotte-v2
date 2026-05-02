@@ -13,7 +13,7 @@ Selecting the metadata received from the service.
 
 The METADATA type indicates that the data requires further processing on our side.
 
-The AUTODOWNLOAD type signifies that the service has already downloaded the content and it can be sent immediately without any post-processing.
+The AUTODOWNLOAD type signifies that the service has already downloaded the content, and it can be sent immediately without any post-processing.
 
 The ERROR type indicates that an error has occurred and must be handled accordingly.
     """
@@ -37,6 +37,7 @@ class MediaMetadata:
     performer_url: str | None = None
     width: int | None = None                 # width (video/image)
     height: int | None = None                # height
+    cache_key: str | None = None             # cache key (for caching purposes)
 
     # Extra service-specific info
     extra: dict = field(default_factory=dict)
