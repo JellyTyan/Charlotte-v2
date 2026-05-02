@@ -3,6 +3,7 @@ import logging
 from aiogram import F, Router
 from aiogram.enums import ParseMode
 from aiogram.types import FSInputFile, Message
+from aiogram.utils.chat_action import ChatActionSender
 from fluentogram import TranslatorRunner
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -48,15 +49,16 @@ async def spotify_handler(message: Message, config: Config, i18n: TranslatorRunn
     service = SpotifyService(arq=arq)
 
     # --- Fetch metadata ---
-    media_metadata = await service.get_info(url, config=config)
-    if not media_metadata:
-        raise BotError(
-            code=ErrorCode.METADATA_ERROR,
-            message="Failed to get metadata",
-            url=url,
-            service=Services.SPOTIFY,
-            is_logged=True
-        )
+    async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=message.chat.id):
+        media_metadata = await service.get_info(url, config=config)
+        if not media_metadata:
+            raise BotError(
+                code=ErrorCode.METADATA_ERROR,
+                message="Failed to get metadata",
+                url=url,
+                service=Services.SPOTIFY,
+                is_logged=True
+            )
 
     # =========================================================================
     # SINGLE TRACK
@@ -87,16 +89,14 @@ async def spotify_handler(message: Message, config: Config, i18n: TranslatorRunn
             await send_manager.send(message, [cached], service="spotify", db_session=db_session)
             return
 
-        if message.bot:
-            await message.bot.send_chat_action(chat_id, "record_audio")
-
         try:
             try:
-                media_content = await task_manager.run_download(
-                    user_id=user_id,
-                    url=url,
-                    coro=service.download(media_metadata, lossless_mode=lossless_mode)
-                )
+                async with ChatActionSender.record_voice(bot=message.bot, chat_id=message.chat.id):
+                    media_content = await task_manager.run_download(
+                        user_id=user_id,
+                        url=url,
+                        coro=service.download(media_metadata, lossless_mode=lossless_mode)
+                    )
             except BotError as e:
                 if e.code == ErrorCode.LOSSLESS_UNAVAILABLE:
                     # Tidal недоступен — проверяем дефолтный кэш
@@ -109,11 +109,12 @@ async def spotify_handler(message: Message, config: Config, i18n: TranslatorRunn
                             await send_manager.send(message, [default_cached], service="spotify", db_session=db_session)
                             return
                     # Дефолтного кэша нет — скачиваем стандарт
-                    media_content = await task_manager.run_download(
-                        user_id=user_id,
-                        url=url,
-                        coro=service.download(media_metadata, lossless_mode=False)
-                    )
+                    async with ChatActionSender.record_voice(bot=message.bot, chat_id=message.chat.id):
+                        media_content = await task_manager.run_download(
+                            user_id=user_id,
+                            url=url,
+                            coro=service.download(media_metadata, lossless_mode=False)
+                        )
                 else:
                     raise e
 
@@ -193,11 +194,12 @@ async def spotify_handler(message: Message, config: Config, i18n: TranslatorRunn
 
                 # Download the specific track URL (NOT the playlist URL)
                 try:
-                    media_content = await task_manager.run_download(
-                        user_id=user_id,
-                        url=track_meta.url,
-                        coro=service.download(track_meta, lossless_mode=lossless_mode)
-                    )
+                    async with ChatActionSender.record_voice(bot=message.bot, chat_id=message.chat.id):
+                        media_content = await task_manager.run_download(
+                            user_id=user_id,
+                            url=track_meta.url,
+                            coro=service.download(track_meta, lossless_mode=lossless_mode)
+                        )
                 except BotError as e:
                     if e.code == ErrorCode.LOSSLESS_UNAVAILABLE:
                         # Tidal недоступен — проверяем дефолтный кэш
@@ -210,10 +212,11 @@ async def spotify_handler(message: Message, config: Config, i18n: TranslatorRunn
                                                         service="spotify", db_session=db_session)
                                 continue
                         # Дефолтного кэша нет — скачиваем стандарт
-                        media_content = await task_manager.run_download(
-                            user_id=user_id,
-                            url=track_meta.url,
-                            coro=service.download(track_meta, lossless_mode=False)
+                        async with ChatActionSender.record_voice(bot=message.bot, chat_id=message.chat.id):
+                            media_content = await task_manager.run_download(
+                                user_id=user_id,
+                                url=track_meta.url,
+                                coro=service.download(track_meta, lossless_mode=False)
                         )
                     else:
                         raise e

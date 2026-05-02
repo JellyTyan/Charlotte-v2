@@ -4,6 +4,7 @@ from aiofiles import os as aios
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, FSInputFile, Message
+from aiogram.utils.chat_action import ChatActionSender
 from fluentogram import TranslatorRunner
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,26 +38,24 @@ async def youtube_handler(message: Message, i18n: TranslatorRunner, db_session: 
     url = message.text
     chat_id = message.chat.id
 
-    if message.bot:
-        await message.bot.send_chat_action(chat_id, "find_location")
+    async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=chat_id):
+        process_message = await message.reply(i18n.get('processing'))
 
-    process_message = await message.reply(i18n.get('processing'))
+        arq = await get_arq_pool('light')
+        service = YouTubeService(arq=arq)
 
-    arq = await get_arq_pool('light')
-    service = YouTubeService(arq=arq)
+        # Получаем метаданные (без скачивания самого видео)
+        media_metadata = await service.get_info(url)
 
-    # Получаем метаданные (без скачивания самого видео)
-    media_metadata = await service.get_info(url)
-
-    if media_metadata is None:
-        await process_message.delete()
-        raise BotError(
-            code=ErrorCode.METADATA_ERROR,
-            message="Failed to get metadata",
-            url=url,
-            service=Services.YOUTUBE,
-            is_logged=True
-        )
+        if media_metadata is None:
+            await process_message.delete()
+            raise BotError(
+                code=ErrorCode.METADATA_ERROR,
+                message="Failed to get metadata",
+                url=url,
+                service=Services.YOUTUBE,
+                is_logged=True
+            )
 
     # Собираем красивое описание
     caption = f"<b>{media_metadata.title}</b>\n\n"
@@ -165,16 +164,13 @@ async def process_youtube_download(message: Message, url: str, format_choice: st
         await send_manager.send(message, cached, service="youtube", db_session=db_session)
         return
 
-    if message.bot:
-        await message.bot.send_chat_action(message.chat.id, "record_video")
-
     try:
-        media_content = await task_manager.run_download(
-            user_id=user_id,
-            url=url,
-            coro=service.download(url, format_choice)
-        )
-
+        async with ChatActionSender.record_video_note(bot=message.bot, chat_id=message.chat.id):
+            media_content = await task_manager.run_download(
+                user_id=user_id,
+                url=url,
+                coro=service.download(url, format_choice)
+            )
         if media_content:
             await send_manager.send(
                 message,
@@ -281,9 +277,6 @@ async def trim_get_end(message: Message, i18n: TranslatorRunner, state: FSMConte
     process_message = await message.reply(i18n.get('yt-trim-processing'))
 
     try:
-        if message.bot:
-            await message.bot.send_chat_action(message.chat.id, "record_video")
-            
         arq = await get_arq_pool('light')
         service = YouTubeService(arq=arq)
         send_manager = MediaSender()
@@ -291,13 +284,14 @@ async def trim_get_end(message: Message, i18n: TranslatorRunner, state: FSMConte
         # Format choice is hardcoded to best video/audio for trim by default.
         # Ideally, we would have stored the user's choice, but since Trim
         # is a separate button on the main info card, we just grab the best.
-        format_choice = "youtube_video_best" 
+        format_choice = "youtube_video_best"
 
-        media_content = await task_manager.run_download(
-            user_id=user_id,
-            url=url,
-            coro=service.download_trim(url, format_choice, start_sec, end_sec)
-        )
+        async with ChatActionSender.record_video_note(bot=message.bot, chat_id=message.chat.id):
+            media_content = await task_manager.run_download(
+                user_id=user_id,
+                url=url,
+                coro=service.download_trim(url, format_choice, start_sec, end_sec)
+            )
 
         await process_message.delete()
 
