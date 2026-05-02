@@ -22,7 +22,7 @@ from io import BytesIO
 logger = logging.getLogger(__name__)
 
 # Dedicated executor for subprocess operations
-_subprocess_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="ffmpeg")
+_subprocess_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="ffmpeg")
 
 
 # ============================================================================
@@ -161,7 +161,7 @@ async def universal_ytdlp_extract(
         except yt_dlp.utils.DownloadError as e:
             raise Exception(str(e))
 
-    return await loop.run_in_executor(None, process)
+    return await loop.run_in_executor(_subprocess_executor, process)
 
 
 async def ytdlp_trim_extract(
@@ -257,7 +257,7 @@ async def ytdlp_trim_extract(
         except yt_dlp.utils.DownloadError as e:
             raise Exception(str(e))
 
-    return await loop.run_in_executor(None, process)
+    return await loop.run_in_executor(_subprocess_executor, process)
 
 
 async def universal_gallery_dl(
