@@ -216,6 +216,15 @@ class InstagramService:
                     await mark_account_banned(cookie_file)
                     last_error = e
                     continue
+                if "instagram sent an empty media response" in err_lower:
+                    raise BotError(
+                        code=ErrorCode.NOT_FOUND,
+                        service=Services.INSTAGRAM,
+                        message="Instagram sent an empty media response",
+                        url=url,
+                        critical=False,
+                        is_logged=True,
+                    )
 
                 # Non-ban error — fail immediately
                 raise BotError(

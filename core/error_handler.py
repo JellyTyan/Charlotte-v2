@@ -69,14 +69,17 @@ async def global_error_handler(event: ErrorEvent):
     if isinstance(exception, BotError):
         logger.info(f"Handling BotError: code={exception.code}, message={exception.message}")
 
-        from utils.error_messages import get_i18n_error_message
-        error_message = get_i18n_error_message(exception.code, i18n)
+        if exception.send_user_message:
+            from utils.error_messages import get_i18n_error_message
+            error_message = get_i18n_error_message(exception.code, i18n)
 
-        if error_message:
-            logger.info(f"Sending error message to user: {error_message}")
-            await message.answer(error_message)
+            if error_message:
+                logger.info(f"Sending error message to user: {error_message}")
+                await message.answer(error_message)
+            else:
+                logger.warning(f"No error message defined for code: {exception.code}")
         else:
-            logger.warning(f"No error message defined for code: {exception.code}")
+            logger.info("send_user_message is False, skipping notification to user")
 
         if exception.critical and config.ADMIN_ID:
             logger.info(f"Sending critical error notification to admin {config.ADMIN_ID}")

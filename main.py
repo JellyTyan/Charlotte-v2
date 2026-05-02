@@ -63,6 +63,7 @@ async def main():
     dp.message.middleware(RateLimiter(rate=10, per=60))
     logger.info("✅ All middlewares registered")
 
+    from core.error_handler import global_error_handler
     logger.info("✅ Error handler registered")
 
     from modules.payment.router import payment_router

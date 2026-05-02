@@ -216,33 +216,28 @@ class TiktokService:
                 is_logged=True
             )
 
-        download_url = metadata.extra.get("video_url")
-        if not download_url:
-            raise BotError(
-                code=ErrorCode.DOWNLOAD_FAILED,
-                message="No video URL found",
-                url=metadata.url,
-                service=Services.TIKTOK,
-                is_logged=True,
-                critical=True
-            )
-
         video_filename = f"{metadata.performer}_{int(time.time())}.mp4"
-        filepath = os.path.join(self.output_path, sanitize_filename(video_filename))
-
-        # Download
-        if not download_url.startswith("http"):
-            download_url = f"https://www.tikwm.com{download_url}"
-        download_url = await self._resolve_url(download_url)
-
-        job = await self.arq.enqueue_job("universal_download", download_url, filepath)
+        
+        # Use gallery-dl for download
+        job = await self.arq.enqueue_job(
+            "universal_gallery_dl",
+            url=metadata.url,
+            output_dir=self.output_path,
+            filename=video_filename,
+            _queue_name='heavy'
+        )
+        
         try:
-            video_path = await job.result()
+            result = await job.result()
+            files = result.get("files", [])
+            if not files:
+                raise Exception("No files downloaded by gallery-dl")
+            video_path = files[0]
         except Exception as e:
             raise BotError(
                 code=ErrorCode.DOWNLOAD_FAILED,
                 service=Services.TIKTOK,
-                message=f"Failed to download video: {e}",
+                message=f"Failed to download video with gallery-dl: {e}",
                 url=metadata.url,
                 critical=True,
                 is_logged=True
