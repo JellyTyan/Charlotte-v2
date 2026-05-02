@@ -2,7 +2,7 @@ import hashlib
 import logging
 import asyncio
 import re
-from aiogram import F, types
+from aiogram import F, Router
 from aiogram.types import (
     InlineQuery,
     InlineQueryResultCachedVideo,
@@ -11,73 +11,71 @@ from aiogram.types import (
     InputTextMessageContent,
     InlineQueryResultArticle,
     InlineKeyboardMarkup,
-    InlineKeyboardButton,
-    Message, Update
+    InlineKeyboardButton
 )
 from core.config import Config
-from storage.cache.redis_client import cache_set, cache_get, cache_delete
+from storage.cache.redis_client import cache_set
 from storage.db.crud import get_media_cache
 from utils.arq_pool import get_arq_pool
 from senders.media_sender import MediaSender
 from models.media import MediaType, MediaContent
 from sqlalchemy.ext.asyncio import AsyncSession
-from aiogram.filters import CommandStart
-from aiogram.filters.command import CommandObject
 from fluentogram import TranslatorRunner
-from modules.router import service_router as router
 
 # Service Regexes & Utils
-from modules.twitter.handler import TWITTER_REGEX
-from modules.twitter.service import TwitterService
-from modules.twitter.utils import get_cache_key as twitter_cache_key
+from modules.services.twitter.handler import TWITTER_REGEX
+from modules.services.twitter.service import TwitterService
+from modules.services.twitter.utils import get_cache_key as twitter_cache_key
 
-from modules.instagram.handler import INSTAGRAM_REGEX
-from modules.instagram.utils import get_cache_key as instagram_cache_key
+from modules.services.instagram.handler import INSTAGRAM_REGEX
+from modules.services.instagram.utils import get_cache_key as instagram_cache_key
 
-from modules.pinterest.handler import PINTEREST_REGEX
-from modules.pinterest.service import PinterestService
-from modules.pinterest.utils import get_cache_key as pinterest_cache_key
+from modules.services.pinterest.handler import PINTEREST_REGEX
+from modules.services.pinterest.service import PinterestService
+from modules.services.pinterest.utils import get_cache_key as pinterest_cache_key
 
-from modules.reddit.handler import REDDIT_REGEX
-from modules.reddit.service import RedditService
-from modules.reddit.utils import get_cache_key as reddit_cache_key
+from modules.services.reddit.handler import REDDIT_REGEX
+from modules.services.reddit.service import RedditService
+from modules.services.reddit.utils import get_cache_key as reddit_cache_key
 
-from modules.tiktok.handler import TIKTOK_REGEX
-from modules.tiktok.utils import get_cache_key as tiktok_cache_key
+from modules.services.tiktok.handler import TIKTOK_REGEX
+from modules.services.tiktok.utils import get_cache_key as tiktok_cache_key
 
-from modules.youtube.handler import YOUTUBE_REGEX
-from modules.youtube.utils import get_cache_key as youtube_cache_key
+from modules.services.youtube.handler import YOUTUBE_REGEX
+from modules.services.youtube.utils import get_cache_key as youtube_cache_key
 
-from modules.ytmusic.handler import YTMUSIC_REGEX
-from modules.ytmusic.service import cache_check as ytmusic_cache_key
+from modules.services.ytmusic.handler import YTMUSIC_REGEX
+from modules.services.ytmusic.service import cache_check as ytmusic_cache_key
 
-from modules.soundcloud.handler import SOUNDCLOUD_REGEX
-from modules.soundcloud.utils import get_cache_key as soundcloud_cache_key
+from modules.services.soundcloud.handler import SOUNDCLOUD_REGEX
+from modules.services.soundcloud.utils import get_cache_key as soundcloud_cache_key
 
-from modules.spotify.handler import SPOTIFY_REGEX
-from modules.spotify.utils import get_cache_key as spotify_cache_key
+from modules.services.spotify.handler import SPOTIFY_REGEX
+from modules.services.spotify.utils import get_cache_key as spotify_cache_key
 
-from modules.deezer.handler import DEEZER_REGEX
-from modules.deezer.utils import get_cache_key as deezer_cache_key
+from modules.services.deezer.handler import DEEZER_REGEX
+from modules.services.deezer.utils import get_cache_key as deezer_cache_key
 
-from modules.nicovideo.handler import NICOVIDEO_REGEX
-from modules.nicovideo.utils import get_cache_key as nicovideo_cache_key
+from modules.services.nicovideo.handler import NICOVIDEO_REGEX
+from modules.services.nicovideo.utils import get_cache_key as nicovideo_cache_key
 
-from modules.apple_music.handler import APPLE_REGEX as APPLE_MUSIC_REGEX
-from modules.apple_music.utils import get_cache_key as apple_music_cache_key
+from modules.services.apple_music.handler import APPLE_REGEX as APPLE_MUSIC_REGEX
+from modules.services.apple_music.utils import get_cache_key as apple_music_cache_key
 
-from modules.bluesky.handler import BLUESKY_REGEX
-from modules.bluesky.utils import get_cache_key as bluesky_cache_key
+from modules.services.bluesky.handler import BLUESKY_REGEX
+from modules.services.bluesky.utils import get_cache_key as bluesky_cache_key
 
-from modules.twitch.handler import TWITCH_REGEX
-from modules.twitch.utils import get_cache_key as twitch_cache_key
+from modules.services.twitch.handler import TWITCH_REGEX
+from modules.services.twitch.utils import get_cache_key as twitch_cache_key
+
+inline_router = Router(name="inline_handler")
 
 logger = logging.getLogger(__name__)
 
 # Списки сервисов для разной логики
 FAST_TRACK_SERVICES = ["twitter", "reddit", "pinterest"]
 
-@router.inline_query(F.query.regexp(r"^https?://"))
+@inline_router.inline_query(F.query.regexp(r"^https?://"))
 async def inline_media_handler(inline_query: InlineQuery, config: Config, db_session: AsyncSession, i18n: TranslatorRunner):
     url = inline_query.query.strip()
     url_hash = hashlib.md5(url.encode()).hexdigest()
@@ -208,18 +206,37 @@ async def inline_media_handler(inline_query: InlineQuery, config: Config, db_ses
             )
             return await inline_query.answer([fallback], cache_time=5, is_personal=True)
 
+        from storage.db.crud import get_user, get_user_settings
+        from utils.text_utils import truncate_string, escape_html
+
+        user = await get_user(db_session, inline_query.from_user.id)
+        is_premium = user.is_premium if user else False
+        user_settings = await get_user_settings(db_session, inline_query.from_user.id)
+        
+        show_ad = True
+        if user_settings and is_premium:
+            show_ad = user_settings.profile.bot_sign
+
         results = []
         for i, media in enumerate(media_items):
             if not media.telegram_file_id:
                 continue
             res_id = f"{url_hash}_{i}"
+
+            final_caption = escape_html(media.title) if media.title else ""
+            if show_ad:
+                ad_text = "\n\n<a href='https://t.me/CharlotteFox_Bot'>Charlotte 🧡</a>"
+                final_caption = truncate_string(final_caption, 1000)
+                final_caption += ad_text
+            elif not final_caption:
+                final_caption = None
             
             if media.type in [MediaType.VIDEO, MediaType.GIF]:
-                results.append(InlineQueryResultCachedVideo(id=res_id, title=media.title or "Video", video_file_id=media.telegram_file_id))
+                results.append(InlineQueryResultCachedVideo(id=res_id, title=media.title or "Video", video_file_id=media.telegram_file_id, caption=final_caption, parse_mode="HTML"))
             elif media.type == MediaType.PHOTO:
-                results.append(InlineQueryResultCachedPhoto(id=res_id, photo_file_id=media.telegram_file_id, title=media.title or "Photo"))
+                results.append(InlineQueryResultCachedPhoto(id=res_id, photo_file_id=media.telegram_file_id, title=media.title or "Photo", caption=final_caption, parse_mode="HTML"))
             elif media.type == MediaType.AUDIO:
-                results.append(InlineQueryResultCachedAudio(id=res_id, audio_file_id=media.telegram_file_id))
+                results.append(InlineQueryResultCachedAudio(id=res_id, audio_file_id=media.telegram_file_id, caption=final_caption, parse_mode="HTML"))
 
         if not results:
              return await inline_query.answer([], cache_time=5)
@@ -229,9 +246,3 @@ async def inline_media_handler(inline_query: InlineQuery, config: Config, db_ses
     except Exception as e:
         logger.error(f"Critical inline error: {e}")
         return await inline_query.answer([], cache_time=10)
-
-
-# @router.message(CommandStart(deep_link=True))
-# async def inline_deep_link_handler(message: Message, command: CommandObject, db_session: AsyncSession, config: Config):
-#     # Получаем наш url_hash из ссылки (то, что идет после ?start=)
-#

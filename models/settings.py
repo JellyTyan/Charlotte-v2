@@ -9,6 +9,7 @@ class ProfileSettings(BaseModel):
     reactions: bool = False
     negativity: bool = False
     news_spam: bool = False
+    bot_sign: bool = True
 
 
 

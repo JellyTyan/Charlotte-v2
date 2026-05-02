@@ -102,3 +102,9 @@ btn-service-enabled = { $is_enabled ->
     [true] ✅ Enabled
     *[false] ❌ Enabled
 }
+
+btn-bot-sign = { $is_enabled ->
+    [true] 🧡 Bot Ad [ON]
+   *[false] 🧡 Bot Ad [OFF]
+}
+desc-bot-sign = Append a promotional signature "Charlotte 🧡" to downloaded media. Disabling this requires Sponsorship 🌟.

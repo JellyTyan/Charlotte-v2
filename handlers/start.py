@@ -9,9 +9,10 @@ from storage.cache.redis_client import cache_get, cache_delete
 from storage.db.crud import create_user, create_chat
 
 from core.loader import dp
+from aiogram import Router
+router = Router()
 
-
-@dp.message(CommandStart())
+@router.message(CommandStart())
 async def start_command(message: Message, command: CommandObject, state: FSMContext, i18n: TranslatorRunner, db_session: AsyncSession):
     if not message.from_user:
         return None

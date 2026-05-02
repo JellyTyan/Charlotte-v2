@@ -103,3 +103,9 @@ btn-news-spam = { $is_enabled ->
     *[false] ❌ Newsletter
 }
 desc-news-spam = Zezwól botowi na wysyłanie nowości i aktualizacji! 📰
+
+btn-bot-sign = { $is_enabled ->
+    [true] 🧡 Bot Ad [ON]
+   *[false] 🧡 Bot Ad [OFF]
+}
+desc-bot-sign = Append a promotional signature "Charlotte 🧡" to downloaded media. Disabling this requires Sponsorship 🌟.

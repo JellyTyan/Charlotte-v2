@@ -15,12 +15,23 @@ class Users(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(BigInteger, unique=True)
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
-    is_premium: Mapped[bool] = mapped_column(Boolean, default=False)
     is_lifetime_premium: Mapped[bool] = mapped_column(Boolean, default=False)
     stars_donated: Mapped[int] = mapped_column(Integer, default=0)
-    premium_ends: Mapped[datetime.date] = mapped_column(Date, default=datetime.date.today)
+    premium_ends: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=True)
     last_used: Mapped[datetime.date] = mapped_column(Date, default=datetime.date.today, nullable=True)
     settings_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    @property
+    def is_premium(self) -> bool:
+        if self.is_lifetime_premium:
+            return True
+        if not self.premium_ends:
+            return False
+        # If premium_ends is naive, compare with naive utcnow
+        now = datetime.datetime.now(timezone.utc)
+        if self.premium_ends.tzinfo is None:
+            now = now.replace(tzinfo=None)
+        return self.premium_ends > now
 
 
 class Chats(Base):

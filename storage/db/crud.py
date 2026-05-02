@@ -87,11 +87,39 @@ async def get_user_settings(session: AsyncSession, user_id: int) -> UserSettings
     else:
         return UserSettingsJson.model_validate({})
 
-async def update_user_premium(session: AsyncSession, user_id: int, is_premium: bool, premium_ends: date):
+async def update_user_premium(session: AsyncSession, user_id: int, premium_ends: datetime.date):
     await session.execute(
         update(Users)
         .where(Users.user_id == user_id)
-        .values(is_premium=is_premium, premium_ends=premium_ends)
+        .values(premium_ends=premium_ends)
+    )
+    await session.commit()
+    await cache_delete(f"user:{user_id}")
+
+async def grant_sponsorship(session: AsyncSession, user_id: int, days: int, stars_donated: int = 0):
+    user = await get_user(session, user_id)
+    if not user:
+        user = await create_user(session, user_id)
+        
+    current_end = user.premium_ends if user.premium_ends else datetime.datetime.now(datetime.timezone.utc)
+    # If it's already expired, start from now
+    if current_end < datetime.datetime.now(datetime.timezone.utc):
+        current_end = datetime.datetime.now(datetime.timezone.utc)
+        
+    new_end = current_end + datetime.timedelta(days=days)
+    
+    # Reset notification flag
+    settings = user.settings_json or {}
+    settings["premium_expired_notified"] = False
+    
+    await session.execute(
+        update(Users)
+        .where(Users.user_id == user_id)
+        .values(
+            premium_ends=new_end,
+            stars_donated=Users.stars_donated + stars_donated,
+            settings_json=settings
+        )
     )
     await session.commit()
     await cache_delete(f"user:{user_id}")
@@ -319,8 +347,9 @@ async def get_premium_events_by_user(session: AsyncSession, user_id: int):
     return result.scalars().all()
 
 async def get_premium_and_donation_stats(session: AsyncSession) -> dict:
+    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) # fallback
     stmt = select(
-        func.count().filter(or_(Users.is_premium == True, Users.is_lifetime_premium == True)).label("premium_count"),
+        func.count().filter(or_(Users.premium_ends > now, Users.is_lifetime_premium == True)).label("premium_count"),
         func.sum(Users.stars_donated).label("total_stars")
     )
 
@@ -341,18 +370,7 @@ async def check_if_user_premium(session: AsyncSession, user_id: int) -> bool:
     if not user:
         return False
 
-    if user.is_premium:
-        if user.is_lifetime_premium:
-            return True
-        elif user.premium_ends:
-            if isinstance(user.premium_ends, datetime.datetime):
-                ends = user.premium_ends.date()
-            else:
-                ends = user.premium_ends
-            if ends > datetime.date.today():
-                return True
-
-    return False
+    return user.is_premium
 
 async def toggle_lifetime_premium(session: AsyncSession, user_id: int) -> bool | None:
     """
@@ -370,20 +388,20 @@ async def toggle_lifetime_premium(session: AsyncSession, user_id: int) -> bool |
     if not user:
         return None
 
-    if user.is_premium:
+    if user.is_premium and user.is_lifetime_premium:
         await session.execute(
             update(Users)
             .where(Users.user_id == user_id)
-            .values(is_premium=False, is_lifetime_premium=False)
+            .values(is_lifetime_premium=False)
         )
         await session.commit()
         await cache_delete(f"user:{user_id}")
         return False
-    elif not user.is_premium:
+    elif not user.is_lifetime_premium:
         await session.execute(
             update(Users)
             .where(Users.user_id == user_id)
-            .values(is_premium=True, is_lifetime_premium=True)
+            .values(is_lifetime_premium=True)
         )
         await session.commit()
         await cache_delete(f"user:{user_id}")
