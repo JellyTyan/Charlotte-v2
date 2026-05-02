@@ -165,3 +165,4 @@ storage/cookies/*
 storage/temp/*
 tests
 /backups
+uv.lock

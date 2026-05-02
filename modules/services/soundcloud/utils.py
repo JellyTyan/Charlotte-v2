@@ -1,0 +1,168 @@
+import logging
+import hashlib
+
+from curl_cffi.requests import AsyncSession
+import re
+from models.errors import BotError, ErrorCode
+from models.media import MediaContent, MediaType
+from models.metadata import MediaMetadata, MetadataType
+from models.service_list import Services
+from storage.cache.redis_client import cache_get, cache_set
+from storage.db.crud import get_media_cache
+
+logger = logging.getLogger(__name__)
+
+def get_cover_url(info_dict: dict):
+    """
+    Extracts the cover URL from the track's information.
+
+    Parameters:
+    ----------
+    info_dict : dict
+        The information dictionary for the SoundCloud track.
+
+    Returns:
+    -------
+    str or None
+        The URL of the cover image, or None if no appropriate image is found.
+    """
+    thumbnails = info_dict.get("thumbnails", [])
+    return next(
+        (
+            thumbnail["url"]
+            for thumbnail in thumbnails
+            if thumbnail.get("width") == 500
+        ),
+        None,
+    )
+
+async def get_auth_token(session: AsyncSession) -> str:
+    cached_token = await cache_get("soundcloud:token")
+    if cached_token:
+        token = cached_token.get("token")
+        try:
+            test_resp = await session.get(f"https://api-v2.soundcloud.com/tracks/1?client_id={token}")
+            if test_resp.status_code != 401:
+                return token
+        except:
+            pass
+
+    resp = await session.get("https://soundcloud.com")
+    html = resp.text
+    script_urls = re.findall(r'src="(https://[a-z0-9-]+\.sndcdn\.com/assets/[^"]+\.js)"', html)
+
+    if not script_urls:
+        raise Exception("Scripts are not founded")
+
+    for script_url in reversed(script_urls):
+        try:
+            js_code = await session.get(script_url)
+            js_code = js_code.text
+
+            match = re.search(r'client_id:"([a-zA-Z0-9]{32})"', js_code)
+
+            if match:
+                key = match.group(1)
+                await cache_set("soundcloud:token", {"token": key}, ttl=86400)
+                return key
+
+        except Exception as e:
+            logger.error(f"Error when loading {script_url}: {e}")
+            continue
+
+    raise Exception("Key not founded")
+
+
+async def get_song_info(id: int):
+    async with AsyncSession(impersonate="chrome136") as session:
+        token = await get_auth_token(session)
+        params = {
+            "client_id": token
+        }
+        url = f"https://api-v2.soundcloud.com/tracks/{id}?client_id={token}"
+        response = await session.get(url, params=params)
+        data = response.json()
+
+        return MediaMetadata(
+            type=MetadataType.METADATA,
+            url=data.get('permalink_url', url),
+            title=data.get('title'),
+            description=data.get('description'),
+            duration=data.get('full_duration', 0) // 1000,
+            cover=data.get('artwork_url'),
+            performer=(data.get('publisher_metadata') or {}).get('artist') or (data.get('user') or {}).get('username'),
+            performer_url=data.get('user', {}).get('permalink_url'),
+            media_type='track',
+            cache_key=f"soundcloud:{id}"
+        )
+
+async def get_playlist_info(id: int):
+    async with AsyncSession(impersonate="chrome136") as session:
+        token = await get_auth_token(session)
+        params = {
+            "client_id": token
+        }
+        url = f"https://api-v2.soundcloud.com/playlists/{id}?representation=full&client_id={token}"
+        response = await session.get(url, params=params)
+        data = response.json()
+        items = []
+        for track in data.get('tracks', []):
+            track_id = track.get('id')
+            if not track.get('permalink_url'):
+                items.append(await get_song_info(track_id))
+            else:
+                items.append(MediaMetadata(
+                    type=MetadataType.METADATA,
+                    url=track.get('permalink_url', ''),
+                    title=track.get('title'),
+                    duration=track.get('full_duration', 0) // 1000,
+                    cover=track.get('artwork_url'),
+                    performer=(track.get('publisher_metadata') or {}).get('artist') or (track.get('user') or {}).get('username'),
+                    media_type='track',
+                    cache_key=f"soundcloud:{track_id}" if track_id else None
+                ))
+        return MediaMetadata(
+            type=MetadataType.METADATA,
+            url=data.get('permalink_url', url),
+            title=data.get('title'),
+            description=data.get('description'),
+            duration=data.get('duration', 0) // 1000,
+            cover=data.get('artwork_url'),
+            performer=data.get('user', {}).get('username'),
+            performer_url=data.get('user', {}).get('permalink_url'),
+            media_type='playlist',
+            items=items,
+        )
+
+
+def get_cache_key(url: str) -> str | None:
+    """Build a SoundCloud cache key from a track URL."""
+    # Standard: soundcloud.com/user/track
+    # Short: on.soundcloud.com/ABC
+    match = re.search(r"soundcloud\.com/([^/?#]+/[^/?#]+)", url)
+    if match:
+        return f"sc:{match.group(1)}"
+    
+    # Fallback for short links (hash the URL without params)
+    if "on.soundcloud.com" in url:
+        clean_url = url.split('?')[0].rstrip('/')
+        hashed = hashlib.md5(clean_url.encode('utf-8')).hexdigest()
+        return f"sc:{hashed}"
+        
+    return None
+
+async def cache_check(session, cache_key: str) -> MediaContent | None:
+    """Check DB cache for a previously sent SoundCloud track and return a MediaContent if found."""
+    cached = await get_media_cache(session, cache_key)
+    if cached:
+        return MediaContent(
+            type=MediaType.AUDIO,
+            telegram_file_id=cached.telegram_file_id,
+            telegram_document_file_id=cached.telegram_document_file_id,
+            cover_file_id=cached.data.cover,
+            full_cover_file_id=cached.data.full_cover,
+            title=cached.data.title,
+            performer=cached.data.author,
+            duration=cached.data.duration
+        )
+    return None

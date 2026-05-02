@@ -44,3 +44,39 @@ invalid-callback = ❌ Oops! That button seems to be expired.
 url-expired = ⏰ This link expired. Please try again with a fresh one!
 setting-changed = ⚙️ Setting *{ $setting }* has been { $status }!
 premium-granted = 🎉 Great news! The owner has granted you free access to premium features. Enjoy unlimited downloads!
+
+
+# System & Payment Localization
+sponsor-alert = 🌟 30 Days of Premium for 100 Stars!
+sponsor-invoice-title = Sponsor Premium (30 Days)
+sponsor-invoice-desc = Get 30 days of premium access! No ads and extra features.
+sponsor-success = 🎉 Thank you for your support! You have been granted 30 days of Sponsor Premium 🌟
+support-invoice-title = Donate 50 Stars
+support-invoice-desc = Support the development of Charlotte!
+support-success = 🎉 Thank you so much for your support! 🧡
+support-invalid-amount = ❌ Amount must be between 1 and 100,000 Stars. Please try again:
+support-invalid-number = ❌ Please enter a valid number between 1 and 100,000:
+payment-invalid-data = ⚠️ Error: Invalid payment data.
+payment-invalid-format = ⚠️ Error: Invalid format data.
+payment-link-expired = ⚠️ Error: Link expired. Please try again.
+payment-success-download = ✅ Thank you for supporting Charlotte! Starting download...
+payment-error-refund = ❌ Error processing your request. Refunding...
+premium-expired = ⚠️ Your Sponsor Premium has expired! You can renew it at any time. 🌟
+bot-ad-disable-alert = 🌟 Disabling the Bot Ad requires an active Sponsorship (100 Stars)!
+download-failed-refund = ❌ Download failed. Your payment has been refunded.
+not-your-request = ❌ This is not your request
+action-cancelled = 🛑 Cancelled
+banned-global = 🚫 You are globally banned.
+banned-chat = 🚫 You are banned in this chat.
+too-many-requests = ⏳ Too many requests. Please wait.
+menu-not-yours = ⚠️ You cannot interact with this menu.
+general-error = ❌ An error occurred. Please try again later.
+
+# YouTube Trim Feature
+yt-trim-sponsor-only = ✂️ Video Trim is available for Sponsors only!
+yt-trim-ask-start = ✂️ Enter start time (e.g. 01:30 or 00:01:30):
+yt-trim-ask-end = ⏱ Enter end time (e.g. 02:00 or 00:02:00):
+yt-trim-invalid-time = ❌ Invalid format. Use MM:SS or HH:MM:SS. Try again:
+yt-trim-end-before-start = ❌ End time must be after start time. Try again:
+yt-trim-processing = ✂️ Trimming your clip, please wait...
+yt-trim-out-of-bounds = ❌ Time exceeds video duration ({  }). Try again:

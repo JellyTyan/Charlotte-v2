@@ -2,13 +2,14 @@ import asyncio
 import logging
 import re
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 from urllib.parse import urljoin
 
 from curl_cffi.requests import AsyncSession
 from arq.connections import RedisSettings
 import aiofiles
 from bs4 import BeautifulSoup
+from PIL import Image, ImageFile
 
 logger = logging.getLogger(__name__)
 
@@ -402,7 +403,9 @@ async def universal_html_parse(
     """
     logger.info(f"Parsing HTML with {selector_type} selectors")
 
-    try:
+    loop = asyncio.get_running_loop()
+
+    def parse():
         soup = BeautifulSoup(html_content, "html.parser")
         results = {}
 
@@ -430,6 +433,8 @@ async def universal_html_parse(
 
         return results
 
+    try:
+        return await loop.run_in_executor(None, parse)
     except Exception as e:
         logger.error(f"HTML parsing failed: {e}")
         raise
@@ -579,6 +584,147 @@ async def universal_url_resolve(
             logger.error(f"URL resolution failed completely: {e2}")
             raise
 
+async def convert_to_png(
+        ctx,
+        input_path: str,
+) -> str:
+    """
+    Convert image to PNG format.
+
+    Args:
+        ctx: ARQ context
+        input_path: Input image path
+
+    Returns:
+        str: Output PNG file path
+    """
+    logger.info(f"Converting {input_path} to PNG")
+
+    loop = asyncio.get_running_loop()
+
+    def convert():
+        output_path = str(Path(input_path).with_suffix(".png"))
+        ImageFile.LOAD_TRUNCATED_IMAGES = True
+        img = Image.open(input_path)
+        img.save(output_path, "PNG", optimize=True)
+        return output_path
+
+    try:
+        output_path = await loop.run_in_executor(None, convert)
+        logger.info(f"Conversion complete: {output_path}")
+        return output_path
+    except Exception as e:
+        logger.error(f"Image conversion failed: {e}")
+        raise
+
+
+async def convert_to_jpg(
+        ctx,
+        input_path: str,
+        quality: int = 95,
+) -> str:
+    """
+    Convert image to JPG format.
+
+    Args:
+        ctx: ARQ context
+        input_path: Input image path
+        quality: JPEG quality (1-100, default 95)
+
+    Returns:
+        str: Output JPG file path
+    """
+    logger.info(f"Converting {input_path} to JPG")
+
+    loop = asyncio.get_running_loop()
+
+    def convert():
+        output_path = str(Path(input_path).with_suffix(".jpg"))
+        ImageFile.LOAD_TRUNCATED_IMAGES = True
+        img = Image.open(input_path)
+        
+        # Convert RGBA to RGB if needed
+        if img.mode in ("RGBA", "LA", "P"):
+            background = Image.new("RGB", img.size, (255, 255, 255))
+            if img.mode == "P":
+                img = img.convert("RGBA")
+            background.paste(img, mask=img.split()[-1] if img.mode in ("RGBA", "LA") else None)
+            img = background
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
+        
+        img.save(output_path, "JPEG", quality=quality, optimize=True)
+        return output_path
+
+    try:
+        output_path = await loop.run_in_executor(None, convert)
+        logger.info(f"Conversion complete: {output_path}")
+        return output_path
+    except Exception as e:
+        logger.error(f"Image conversion failed: {e}")
+        raise
+
+async def process_audio_thumbnail(
+    ctx,
+    input_path: str,
+    output_path: Optional[str] = None,
+) -> str:
+    """
+    Crop image to square, resize to 320x320, and convert to JPEG format.
+    Used for Telegram audio thumbnails.
+    
+    Args:
+        ctx: ARQ context
+        input_path: Input image path
+        output_path: Output image path (defaults to same path with .jpg extension)
+        
+    Returns:
+        str: Output JPG file path
+    """
+    logger.info(f"Processing audio thumbnail: {input_path}")
+
+    loop = asyncio.get_running_loop()
+
+    def process():
+        out_path = output_path or str(Path(input_path).with_suffix(".jpg"))
+        ImageFile.LOAD_TRUNCATED_IMAGES = True
+        img = Image.open(input_path)
+        
+        # Crop to square
+        width, height = img.size
+        if width != height:
+            size = min(width, height)
+            left = (width - size) / 2
+            top = (height - size) / 2
+            right = (width + size) / 2
+            bottom = (height + size) / 2
+            img = img.crop((left, top, right, bottom))
+        
+        # Resize to 320x320
+        img = img.resize((320, 320), Image.Resampling.LANCZOS)
+        
+        # Convert RGBA to RGB if needed
+        if img.mode in ("RGBA", "LA", "P"):
+            background = Image.new("RGB", img.size, (255, 255, 255))
+            if img.mode == "P":
+                img = img.convert("RGBA")
+            background.paste(img, mask=img.split()[-1] if img.mode in ("RGBA", "LA") else None)
+            img = background
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
+            
+        img.save(out_path, "JPEG", quality=90, optimize=True)
+        return out_path
+
+    try:
+        out_path = await loop.run_in_executor(None, process)
+        logger.info(f"Audio thumbnail processing complete: {out_path}")
+        return out_path
+    except Exception as e:
+        logger.error(f"Audio thumbnail processing failed: {e}")
+        raise
+
+
 
 # ============================================================================
 # WORKER SETTINGS
@@ -600,6 +746,9 @@ class WorkerSettings:
         universal_regex_extract,
         # Utilities
         universal_url_resolve,
+        convert_to_png,
+        convert_to_jpg,
+        process_audio_thumbnail,
     ]
     redis_settings = RedisSettings(host='redis', port=6379)
     queue_name = 'light'

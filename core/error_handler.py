@@ -6,8 +6,9 @@ from fluentogram import TranslatorRunner
 
 from core.config import Config
 from core.loader import dp, bot
-from models.errors import BotError, ErrorCode
-from storage.db.crud import get_chat_settings
+from models.errors import BotError
+from storage.db.crud import get_chat_settings, get_user_settings
+from storage.db import database_manager
 
 logger = logging.getLogger(__name__)
 config = Config()
@@ -20,10 +21,11 @@ async def global_error_handler(event: ErrorEvent):
 
     # Get message from update (can be from message or callback_query)
     message = None
-    if hasattr(event, 'message'):
-        message = event.message
-    elif hasattr(event, 'callback_query') and event.callback_query:
-        message = event.callback_query.message
+    update = event.update
+    if update.message:
+        message = update.message
+    elif update.callback_query:
+        message = update.callback_query.message
 
     if not message:
         logger.error(f"Error without message context: {exception}")
@@ -38,28 +40,28 @@ async def global_error_handler(event: ErrorEvent):
 
     # Get user/chat for locale
     user = None
-    if hasattr(event, 'from_user'):
-        user = event.from_user
-    elif hasattr(event, 'callback_query') and event.callback_query:
-        user = event.callback_query.from_user
+    if update.message and update.message.from_user:
+        user = update.message.from_user
+    elif update.callback_query and update.callback_query.from_user:
+        user = update.callback_query.from_user
 
     chat = None
-    if hasattr(event, 'chat'):
-        chat = event.chat
-    elif message:
-        chat = message.chat
+    if update.message and update.message.chat:
+        chat = update.message.chat
+    elif update.callback_query and update.callback_query.message:
+        chat = update.callback_query.message.chat
 
     lang = "en"
 
-    if chat and chat.type != "private":
-        settings = await get_chat_settings(chat.id)
-        if settings:
-            lang = settings.profile.language
-    elif user:
-        from storage.db.crud import get_user_settings
-        settings = await get_user_settings(user.id)
-        if settings:
-            lang = settings.profile.language
+    async with database_manager.async_session() as session:
+        if chat and chat.type != "private":
+            settings = await get_chat_settings(session, chat.id)
+            if settings:
+                lang = settings.profile.language
+        elif user:
+            settings = await get_user_settings(session, user.id)
+            if settings:
+                lang = settings.profile.language
 
     i18n: TranslatorRunner = hub.get_translator_by_locale(lang)
 

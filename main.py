@@ -1,5 +1,4 @@
 from dotenv import load_dotenv
-load_dotenv()
 import os
 
 from core.config import Config
@@ -7,6 +6,8 @@ from core.logger import setup_logger
 from core.bot_commands import set_default_commands
 from utils.i18n import create_translator_hub
 from middlewares.i18n import TranslatorRunnerMiddleware
+
+load_dotenv()
 
 
 async def main():
@@ -40,6 +41,10 @@ async def main():
     dp.workflow_data.update(config=config, logger=logger)
 
     logger.info("⚙️ Setting up translation...")
+
+    from middlewares.db import DbSessionMiddleware
+    dp.update.middleware(DbSessionMiddleware(database_manager.async_session))
+
     translator_hub = create_translator_hub()
 
     dp["_translator_hub"] = translator_hub
@@ -58,30 +63,55 @@ async def main():
     dp.message.middleware(RateLimiter(rate=10, per=60))
     logger.info("✅ All middlewares registered")
 
-    import core.error_handler
     logger.info("✅ Error handler registered")
 
-    import modules
-    from modules.router import service_router
-    from modules.payment.handler import payment_router
+    from modules.payment.router import payment_router
+    from modules.services.router import service_router
+    from modules.inline.handler import inline_router
+    from handlers import user_router, admin_router
 
+    dp.include_router(user_router)
     dp.include_router(payment_router)
+    dp.include_router(admin_router)
+    dp.include_router(inline_router)
     dp.include_router(service_router)
 
-    import handlers
     logger.info("✅ All handlers registered")
 
     logger.info("⏰ Starting scheduled tasks...")
     from tasks.scheduled import start_scheduled_tasks
-    start_scheduled_tasks()
+    start_scheduled_tasks(bot)
     logger.info("✅ Scheduled tasks started")
 
     logger.info("📝 Setting default commands...")
     await set_default_commands()
     logger.info("✅ Default commands set")
 
-    logger.info("🎉 Bot successfully started and ready to receive messages!")
-    await dp.start_polling(bot, skip_updates=True)
+    if config.TELEGRAM_LOCAL:
+        logger.info("🌐 Starting webhook mode with local Telegram Bot API...")
+        from aiohttp import web
+        from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+        
+        app = web.Application()
+        webhook_requests_handler = SimpleRequestHandler(dispatcher=dp, bot=bot)
+        webhook_requests_handler.register(app, path=config.WEBHOOK_PATH)
+        setup_application(app, dp, bot=bot)
+        
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, config.WEBAPP_HOST, config.WEBAPP_PORT)
+        await site.start()
+        
+        webhook_url = f"{config.WEBHOOK_HOST}{config.WEBHOOK_PATH}"
+        await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
+        logger.info(f"✅ Webhook set to {webhook_url}")
+        logger.info(f"🎉 Bot started in webhook mode on {config.WEBAPP_HOST}:{config.WEBAPP_PORT}")
+        
+        import asyncio
+        await asyncio.Event().wait()
+    else:
+        logger.info("🎉 Bot successfully started and ready to receive messages!")
+        await dp.start_polling(bot, skip_updates=True)
 
 if __name__ == "__main__":
     import asyncio

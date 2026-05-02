@@ -1,0 +1,348 @@
+import logging
+import os
+import pathlib
+import re
+from pathlib import Path
+from typing import List
+
+from aiofiles import os as aios
+
+from models.errors import BotError, ErrorCode
+from models.media import MediaContent, MediaType
+from models.metadata import MediaMetadata, MetadataType
+from models.service_list import Services
+from storage.cache.redis_client import get_or_cache
+from utils import search_music, transliterate, random_cookie_file, get_extra_audio_options, sanitize_filename, sanitize_filename
+from utils.service_utils import get_audio_options
+from utils.tidal import TidalUtil
+from .utils import (
+    fetch_spotify_token,
+    get_spotify_author,
+    get_set_list
+)
+
+logger = logging.getLogger(__name__)
+
+class SpotifyService:
+    name = "Spotify"
+
+    def __init__(self, output_path: str = "storage/temp/", arq = None) -> None:
+        self.output_path = output_path
+        self.arq = arq
+
+    async def get_info(self, url: str, *args, **kwargs) -> MediaMetadata|None:
+        logger.debug(f"Getting info for Spotify URL: {url}")
+        config = kwargs.get('config')
+        if not config:
+            raise BotError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message="Config is required",
+                service=Services.SPOTIFY,
+                critical=True,
+                is_logged=True
+            )
+
+        if not self.arq:
+            raise BotError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message="ARQ pool is required",
+                service=Services.SPOTIFY,
+                critical=True,
+                is_logged=True
+            )
+
+        try:
+            logger.debug("Fetching Spotify access token")
+            data = await get_or_cache(
+                "spotify_bearer_token",
+                lambda: fetch_spotify_token(config),
+                ttl=3500
+            )
+            token = data["token"]
+            logger.debug(f"Token retrieved successfully")
+        except Exception as e:
+            logger.error(f"Failed to get token: {e}", exc_info=True)
+            raise
+
+        match_track = re.search(r"track/([^/?]+)", url)
+        match_playlist = re.search(r"playlist/([^/?]+)", url)
+        match_album = re.search(r"album/([^/?]+)", url)
+        if match_track:
+            track_id = match_track.group(1)
+            logger.debug(f"Extracting track info for ID: {track_id}")
+            try:
+                track_info = await get_spotify_author(track_id, token)
+                logger.debug(f"Track info: {track_info['artist']} - {track_info['title']}")
+            except Exception as e:
+                logger.error(f"Failed to get track info: {e}", exc_info=True)
+                raise
+
+            return MediaMetadata(
+                type=MetadataType.METADATA,
+                url=url,
+                title=track_info["title"],
+                performer=track_info["artist"],
+                cover=track_info["cover_url"],
+                media_type="track",
+                cache_key=f"spotify:{track_info['track_id']}" if track_info.get("track_id") else None,
+                extra={"album_name": track_info["album_name"], "date": track_info["date"]}
+            )
+        elif match_playlist:
+            playlist_id = match_playlist.group(1)
+            logger.debug(f"Extracting playlist info for ID: {playlist_id}")
+            return await get_set_list(playlist_id, "playlist", token)
+        elif match_album:
+            album_id = match_album.group(1)
+            logger.debug(f"Extracting album info for ID: {album_id}")
+            return await get_set_list(album_id, "album", token)
+        else:
+            logger.warning(f"Unrecognized Spotify URL pattern: {url}")
+            raise BotError(
+                code=ErrorCode.INVALID_URL,
+                message="Unrecognized Spotify URL format",
+                service=Services.SPOTIFY,
+                url=url,
+                is_logged=True
+            )
+
+    async def download(self, metadata: MediaMetadata, lossless_mode: bool = False) -> List[MediaContent]:
+        if not self.arq:
+            raise BotError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message="ARQ pool is required",
+                service=Services.SPOTIFY,
+                critical=True,
+                is_logged=True
+            )
+        logger.debug(f"Starting download for: {metadata.performer} - {metadata.title} (Lossless: {lossless_mode})")
+
+        title = metadata.title
+        performer = metadata.performer
+        cover_url = metadata.cover
+        album_name = metadata.extra.get("album_name", None)
+        date = metadata.extra.get("date", None)
+
+        # Experimental Tidal Lossless Download
+        if lossless_mode:
+            tidal_downloaded_path = None
+            tidal_item = None
+            try:
+                logger.debug(f"Attempting Tidal download for: {performer} - {title}")
+                tidal = TidalUtil()
+                search_query = f"{performer} - {title}"
+                results = await tidal.search(search_query, limit=10)
+
+                for item in results:
+                    # Simple fuzzy match replacement: clean strings and compare
+                    tidal_artist = item.get('artist', {}).get('name', '').lower()
+                    tidal_title = item.get('title', '').lower()
+
+                    target_artist = performer.lower()
+                    target_title = title.lower()
+
+                    # Check if strings are contained or equal (ignoring case)
+                    if (target_artist in tidal_artist or tidal_artist in target_artist) and \
+                        (target_title in tidal_title or tidal_title in target_title):
+
+                        logger.info(f"Found Tidal match: {item['artist']['name']} - {item['title']} (ID: {item['id']})")
+                        filename = sanitize_filename(f"{performer} - {title}.flac")
+                        filepath = os.path.join(self.output_path, filename)
+
+                        downloaded_path = await tidal.download(item['id'], filepath)
+
+                        if downloaded_path and await aios.path.exists(downloaded_path):
+                            logger.info(f"Successfully downloaded from Tidal: {downloaded_path}")
+                            tidal_downloaded_path = downloaded_path
+                            tidal_item = item
+                        else:
+                            logger.warning("Tidal download returned path but file missing or failed.")
+                        break
+            except Exception as e:
+                logger.error(f"Tidal download failed: {e}. Falling back to standard method.")
+
+            if tidal_downloaded_path and tidal_item:
+                # Download cover if needed
+                cover_path = None
+                base_path = os.path.join(self.output_path, pathlib.Path(tidal_downloaded_path).stem)
+
+                if cover_url:
+                    try:
+                        cover_path = f"{base_path}.jpg"
+                        job = await self.arq.enqueue_job("universal_download", cover_url, cover_path)
+                        try:
+                            await job.result()
+                            process_job = await self.arq.enqueue_job('process_audio_thumbnail', input_path=cover_path, _queue_name='light')
+                            cover_path = await process_job.result()
+                        except Exception as e:
+                            logger.warning(f"Failed to download Tidal cover: {e}")
+                            cover_path = None
+                    except Exception as e:
+                        logger.warning(f"Failed to download cover: {e}")
+                        cover_path = None
+
+                # Update Metadata
+                try:
+                    job = await self.arq.enqueue_job(
+                        "universal_metadata_update",
+                        tidal_downloaded_path,
+                        title=title,
+                        artist=performer,
+                        cover_file=cover_path,
+                        album_name=album_name,
+                        date=date,
+                        _queue_name='heavy'
+                    )
+                    try:
+                        await job.result()
+                    except Exception as e:
+                        logger.warning(f"Failed to update Tidal metadata: {e}")
+                except Exception as e:
+                    logger.warning(f"Failed to update Tidal metadata: {e}")
+
+                duration = tidal_item.get('duration', 0)
+                cover_file = Path(cover_path) if cover_path and await aios.path.exists(cover_path) else None
+
+                return [MediaContent(
+                    type=MediaType.AUDIO,
+                    path=Path(tidal_downloaded_path),
+                    duration=duration,
+                    title=title,
+                    performer=performer,
+                    cover=cover_file,
+                    is_lossless=True
+                )]
+
+            # Tidal недоступен — не делаем YouTube-фоллбэк, пускаем хэндлер решать
+            raise BotError(
+                code=ErrorCode.LOSSLESS_UNAVAILABLE,
+                message="Tidal is unavailable, lossless download skipped",
+                service=Services.SPOTIFY,
+                is_logged=False,
+            )
+
+        # Fallback to standard YouTube/yt-dlp method
+        options = get_audio_options(f"{performer} - {title}")
+        logger.debug(f"Searching YouTube for: {performer} - {title}")
+        video_link = await search_music(performer, title)
+        if not video_link:
+            raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                message=f"No YouTube results found for: {performer} - {title}",
+                service=Services.SPOTIFY,
+                is_logged=True
+            )
+        logger.debug(f"Found YouTube link: {video_link}")
+        try:
+            job = await self.arq.enqueue_job(
+                "universal_ytdlp_extract",
+                video_link,
+                extract_only = False,
+                format_selector = None,
+                output_template = f"storage/temp/{sanitize_filename(transliterate(title))}.%(ext)s",
+                cookies_file = random_cookie_file("youtube"),
+                extra_opts=get_extra_audio_options(),
+                _queue_name='heavy'
+            )
+            try:
+                result = await job.result()
+            except Exception as e:
+                raise BotError(
+                    code=ErrorCode.DOWNLOAD_FAILED,
+                    service=Services.SPOTIFY,
+                    message=f"Failed to download YouTube audio for Spotify: {e}",
+                    url=video_link,
+                    critical=True,
+                    is_logged=True
+                )
+            info_dict = result.get("info")
+            audio_path = result.get("filepath")
+            audio_path = os.path.splitext(audio_path)[0] + ".mp3"
+            base_path = audio_path.rsplit('.', 1)[0]
+
+            if not info_dict:
+                raise BotError(
+                    code=ErrorCode.DOWNLOAD_FAILED,
+                    message="Failed to get audio info",
+                    service=Services.SPOTIFY,
+                    url=video_link,
+                    is_logged=True
+                )
+
+            logger.debug(f"Audio path: {audio_path}")
+
+            # Use cover from get_info if available, otherwise download from YouTube
+            cover_path = None
+            if not cover_url:
+                thumbnail_url = info_dict.get("thumbnail", None)
+                if thumbnail_url:
+                    cover_url = thumbnail_url
+            else:
+                logger.debug(f"Using existing cover: {cover_url}")
+
+            if cover_url:
+                try:
+                    cover_path = f"{base_path}.jpg"
+                    logger.debug(f"Downloading cover: {cover_url}")
+                    job = await self.arq.enqueue_job("universal_download", cover_url, cover_path)
+                    try:
+                        await job.result()
+                        process_job = await self.arq.enqueue_job('process_audio_thumbnail', input_path=cover_path, _queue_name='light')
+                        cover_path = await process_job.result()
+                    except Exception as e:
+                        logger.warning(f"Failed to download YouTube cover for Spotify: {e}")
+                        cover_path = None
+                except Exception as e:
+                    logger.warning(f"Failed to download cover: {e}")
+                    cover_path = None
+
+            logger.debug("Updating metadata")
+            # 3. Update Metadata
+            job = await self.arq.enqueue_job(
+                "universal_metadata_update",
+                audio_path,
+                title=title,
+                artist=performer,
+                cover_file=cover_path,
+                album_name=album_name,
+                date=date,
+                _queue_name='heavy'
+            )
+            try:
+                await job.result()
+            except Exception as e:
+                logger.error(f"Failed to update YouTube audio metadata for Spotify: {e}")
+                # Not critical since the file is already downloaded
+
+            if await aios.path.exists(audio_path):
+                logger.debug(f"Download completed: {audio_path}")
+                cover_file = None
+                if cover_path and await aios.path.exists(cover_path):
+                    cover_file = Path(cover_path)
+                return [MediaContent(
+                    type=MediaType.AUDIO,
+                    path=Path(audio_path),
+                    duration=info_dict.get("duration", None),
+                    title=title,
+                    performer=performer,
+                    cover=cover_file
+                )]
+            else:
+                raise BotError(
+                    code=ErrorCode.DOWNLOAD_FAILED,
+                    message="Audio file not found after download",
+                    url=video_link,
+                    service=Services.SPOTIFY,
+                    is_logged=True,
+                )
+
+        except BotError:
+            raise
+        except Exception as e:
+            raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                message=f"Error downloading YouTube Audio: {e}",
+                url=video_link,
+                service=Services.SPOTIFY,
+                critical=True,
+                is_logged=True
+            )

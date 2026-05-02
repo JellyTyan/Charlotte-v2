@@ -1,6 +1,5 @@
 FROM python:3.13-slim
 
-# Create user with consistent UID/GID
 RUN useradd -m -u 1000 charlotte && \
     mkdir -p /app /app/storage/temp /app/logs /app/storage/cookies && \
     chown -R charlotte:charlotte /app
@@ -15,8 +14,9 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install (bot-only deps)
-COPY --chown=charlotte:charlotte requirements.bot.txt .
-RUN pip install --no-cache-dir -r requirements.bot.txt
+RUN pip install uv
+COPY --chown=charlotte:charlotte pyproject.toml .
+RUN uv pip install --system -e .[bot]
 
 # Copy project files (workers excluded — they have their own image)
 COPY --chown=charlotte:charlotte core/ core/
