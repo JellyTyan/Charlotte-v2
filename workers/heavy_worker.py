@@ -266,6 +266,7 @@ async def universal_gallery_dl(
     output_dir: Optional[str] = None,
     options: Optional[Dict[str, str]] = None,
     extract_only: bool = False,
+    filename: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Extract info or download using gallery-dl.
@@ -276,6 +277,7 @@ async def universal_gallery_dl(
         output_dir: Output directory
         options: Gallery-dl options as dict
         extract_only: Only extract info (--dump-json)
+        filename: Custom filename format for downloaded files
 
     Returns:
         dict: {
@@ -289,9 +291,15 @@ async def universal_gallery_dl(
 
     gallery_dl_exe = shutil.which("gallery-dl")
     if not gallery_dl_exe:
-        venv_path = os.path.join(os.getcwd(), "venv", "bin", "gallery-dl")
-        if os.path.exists(venv_path):
-            gallery_dl_exe = venv_path
+        # Check various venv locations
+        venv_paths = [
+            os.path.join(os.getcwd(), "venv", "bin", "gallery-dl"),
+            os.path.join(os.getcwd(), ".venv", "bin", "gallery-dl"),
+        ]
+        for vpath in venv_paths:
+            if os.path.exists(vpath):
+                gallery_dl_exe = vpath
+                break
 
     if not gallery_dl_exe:
         logger.error("gallery-dl not found")
@@ -301,10 +309,23 @@ async def universal_gallery_dl(
 
     if extract_only:
         cmd.append("--dump-json")
+    else:
+        # Better download behavior
+        cmd.extend(["--no-mtime", "--no-part"])
 
     if output_dir:
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         cmd.extend(["--dest", output_dir])
+
+    if filename:
+        # If filename has an extension, use it as is, otherwise add {extension}
+        if "." in filename:
+            cmd.extend(["-o", f"filename={filename}"])
+        else:
+            cmd.extend(["-o", f"filename={filename}.{{extension}}"])
+        
+        # Ensure it's saved directly in the destination directory without subfolders
+        cmd.extend(["-o", "directory=."])
 
     if options:
         for key, value in options.items():
@@ -321,12 +342,13 @@ async def universal_gallery_dl(
     stdout, stderr = await proc.communicate()
 
     if proc.returncode != 0:
-        logger.error(f"gallery-dl error: {stderr.decode()}")
-        raise Exception(f"gallery-dl error: {stderr.decode()}")
+        err_msg = stderr.decode()
+        logger.error(f"gallery-dl error: {err_msg}")
+        raise Exception(f"gallery-dl error: {err_msg}")
 
     output = stdout.decode().strip()
     if not output:
-        raise Exception(f"gallery-dl error: {stderr.decode()}")
+        return {"items": [], "files": []}
 
     if extract_only:
         try:
@@ -336,7 +358,7 @@ async def universal_gallery_dl(
                 if isinstance(first_item, list) and len(first_item) > 1:
                     items.append(first_item[1])
                 else:
-                    raise Exception(f"Structure mismatch: {stderr.decode()}")
+                    items.append(first_item)
         except json.JSONDecodeError:
             lines = output.splitlines()
             for line in lines:
@@ -346,13 +368,22 @@ async def universal_gallery_dl(
                         items.append(line_json[1])
                 except:
                     pass
-            if not items:
-                raise Exception(f"Structure mismatch: {stderr.decode()}")
     else:
         # Parse downloaded files from stdout
+        # gallery-dl prints the path to each downloaded file
         for line in output.strip().split('\n'):
-            if line and os.path.exists(line):
+            line = line.strip()
+            if not line:
+                continue
+            
+            # Simple heuristic: if it looks like a path and exists
+            if os.path.exists(line):
                 files.append(line)
+            elif output_dir:
+                # Try relative to output_dir if it's not absolute
+                potential_path = os.path.join(output_dir, line)
+                if os.path.exists(potential_path):
+                    files.append(potential_path)
 
     return {
         "items": items,
