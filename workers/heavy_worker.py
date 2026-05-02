@@ -164,6 +164,102 @@ async def universal_ytdlp_extract(
     return await loop.run_in_executor(None, process)
 
 
+async def ytdlp_trim_extract(
+    ctx,
+    url: str,
+    start_sec: int,
+    end_sec: int,
+    format_selector: Optional[str] = None,
+    output_template: Optional[str] = None,
+    output_dir: Optional[str] = None,
+    cookies_file: Optional[str] = None,
+    extra_opts: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Download a trimmed segment of a video using yt-dlp download_ranges.
+
+    Unlike universal_ytdlp_extract, download_range_func is built locally
+    because it is not JSON-serializable and cannot be passed through Redis/ARQ.
+
+    Args:
+        ctx: ARQ context
+        url: Media URL
+        start_sec: Clip start position in seconds
+        end_sec: Clip end position in seconds
+        format_selector: yt-dlp format selector string
+        output_template: Output filename template
+        output_dir: Output directory
+        cookies_file: Path to cookies file
+        extra_opts: Additional yt-dlp options (JSON-serializable only)
+
+    Returns:
+        dict with keys: info, filepath, title, duration, thumbnail
+    """
+    from yt_dlp.utils import download_range_func as _download_range_func
+
+    logger.info(f"yt-dlp TRIM: {url} [{start_sec}s – {end_sec}s]")
+
+    loop = asyncio.get_running_loop()
+
+    def process():
+        ydl_opts: Dict[str, Any] = {
+            "quiet": False,
+            "no_warnings": False,
+            "extract_flat": False,
+            "noplaylist": True,
+            # Core trim options — built here so they are never serialized
+            "download_ranges": _download_range_func(None, [(start_sec, end_sec)]),
+            "force_keyframes_at_cuts": True,
+        }
+
+        if cookies_file and os.path.exists(cookies_file):
+            ydl_opts["cookiefile"] = cookies_file
+
+        if output_dir:
+            Path(output_dir).mkdir(parents=True, exist_ok=True)
+            ydl_opts["paths"] = {"home": output_dir}
+
+        if output_template:
+            ydl_opts["outtmpl"] = output_template
+
+        if format_selector:
+            ydl_opts["format"] = format_selector
+
+        if extra_opts:
+            # Strip any non-serializable keys that might have leaked in
+            safe_keys = {k: v for k, v in extra_opts.items()
+                         if k not in ("download_ranges", "force_keyframes_at_cuts")}
+            ydl_opts.update(safe_keys)
+
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+
+                clean_info = {
+                    "id": info.get("id"),
+                    "title": info.get("title"),
+                    "uploader": info.get("uploader"),
+                    "duration": info.get("duration"),
+                    "thumbnail": info.get("thumbnail"),
+                    "ext": info.get("ext"),
+                    "width": info.get("width"),
+                    "height": info.get("height"),
+                }
+
+                filepath = ydl.prepare_filename(info)
+                return {
+                    "info": clean_info,
+                    "filepath": filepath,
+                    "title": info.get("title"),
+                    "duration": info.get("duration"),
+                    "thumbnail": info.get("thumbnail"),
+                }
+        except yt_dlp.utils.DownloadError as e:
+            raise Exception(str(e))
+
+    return await loop.run_in_executor(None, process)
+
+
 async def universal_gallery_dl(
     ctx,
     url: str,
@@ -691,6 +787,7 @@ class WorkerSettings:
     functions = [
         # Media extraction
         universal_ytdlp_extract,
+        ytdlp_trim_extract,
         universal_gallery_dl,
         # Media processing
         universal_ffmpeg_process,
