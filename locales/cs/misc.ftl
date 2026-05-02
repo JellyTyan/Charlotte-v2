@@ -71,3 +71,12 @@ banned-chat = 🚫 V tomto chatu jste zabanováni.
 too-many-requests = ⏳ Příliš mnoho požadavků. Prosím čekejte.
 menu-not-yours = ⚠️ S tímto menu nemůžete interagovat.
 general-error = ❌ Došlo k chybě. Zkuste to prosím později.
+
+# YouTube Trim Feature
+yt-trim-sponsor-only = ✂️ Ořez videa je dostupný pouze pro Sponzory!
+yt-trim-ask-start = ✂️ Zadejte čas začátku (např. 01:30 nebo 00:01:30):
+yt-trim-ask-end = ⏱ Zadejte čas konce (např. 02:00 nebo 00:02:00):
+yt-trim-invalid-time = ❌ Neplatný formát. Použijte MM:SS nebo HH:MM:SS. Zkuste to znovu:
+yt-trim-end-before-start = ❌ Čas konce musí být větší než čas začátku. Zkuste to znovu:
+yt-trim-processing = ✂️ Ořezáváme klip, prosím čekejte...
+yt-trim-out-of-bounds = ❌ Čas překračuje délku videa ({  }). Zkuste to znovu:

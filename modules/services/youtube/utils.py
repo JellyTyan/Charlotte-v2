@@ -2,13 +2,46 @@ from utils import random_cookie_file
 import logging
 import hashlib
 import re
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from storage.db.crud import get_media_cache
 from models.media import MediaContent, MediaType
 
 logger = logging.getLogger(__name__)
+
+
+def parse_time_to_seconds(time_str: str) -> Optional[int]:
+    """
+    Parse a time string in MM:SS or HH:MM:SS format into total seconds.
+
+    Examples:
+        "01:30"      -> 90
+        "00:01:30"   -> 90
+        "1:00:00"    -> 3600
+
+    Returns:
+        int: total seconds, or None if the format is invalid.
+    """
+    parts = time_str.strip().split(":")
+    try:
+        int_parts = [int(p) for p in parts]
+    except ValueError:
+        return None
+
+    if len(int_parts) == 2:          # MM:SS
+        minutes, seconds = int_parts
+        if seconds < 0 or seconds >= 60 or minutes < 0:
+            return None
+        return minutes * 60 + seconds
+    elif len(int_parts) == 3:        # HH:MM:SS
+        hours, minutes, seconds = int_parts
+        if seconds < 0 or seconds >= 60 or minutes < 0 or minutes >= 60 or hours < 0:
+            return None
+        return hours * 3600 + minutes * 60 + seconds
+
+    return None
+
 def get_ytdlp_options():
     return {
         # "outtmpl": f"temp/%(id)s_{sanitize_filename('%(title)s')}.%(ext)s",

@@ -71,3 +71,12 @@ banned-chat = 🚫 Estás baneado en este chat.
 too-many-requests = ⏳ Demasiadas solicitudes. Por favor espera.
 menu-not-yours = ⚠️ No puedes interactuar con este menú.
 general-error = ❌ Ocurrió un error. Por favor, inténtalo de nuevo más tarde.
+
+# YouTube Trim Feature
+yt-trim-sponsor-only = ✂️ ¡El recorte de video solo está disponible para Patrocinadores!
+yt-trim-ask-start = ✂️ Ingresa el tiempo de inicio (ej. 01:30 o 00:01:30):
+yt-trim-ask-end = ⏱ Ingresa el tiempo de fin (ej. 02:00 o 00:02:00):
+yt-trim-invalid-time = ❌ Formato inválido. Usa MM:SS o HH:MM:SS. Intenta de nuevo:
+yt-trim-end-before-start = ❌ El tiempo de fin debe ser después del tiempo de inicio. Intenta de nuevo:
+yt-trim-processing = ✂️ Recortando tu clip, por favor espera...
+yt-trim-out-of-bounds = ❌ El tiempo excede la duración del video ({  }). Intenta de nuevo:

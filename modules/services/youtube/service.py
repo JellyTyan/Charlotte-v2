@@ -12,7 +12,7 @@ from models.metadata import MediaMetadata, MetadataType
 from utils import store_url, url_hash, process_video_for_telegram, sanitize_filename
 from models.service_list import Services
 
-from .models import YoutubeCallback
+from .models import YoutubeCallback, YoutubeTrimCallback
 from .utils import get_video_info, get_ytdlp_options
 
 logger = logging.getLogger(__name__)
@@ -205,6 +205,17 @@ class YouTubeService:
             except (KeyError, ValueError) as e:
                 logger.warning(f"Failed to create audio button: {e}")
 
+        # Trim button — visible for everyone, sponsor check is done on press
+        markup.row(
+            InlineKeyboardButton(
+                text="✂️ Trim",
+                callback_data=YoutubeTrimCallback(
+                    url_hash=url_hash(url),
+                    duration=int(clean_info.get("duration", 0)) if clean_info.get("duration") else 0
+                ).pack()
+            )
+        )
+
         return MediaMetadata(
             type=MetadataType.METADATA,
             url=url,
@@ -395,4 +406,93 @@ class YouTubeService:
                 url=url,
                 service=Services.YOUTUBE,
                 is_logged=True
+            )
+
+    async def download_trim(
+        self,
+        url: str,
+        format_choice: str,
+        start_sec: int,
+        end_sec: int,
+    ) -> List[MediaContent]:
+        """Download a trimmed video segment. No caching — result is never stored."""
+        logger.info(f"Trim download: {url} [{start_sec}s–{end_sec}s] format={format_choice}")
+        if not self.arq:
+            raise BotError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message="ARQ pool is required",
+                critical=True,
+                is_logged=True
+            )
+
+        # Derive yt-dlp format selector from stored format_choice
+        # format_choice looks like "youtube_video_137+140" or "youtube_audio_140"
+        parts = format_choice.split("_") if format_choice else []
+        if len(parts) >= 3 and parts[-2] == "video":
+            fmt_selector = parts[-1]
+        elif len(parts) >= 3 and parts[-2] == "audio":
+            fmt_selector = parts[-1]
+        else:
+            fmt_selector = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+
+        try:
+            job = await self.arq.enqueue_job(
+                "ytdlp_trim_extract",
+                url=url,
+                start_sec=start_sec,
+                end_sec=end_sec,
+                format_selector=fmt_selector,
+                output_template=f"{self.output_path}%(id)s_{sanitize_filename('%(title)s')}_trim.%(ext)s",
+                extra_opts=get_ytdlp_options(),
+                _queue_name="heavy",
+            )
+            try:
+                result = await job.result()
+            except Exception as e:
+                raise BotError(
+                    code=ErrorCode.DOWNLOAD_FAILED,
+                    service=Services.YOUTUBE,
+                    message=f"Trim download failed: {e}",
+                    url=url,
+                    critical=True,
+                    is_logged=True,
+                )
+
+            clean_info = result["info"]
+            filepath = result["filepath"]
+
+            if not clean_info or not filepath:
+                raise BotError(
+                    code=ErrorCode.DOWNLOAD_FAILED,
+                    message="Trim produced no output file",
+                    url=url,
+                    service=Services.YOUTUBE,
+                    is_logged=True,
+                )
+
+            fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(self.arq, filepath)
+
+            clip_duration = end_sec - start_sec
+            return [
+                MediaContent(
+                    type=MediaType.VIDEO,
+                    path=Path(fixed_video),
+                    width=width,
+                    height=height,
+                    duration=clip_duration,
+                    title=clean_info.get("title", "clip"),
+                    cover=Path(thumbnail) if thumbnail else None,
+                )
+            ]
+        except BotError as ebot:
+            ebot.service = Services.YOUTUBE
+            raise ebot
+        except Exception as e:
+            logger.error(f"Trim download error: {e}")
+            raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                message=str(e),
+                url=url,
+                service=Services.YOUTUBE,
+                is_logged=True,
             )
