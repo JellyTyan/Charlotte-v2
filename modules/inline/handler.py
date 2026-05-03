@@ -201,7 +201,7 @@ async def inline_media_handler(inline_query: InlineQuery, config: Config, db_ses
                 ),
                 # ВОТ ОНА - КНОПКА ПРЯМОГО ПЕРЕХОДА
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text=i18n.inline.download.btn(), url=f"https://t.me/YloaderZefirkaBot?start={url_hash}")]
+                    [InlineKeyboardButton(text=i18n.inline.download.btn(), url=f"https://t.me/CharlotteFox_Bot?start={url_hash}")]
                 ])
             )
             return await inline_query.answer([fallback], cache_time=5, is_personal=True)
