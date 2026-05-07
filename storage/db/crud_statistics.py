@@ -22,7 +22,6 @@ async def log_event(
         status=status
     )
     session.add(event)
-    await session.commit()
     return event
 
 

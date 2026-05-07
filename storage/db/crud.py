@@ -46,23 +46,19 @@ async def create_user(session: AsyncSession, user_id: int) -> Users | None:
         session (AsyncSession): Database session
         user_id (int): User ID
     """
-    try:
-        stmt = select(Users).where(Users.user_id == user_id)
-        result = await session.execute(stmt)
-        existing_user = result.scalar_one_or_none()
+    stmt = select(Users).where(Users.user_id == user_id)
+    result = await session.execute(stmt)
+    existing_user = result.scalar_one_or_none()
 
-        if existing_user:
-            return existing_user
+    if existing_user:
+        return existing_user
 
-        user = Users(user_id=user_id)
-        session.add_all([user])
-        await session.commit()
+    user = Users(user_id=user_id)
+    session.add(user)
+    await session.flush()
 
-        await cache_set(f"user:{user_id}", orm_to_dict(user), ttl=3600)
-        return user
-    except Exception as e:
-        logging.error(e)
-        return None
+    await cache_set(f"user:{user_id}", orm_to_dict(user), ttl=3600)
+    return user
 
 async def get_user_settings(session: AsyncSession, user_id: int) -> UserSettingsJson:
     """Get user settings from database
@@ -93,7 +89,6 @@ async def update_user_premium(session: AsyncSession, user_id: int, premium_ends:
         .where(Users.user_id == user_id)
         .values(premium_ends=premium_ends)
     )
-    await session.commit()
     await cache_delete(f"user:{user_id}")
 
 async def grant_sponsorship(session: AsyncSession, user_id: int, days: int, stars_donated: int = 0):
@@ -121,7 +116,6 @@ async def grant_sponsorship(session: AsyncSession, user_id: int, days: int, star
             settings_json=settings
         )
     )
-    await session.commit()
     await cache_delete(f"user:{user_id}")
 
 async def update_user_settings(session: AsyncSession, user_id: int, settings: UserSettingsJson):
@@ -130,7 +124,6 @@ async def update_user_settings(session: AsyncSession, user_id: int, settings: Us
         .where(Users.user_id == user_id)
         .values(settings_json=settings.model_dump(mode="json"))
     )
-    await session.commit()
     await cache_delete(f"user_settings:{user_id}")
 
 
@@ -163,23 +156,19 @@ async def create_chat(session: AsyncSession, chat_id: int, owner_id: int) -> Cha
         chat_id (int): Chat ID
         owner_id (int): User ID
     """
-    try:
-        stmt = select(Chats).where(Chats.chat_id == chat_id)
-        result = await session.execute(stmt)
-        existing_chat = result.scalar_one_or_none()
+    stmt = select(Chats).where(Chats.chat_id == chat_id)
+    result = await session.execute(stmt)
+    existing_chat = result.scalar_one_or_none()
 
-        if existing_chat:
-            return existing_chat
+    if existing_chat:
+        return existing_chat
 
-        chat = Chats(chat_id=chat_id, owner_id=owner_id)
-        session.add_all([chat])
-        await session.commit()
+    chat = Chats(chat_id=chat_id, owner_id=owner_id)
+    session.add(chat)
+    await session.flush()
 
-        await cache_set(f"chat:{chat_id}", orm_to_dict(chat), ttl=3600)
-        return chat
-    except Exception as e:
-        logging.error(f"Error creating chat {chat_id}: {e}")
-        return None
+    await cache_set(f"chat:{chat_id}", orm_to_dict(chat), ttl=3600)
+    return chat
 
 async def get_chat_settings(session: AsyncSession, chat_id: int) -> ChatSettingsJson:
     """Get chat settings from database
@@ -211,14 +200,12 @@ async def update_chat_settings(session: AsyncSession, chat_id: int, settings: Ch
         .where(Chats.chat_id == chat_id)
         .values(settings_json=settings_dict)
     )
-    await session.commit()
     await cache_delete(f"chat_settings:{chat_id}")
 
 
 async def create_usage_log(session: AsyncSession, user_id: int, service_name: str, event_type: str, status: str) -> Statistics | None:
     statistics = Statistics(service_name=service_name, user_id=user_id, event_type=event_type, status=status)
-    session.add_all([statistics])
-    await session.commit()
+    session.add(statistics)
     return statistics
 
 
@@ -234,7 +221,6 @@ async def create_payment_log(session: AsyncSession, user_id: int, amount: int, c
         provider_payment_charge_id=provider_payment_charge_id
     )
     session.add(payment)
-    await session.commit()
     return payment
 
 
@@ -245,7 +231,6 @@ async def update_payment_status(session: AsyncSession, telegram_payment_charge_i
         .where(Payment.telegram_payment_charge_id == telegram_payment_charge_id)
         .values(status=status)
     )
-    await session.commit()
 
 
 async def get_last_payment(session: AsyncSession, user_id: int):
@@ -394,7 +379,6 @@ async def toggle_lifetime_premium(session: AsyncSession, user_id: int) -> bool |
             .where(Users.user_id == user_id)
             .values(is_lifetime_premium=False)
         )
-        await session.commit()
         await cache_delete(f"user:{user_id}")
         return False
     elif not user.is_lifetime_premium:
@@ -403,7 +387,6 @@ async def toggle_lifetime_premium(session: AsyncSession, user_id: int) -> bool |
             .where(Users.user_id == user_id)
             .values(is_lifetime_premium=True)
         )
-        await session.commit()
         await cache_delete(f"user:{user_id}")
         return True
     return None
@@ -419,7 +402,6 @@ async def ban_user(session: AsyncSession, user_id: int) -> None:
 
     user.is_banned = True
     session.add(user)
-    await session.commit()
     await cache_delete(f"user:{user_id}")
 
 async def unban_user(session: AsyncSession, user_id: int) -> None:
@@ -433,7 +415,6 @@ async def unban_user(session: AsyncSession, user_id: int) -> None:
 
     user.is_banned = False
     session.add(user)
-    await session.commit()
     await cache_delete(f"user:{user_id}")
 
 async def list_of_banned_users(session: AsyncSession) -> list[Users]:
@@ -476,8 +457,6 @@ async def update_global_settings(session: AsyncSession, key: str, value) -> None
     else:
         setting = BotSetting(key=key, value=value)
         session.add(setting)
-
-    await session.commit()
 
     await cache_delete("global_settings")
 
@@ -590,7 +569,6 @@ async def upsert_media_cache(session: AsyncSession, dto: MediaCacheDTO) -> Media
     ).returning(MediaCache)
 
     result = await session.execute(do_update_stmt)
-    await session.commit()
 
     updated_obj = result.scalar_one()
     return MediaCacheDTO.model_validate(updated_obj, from_attributes=True)
@@ -601,7 +579,6 @@ async def delete_media_cache(session: AsyncSession, cache_key: str) -> bool:
 
     stmt = delete(MediaCache).where(MediaCache.cache_key == cache_key).returning(MediaCache.media_id)
     result = await session.execute(stmt)
-    await session.commit()
 
     deleted_id = result.scalar_one_or_none()
     return deleted_id is not None
