@@ -10,6 +10,9 @@ from arq.connections import RedisSettings
 import aiofiles
 from bs4 import BeautifulSoup
 from PIL import Image, ImageFile
+import pillow_heif
+
+pillow_heif.register_heif_opener()
 
 logger = logging.getLogger(__name__)
 
