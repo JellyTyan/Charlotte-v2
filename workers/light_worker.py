@@ -286,14 +286,14 @@ async def universal_download(
         async with AsyncSession(impersonate=impersonate) as session:
             async with session.stream("GET", url, headers=headers) as response:
                 if response.status_code not in [200, 206]:
-                    raise Exception(f"Download failed: {response.status_code}")
+                    raise RuntimeError(f"Download failed: HTTP {response.status_code}")
 
                 # Check content length
                 content_length = response.headers.get("Content-Length")
                 if content_length:
                     total_size = int(content_length) + start_byte
                     if max_size and total_size > max_size:
-                        raise Exception(f"File too large: {total_size} bytes (max: {max_size})")
+                        raise RuntimeError(f"File too large: {total_size} bytes (max: {max_size})")
 
                 mode = "ab" if (resume and start_byte > 0) else "wb"
                 total_written = start_byte
@@ -303,19 +303,21 @@ async def universal_download(
                         total_written += len(chunk)
 
                         if max_size and total_written > max_size:
-                            raise Exception(f"File size exceeded: {total_written} bytes (max: {max_size})")
+                            raise RuntimeError(f"File size exceeded: {total_written} bytes (max: {max_size})")
 
                         await f.write(chunk)
 
                 logger.info(f"Download complete: {total_written} bytes")
                 return str(dest_path)
 
+    except RuntimeError:
+        raise
     except Exception as e:
+        # Wrap curl_cffi / any other non-serializable exception so ARQ can pickle it
         logger.error(f"Download failed: {e}")
-        # Clean up partial file if not resuming
         if not resume and dest_path.exists():
             dest_path.unlink()
-        raise
+        raise RuntimeError(str(e)) from None
 
 
 async def universal_stream_download(

@@ -206,6 +206,108 @@ class TiktokService:
             logger.warning(f"Failed to resolve URL {url}: {e}")
             return url
 
+    # -------------------------------------------------------------------------
+    # Video download helpers (tried in order: gallery-dl → yt-dlp → tikwm)
+    # -------------------------------------------------------------------------
+
+    async def _download_via_gallery_dl(self, metadata: MediaMetadata) -> str:
+        """
+        Attempt 1: download via gallery-dl (ARQ heavy worker).
+        Returns path to the downloaded file.
+        Raises Exception on any failure so the caller can fall through.
+        """
+        video_filename = f"{sanitize_filename(metadata.performer)}_{int(time.time())}.mp4"
+        job = await self.arq.enqueue_job(
+            "universal_gallery_dl",
+            url=metadata.url,
+            output_dir=self.output_path,
+            filename=video_filename,
+            _queue_name='heavy'
+        )
+        result = await job.result()
+        files = result.get("files", [])
+        if not files:
+            raise Exception("gallery-dl returned no files")
+        return files[0]
+
+    async def _download_via_ytdlp(self, metadata: MediaMetadata) -> str:
+        """
+        Attempt 2: download via yt-dlp with chrome impersonation + TikTok cookies.
+        Returns path to the downloaded file.
+        Raises Exception on any failure so the caller can fall through.
+        """
+        from .utils import random_cookie_file
+        cookie_file = random_cookie_file()
+
+        job = await self.arq.enqueue_job(
+            "universal_ytdlp_extract",
+            url=metadata.url,
+            extract_only=False,
+            output_dir=self.output_path,
+            cookies_file=cookie_file,
+            extra_opts={
+                "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+                "merge_output_format": "mp4",
+                "noplaylist": True,
+            },
+            _queue_name='heavy'
+        )
+        result = await job.result()
+        filepath = result.get("filepath")
+        if not filepath or not os.path.exists(filepath):
+            raise Exception(f"yt-dlp did not produce a file (reported: {filepath})")
+        return filepath
+
+    _TIKWM_BASE = "https://www.tikwm.com"
+
+    def _tikwm_abs_url(self, path: str) -> str:
+        """Convert a tikwm relative path to an absolute URL."""
+        if not path:
+            return path
+        if path.startswith("http"):
+            return path
+        return f"{self._TIKWM_BASE}{path}"
+
+    async def _download_via_tikwm(self, metadata: MediaMetadata) -> str:
+        """
+        Attempt 3 (last resort): download directly from tikwm CDN URL.
+        Returns path to the downloaded file.
+        Raises Exception on any failure.
+        """
+        tikwm_data = metadata.extra.get("tikwm_data", {})
+        raw_url = (
+            tikwm_data.get("hdplay")
+            or tikwm_data.get("play")
+            or tikwm_data.get("wmplay")
+            or metadata.extra.get("video_url")
+        )
+        if not raw_url:
+            raise Exception("No tikwm video URL available in metadata")
+
+        # tikwm returns relative paths like /video/media/play/...  — make absolute
+        video_url = self._tikwm_abs_url(raw_url)
+        logger.debug(f"[TikTok/tikwm] Downloading from: {video_url}")
+
+        filename = f"{sanitize_filename(metadata.performer)}_{int(time.time())}_tikwm.mp4"
+        filepath = os.path.join(self.output_path, filename)
+
+        job = await self.arq.enqueue_job(
+            'universal_download',
+            url=video_url,
+            destination=filepath,
+            _queue_name='light'
+        )
+        try:
+            result = await job.result()
+        except Exception as e:
+            raise Exception(f"tikwm CDN download job failed: {e}") from None
+
+        if not result or not os.path.exists(result):
+            raise Exception(f"tikwm CDN download returned no file (got: {result})")
+        return result
+
+    # -------------------------------------------------------------------------
+
     async def _process_video(self, metadata: MediaMetadata) -> List[MediaContent]:
         logger.info(f"Processing as Video: {metadata.url}")
         if not self.arq:
@@ -216,44 +318,50 @@ class TiktokService:
                 is_logged=True
             )
 
-        video_filename = f"{metadata.performer}_{int(time.time())}.mp4"
-        
-        # Use gallery-dl for download
-        job = await self.arq.enqueue_job(
-            "universal_gallery_dl",
-            url=metadata.url,
-            output_dir=self.output_path,
-            filename=video_filename,
-            _queue_name='heavy'
-        )
-        
+        video_path: Optional[str] = None
+        last_error: Optional[Exception] = None
+
+        # --- Attempt 1: gallery-dl ---
         try:
-            result = await job.result()
-            files = result.get("files", [])
-            if not files:
-                raise Exception("No files downloaded by gallery-dl")
-            video_path = files[0]
+            logger.info(f"[TikTok] Trying gallery-dl for: {metadata.url}")
+            video_path = await self._download_via_gallery_dl(metadata)
+            logger.info(f"[TikTok] gallery-dl succeeded → {video_path}")
         except Exception as e:
+            logger.warning(f"[TikTok] gallery-dl failed: {e}")
+            last_error = e
+
+        # --- Attempt 2: yt-dlp (impersonate chrome + cookies) ---
+        if not video_path:
+            try:
+                logger.info(f"[TikTok] Trying yt-dlp for: {metadata.url}")
+                video_path = await self._download_via_ytdlp(metadata)
+                logger.info(f"[TikTok] yt-dlp succeeded → {video_path}")
+            except Exception as e:
+                logger.warning(f"[TikTok] yt-dlp failed: {e}")
+                last_error = e
+
+        # --- Attempt 3: tikwm CDN direct download ---
+        if not video_path:
+            try:
+                logger.info(f"[TikTok] Trying tikwm CDN for: {metadata.url}")
+                video_path = await self._download_via_tikwm(metadata)
+                logger.info(f"[TikTok] tikwm succeeded → {video_path}")
+            except Exception as e:
+                logger.warning(f"[TikTok] tikwm failed: {e}")
+                last_error = e
+
+        # --- All methods exhausted ---
+        if not video_path:
             raise BotError(
                 code=ErrorCode.DOWNLOAD_FAILED,
                 service=Services.TIKTOK,
-                message=f"Failed to download video with gallery-dl: {e}",
+                message=f"All download methods failed. Last error: {last_error}",
                 url=metadata.url,
                 critical=True,
                 is_logged=True
             )
 
         fixed_video, thumbnail, width, height, duration = await process_video_for_telegram(self.arq, video_path)
-
-        if not video_path:
-            raise BotError(
-                code=ErrorCode.DOWNLOAD_FAILED,
-                message="Failed to download video file",
-                url=metadata.url,
-                service=Services.TIKTOK,
-                is_logged=True,
-                critical=True
-            )
 
         return [
             MediaContent(
