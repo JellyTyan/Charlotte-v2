@@ -19,7 +19,7 @@ services:
       - redis
       - postgres
       - migrations
-      - nginx
+      - telegram-bot-api
 
   redis:
     image: redis:7-alpine
@@ -78,19 +78,6 @@ services:
     networks:
       - charlotte-net
     restart: always
-
-  nginx:
-    image: nginx:alpine
-    container_name: charlotte_nginx
-    restart: always
-    ports:
-      - "8080:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - telegram-bot-api
-    networks:
-      - charlotte-net
 
   telegram-bot-api:
     image: aiogram/telegram-bot-api:latest
