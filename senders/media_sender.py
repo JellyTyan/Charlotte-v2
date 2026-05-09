@@ -170,7 +170,7 @@ class MediaSender:
             return cache_id
 
         if item.path:
-            return types.FSInputFile(item.path)
+            return types.FSInputFile(os.path.abspath(item.path))
 
         if item.content and item.filename:
             return types.BufferedInputFile(item.content, item.filename)
@@ -181,7 +181,7 @@ class MediaSender:
 
     def _get_thumb(self, cover_path: Optional[Path]) -> Optional[types.FSInputFile]:
         """Возвращает обложку, если она есть"""
-        return types.FSInputFile(cover_path) if cover_path else None
+        return types.FSInputFile(os.path.abspath(cover_path)) if cover_path else None
 
     def _check_file_size(self, item: MediaContent, is_audio: bool = False) -> None:
         """Проверка размера файла на соответствие лимитам Telegram API"""
