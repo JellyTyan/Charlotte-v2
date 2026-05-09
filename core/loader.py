@@ -19,7 +19,7 @@ if not BOT_TOKEN:
 session = None
 if config.TELEGRAM_LOCAL:
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(config.TELEGRAM_SERVER_URL)
+        api=TelegramAPIServer.from_base(config.TELEGRAM_SERVER_URL, is_local=True)
     )
 
 # Initialize the Telegram bot with the given token and parse mode set to HTML
