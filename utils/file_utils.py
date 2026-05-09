@@ -77,7 +77,10 @@ async def process_video_for_telegram(arq, video_path: str) -> Tuple[str, Optiona
     if await aios.path.exists(video_path):
         await aios.remove(video_path)
 
-    return fixed_path, thumb_path, width, height, duration
+    # Only return thumbnail path if the file was actually created
+    actual_thumb = thumb_path if await aios.path.exists(thumb_path) else None
+
+    return fixed_path, actual_thumb, width, height, duration
 
 
 def sanitize_filename(s: str, restricted: bool = False, is_id: bool = False) -> str:
