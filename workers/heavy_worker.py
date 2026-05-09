@@ -387,7 +387,7 @@ async def universal_gallery_dl(
 
     return {
         "items": items,
-        "files": files,
+        "files": [os.path.normpath(f) for f in files],
     }
 
 
@@ -586,7 +586,7 @@ async def universal_ffmpeg_process(
                         thumb_cmd = [
                             "ffmpeg", "-i", output_file,
                             "-ss", "00:00:01", "-vframes", "1",
-                            "-s", f"{width}x{height}",
+                            "-vf", f"scale={width}:{height},format=yuv420p",
                             "-y", thumb_path
                         ]
                         thumb_result = subprocess.run(thumb_cmd, capture_output=True, text=True, timeout=30)

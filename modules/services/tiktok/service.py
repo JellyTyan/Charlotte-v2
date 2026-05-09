@@ -24,7 +24,7 @@ class TiktokService:
     name = "TikTok"
     _download_executor = ThreadPoolExecutor(max_workers=10)
 
-    def __init__(self, output_path: str = "storage/temp/", arq=None) -> None:
+    def __init__(self, output_path: str = "storage/temp", arq=None) -> None:
         self.output_path = output_path
         self.arq = arq
 
