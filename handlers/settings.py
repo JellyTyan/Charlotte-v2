@@ -401,12 +401,12 @@ async def apply_profile_setting(callback: CallbackQuery, i18n: TranslatorRunner,
 
     chat_id = callback.message.chat.id
     
-    if key == "bot_sign" and new_value == False:
-        from storage.db.crud import get_user
-        user = await get_user(db_session, callback.from_user.id)
-        if not user or not user.is_premium:
-            await callback.answer("🌟 Disabling the Bot Ad requires an active Sponsorship (100 Stars)!", show_alert=True)
-            return
+    # if key == "bot_sign" and new_value == False:
+    #     from storage.db.crud import get_user
+    #     user = await get_user(db_session, callback.from_user.id)
+    #     if not user or not user.is_premium:
+    #         await callback.answer("🌟 Disabling the Bot Ad requires an active Sponsorship (100 Stars)!", show_alert=True)
+    #         return
 
     settings, is_group = await get_settings_obj(db_session, chat_id, callback.from_user.id)
     setattr(settings.profile, key, new_value)
