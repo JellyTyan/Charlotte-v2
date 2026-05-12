@@ -414,10 +414,7 @@ class MediaSender:
                 
                 user_settings = await get_user_settings(db_session, message.from_user.id)
                 if user_settings:
-                    if is_premium:
-                        show_ad = user_settings.profile.bot_sign
-                    else:
-                        show_ad = True
+                    show_ad = user_settings.profile.bot_sign
 
             logger.info(
                 f"Sending to {message.chat.id}: {len(media_items)} media, {len(audio_items)} audio, {len(gif_items)} gif"
