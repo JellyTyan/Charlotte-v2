@@ -27,11 +27,16 @@ class Users(Base):
             return True
         if not self.premium_ends:
             return False
+
+        premium_ends = self.premium_ends
+        if isinstance(premium_ends, datetime.date) and not isinstance(premium_ends, datetime.datetime):
+            premium_ends = datetime.datetime.combine(premium_ends, datetime.time.max)
+
         # If premium_ends is naive, compare with naive utcnow
         now = datetime.datetime.now(timezone.utc)
-        if self.premium_ends.tzinfo is None:
+        if getattr(premium_ends, 'tzinfo', None) is None:
             now = now.replace(tzinfo=None)
-        return self.premium_ends > now
+        return premium_ends > now
 
 
 class Chats(Base):
