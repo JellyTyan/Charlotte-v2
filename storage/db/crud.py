@@ -83,7 +83,7 @@ async def get_user_settings(session: AsyncSession, user_id: int) -> UserSettings
     else:
         return UserSettingsJson.model_validate({})
 
-async def update_user_premium(session: AsyncSession, user_id: int, premium_ends: datetime.date):
+async def update_user_premium(session: AsyncSession, user_id: int, premium_ends: datetime.datetime):
     await session.execute(
         update(Users)
         .where(Users.user_id == user_id)
@@ -97,6 +97,10 @@ async def grant_sponsorship(session: AsyncSession, user_id: int, days: int, star
         user = await create_user(session, user_id)
         
     current_end = user.premium_ends if user.premium_ends else datetime.datetime.now(datetime.timezone.utc)
+    
+    if isinstance(current_end, datetime.date) and not isinstance(current_end, datetime.datetime):
+        current_end = datetime.datetime.combine(current_end, datetime.time.min).replace(tzinfo=datetime.timezone.utc)
+        
     # If it's already expired, start from now
     if current_end < datetime.datetime.now(datetime.timezone.utc):
         current_end = datetime.datetime.now(datetime.timezone.utc)
