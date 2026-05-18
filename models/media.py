@@ -15,6 +15,8 @@ class MediaContent:
     type: MediaType
     path: Optional[Path] = None
     content: Optional[bytes] = None
+    compressed_path: Optional[Path] = None
+    compressed_content: Optional[bytes] = None
     telegram_file_id: Optional[str] = None
     telegram_document_file_id: Optional[str] = None
     cover_file_id: Optional[str] = None

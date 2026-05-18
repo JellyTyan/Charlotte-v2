@@ -169,6 +169,12 @@ class MediaSender:
         if cache_id:
             return cache_id
 
+        if not as_document:
+            if item.compressed_path:
+                return types.FSInputFile(os.path.abspath(item.compressed_path))
+            if getattr(item, "compressed_content", None) and item.filename:
+                return types.BufferedInputFile(item.compressed_content, item.filename)
+
         if item.path:
             return types.FSInputFile(os.path.abspath(item.path))
 
@@ -183,12 +189,22 @@ class MediaSender:
         """Возвращает обложку, если она есть"""
         return types.FSInputFile(os.path.abspath(cover_path)) if cover_path else None
 
-    def _check_file_size(self, item: MediaContent, is_audio: bool = False) -> None:
+    def _check_file_size(self, item: MediaContent, is_audio: bool = False, as_document: bool = False) -> None:
         """Проверка размера файла на соответствие лимитам Telegram API"""
-        if not item.path and not item.content:
+        
+        path_to_check = item.path
+        content_to_check = item.content
+        
+        if not as_document and item.type == MediaType.PHOTO:
+            if item.compressed_path:
+                path_to_check = item.compressed_path
+            elif getattr(item, "compressed_content", None):
+                content_to_check = item.compressed_content
+
+        if not path_to_check and not content_to_check:
             return
 
-        size_mb = (item.path.stat().st_size if item.path else len(item.content)) / (
+        size_mb = (path_to_check.stat().st_size if path_to_check else len(content_to_check)) / (
             1024 * 1024
         )
 
@@ -201,7 +217,7 @@ class MediaSender:
         )
 
         if size_mb > max_size_mb:
-            filename = item.path.name if item.path else (item.filename or "unknown")
+            filename = path_to_check.name if path_to_check else (item.filename or "unknown")
             raise BotError(
                 code=ErrorCode.LARGE_FILE,
                 message=f"File {filename} is {size_mb:.1f}MB (limit: {max_size_mb}MB)",
@@ -375,10 +391,36 @@ class MediaSender:
             )
 
         try:
+            # 0. Сжимаем большие фото (Telegram Photo limit = 10MB)
+            for item in content:
+                if item.type == MediaType.PHOTO:
+                    size = 0
+                    if item.path:
+                        size = item.path.stat().st_size
+                    elif item.content:
+                        size = len(item.content)
+                    
+                    if size > 10 * 1024 * 1024:
+                        try:
+                            if item.path:
+                                from utils.file_utils import compress_image_sync
+                                new_path = await asyncio.to_thread(compress_image_sync, str(item.path))
+                                if new_path and new_path != str(item.path):
+                                    item.compressed_path = Path(new_path)
+                            elif item.content:
+                                from utils.file_utils import compress_image_bytes_sync
+                                new_content = await asyncio.to_thread(compress_image_bytes_sync, item.content)
+                                if new_content:
+                                    item.compressed_content = new_content
+                        except Exception as e:
+                            logger.error(f"Failed to compress photo: {e}")
+
             # 1. Сразу собираем пути для гарантированной очистки (Броня от утечек памяти)
             for item in content:
                 if item.path:
                     self._files_to_cleanup.append(item.path)
+                if item.compressed_path:
+                    self._files_to_cleanup.append(item.compressed_path)
                 if item.cover:
                     self._files_to_cleanup.append(item.cover)
                 if item.full_cover:
@@ -518,7 +560,7 @@ class MediaSender:
 
             # Сборка альбома
             for item in group_items:
-                self._check_file_size(item, is_audio=False)
+                self._check_file_size(item, is_audio=False, as_document=send_as_raw)
                 media_input = self._get_input_media(item, as_document=send_as_raw)
 
                 if send_as_raw:
@@ -664,7 +706,7 @@ class MediaSender:
         )
         send_as_raw = getattr(service_settings, "raw", False)
 
-        self._check_file_size(gif, is_audio=False)
+        self._check_file_size(gif, is_audio=False, as_document=send_as_raw)
         media_input = self._get_input_media(gif, as_document=send_as_raw)
 
         action = "upload_document" if send_as_raw else "upload_video"
