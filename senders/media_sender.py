@@ -489,7 +489,11 @@ class MediaSender:
                         [ReactionTypeEmoji(emoji=random.choice(emoji_pool))]
                     )
                 except Exception as e:
-                    logger.warning(f"Failed to react: {e}")
+                    error_msg = str(e)
+                    if "message to react not found" in error_msg or "REACTION_INVALID" in error_msg:
+                        logger.debug(f"Failed to react (ignored expected error): {e}")
+                    else:
+                        logger.warning(f"Failed to react: {e}")
 
             # 8. Если дамп упал, но юзеру доставили (сгенерировался file_id), сохраняем кэш постфактум
             if not dump_success and cache_key and db_session and service:
