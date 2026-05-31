@@ -45,28 +45,63 @@ from modules.services.youtube.handler import YOUTUBE_REGEX
 from modules.services.youtube.utils import get_cache_key as youtube_cache_key
 
 from modules.services.ytmusic.handler import YTMUSIC_REGEX
-from modules.services.ytmusic.service import cache_check as ytmusic_cache_key
-
 from modules.services.soundcloud.handler import SOUNDCLOUD_REGEX
-from modules.services.soundcloud.utils import get_cache_key as soundcloud_cache_key
-
 from modules.services.spotify.handler import SPOTIFY_REGEX
-from modules.services.spotify.utils import get_cache_key as spotify_cache_key
-
 from modules.services.deezer.handler import DEEZER_REGEX
-from modules.services.deezer.utils import get_cache_key as deezer_cache_key
 
 from modules.services.nicovideo.handler import NICOVIDEO_REGEX
 from modules.services.nicovideo.utils import get_cache_key as nicovideo_cache_key
 
 from modules.services.apple_music.handler import APPLE_REGEX as APPLE_MUSIC_REGEX
-from modules.services.apple_music.utils import get_cache_key as apple_music_cache_key
 
 from modules.services.bluesky.handler import BLUESKY_REGEX
 from modules.services.bluesky.utils import get_cache_key as bluesky_cache_key
 
 from modules.services.twitch.handler import TWITCH_REGEX
 from modules.services.twitch.utils import get_cache_key as twitch_cache_key
+
+
+def apple_music_cache_key(url: str) -> str | None:
+    patterns = [
+        r"music\.apple\.com/[a-z]{2}/song/(?:[^/]+/)?(?P<id>\d+)",
+        r"music\.apple\.com/[a-z]{2}/album/(?:[^/]+/)?\d+.*?[?&]i=(?P<id>\d+)",
+    ]
+    for pattern in patterns:
+        if m := re.search(pattern, url):
+            return f"apple:{int(m.group('id'))}"
+    return None
+
+
+def spotify_cache_key(url: str) -> str | None:
+    match = re.search(r"/track/([\w-]+)", url)
+    if match:
+        return f"spotify:{match.group(1)}"
+    return None
+
+
+def deezer_cache_key(url: str) -> str | None:
+    match = re.search(r"/track/(\d+)", url)
+    if match:
+        return f"deezer:{match.group(1)}"
+    return None
+
+
+def soundcloud_cache_key(url: str) -> str | None:
+    match = re.search(r"soundcloud\.com/([^/?#]+/[^/?#]+)", url)
+    if match:
+        return f"sc:{match.group(1)}"
+    if "on.soundcloud.com" in url:
+        clean_url = url.split('?')[0].rstrip('/')
+        hashed = hashlib.md5(clean_url.encode('utf-8')).hexdigest()
+        return f"sc:{hashed}"
+    return None
+
+
+def ytmusic_cache_key(url: str, format_choice: str = None) -> str | None:
+    match = re.search(r"v=([\w-]+)", url)
+    if match:
+        return f"ytmusic:{match.group(1)}"
+    return None
 
 inline_router = Router(name="inline_handler")
 

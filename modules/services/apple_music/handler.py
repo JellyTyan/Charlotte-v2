@@ -13,17 +13,31 @@ from core.config import Config
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.service_list import Services
+from models.media_cache import MediaCacheDTO, CacheMetadata
 from senders.media_sender import MediaSender
-from storage.db.crud import get_chat_settings, get_user_settings
+from storage.db.crud import get_chat_settings, get_user_settings, get_media_cache, upsert_media_cache
 from tasks.task_manager import task_manager
 from utils.arq_pool import get_arq_pool
 from utils.file_utils import delete_files
 from utils.statistics_helper import log_download_event
 
-from .utils import cache_check
-
 apple_router = Router(name="applemusic")
 logger = logging.getLogger(__name__)
+
+async def cache_check(session: AsyncSession, cache_key: str) -> MediaContent | None:
+    cached = await get_media_cache(session, cache_key)
+    if cached:
+        return MediaContent(
+            type=MediaType.AUDIO,
+            telegram_file_id=cached.telegram_file_id,
+            telegram_document_file_id=cached.telegram_document_file_id,
+            cover_file_id=cached.data.cover,
+            full_cover_file_id=cached.data.full_cover,
+            title=cached.data.title,
+            performer=cached.data.author,
+            duration=cached.data.duration
+        )
+    return None
 
 APPLE_REGEX = r"^https?:\/\/music\.apple\.com\/[a-z]{2}\/(album|playlist|song)\/[^\s]+$"
 
