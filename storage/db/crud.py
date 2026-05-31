@@ -592,3 +592,21 @@ async def delete_media_cache(session: AsyncSession, cache_key: str) -> bool:
 
     deleted_id = result.scalar_one_or_none()
     return deleted_id is not None
+
+
+async def clear_all_media_cache(session: AsyncSession) -> int:
+    """Удаляет все записи из кэша. Возвращает количество удаленных записей."""
+    stmt = delete(MediaCache)
+    result = await session.execute(stmt)
+    return result.rowcount
+
+
+async def clear_old_music_cache(session: AsyncSession) -> int:
+    """Удаляет только старый музыкальный кэш (начинающийся с 'apple:', 'spotify:', 'soundcloud:', 'ytmusic:', 'deezer:').
+    Возвращает количество удаленных записей.
+    """
+    prefixes = ["apple:", "spotify:", "soundcloud:", "ytmusic:", "deezer:"]
+    conditions = [MediaCache.cache_key.like(f"{prefix}%") for prefix in prefixes]
+    stmt = delete(MediaCache).where(or_(*conditions))
+    result = await session.execute(stmt)
+    return result.rowcount

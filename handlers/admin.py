@@ -36,6 +36,8 @@ from storage.db.crud import (
     get_all_chat_ids,
     get_db_overview_stats,
     get_cache_counts_by_service,
+    clear_all_media_cache,
+    clear_old_music_cache,
     grant_sponsorship
 )
 from states import NewsSpamGroup
@@ -84,6 +86,12 @@ panel_kb = InlineKeyboardMarkup(inline_keyboard=[
     [
         InlineKeyboardButton(text="📝 Get Logs", callback_data="admin_panel_get_logs"),
         InlineKeyboardButton(text="📰 News spam", callback_data="admin_panel_news"),
+    ],
+    [
+        InlineKeyboardButton(text="🗑 Сбросить кеш БД", callback_data="admin_panel_clear_db_cache"),
+    ],
+    [
+        InlineKeyboardButton(text="🎵 Сбросить старый муз. кеш", callback_data="admin_panel_clear_old_music_cache"),
     ],
 ])
 
@@ -831,4 +839,36 @@ async def admin_clean_stats_confirm(callback: CallbackQuery, state: FSMContext):
             await callback.bot.send_message(callback.from_user.id, text, parse_mode=ParseMode.HTML, reply_markup=statistic_kb)
     else:
         await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=statistic_kb)
+    await callback.answer()
+
+
+@admin_router.callback_query(lambda c: c.data == "admin_panel_clear_db_cache")
+async def admin_panel_clear_db_cache_handler(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession):
+    cleared_count = await clear_all_media_cache(db_session)
+    await db_session.commit()
+    
+    text = f"✅ Кеш успешно сброшен!\nУдалено записей: <b>{cleared_count}</b>"
+    
+    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
+        if callback.bot is None:
+            return
+        await callback.bot.send_message(callback.from_user.id, text, parse_mode=ParseMode.HTML, reply_markup=panel_kb)
+    else:
+        await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=panel_kb)
+    await callback.answer()
+
+
+@admin_router.callback_query(lambda c: c.data == "admin_panel_clear_old_music_cache")
+async def admin_panel_clear_old_music_cache_handler(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession):
+    cleared_count = await clear_old_music_cache(db_session)
+    await db_session.commit()
+    
+    text = f"✅ Старый музыкальный кеш успешно сброшен!\nУдалено записей: <b>{cleared_count}</b>"
+    
+    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
+        if callback.bot is None:
+            return
+        await callback.bot.send_message(callback.from_user.id, text, parse_mode=ParseMode.HTML, reply_markup=panel_kb)
+    else:
+        await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=panel_kb)
     await callback.answer()

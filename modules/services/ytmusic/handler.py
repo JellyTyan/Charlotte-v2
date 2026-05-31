@@ -1,5 +1,7 @@
 import logging
+from pathlib import Path
 
+import httpx
 from aiogram import F, Router
 from aiogram.enums import ParseMode
 from aiogram.types import FSInputFile, Message
@@ -9,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import Config
 from models.errors import BotError, ErrorCode
+from models.media import MediaContent, MediaType
 from models.service_list import Services
 from senders.media_sender import MediaSender
 from storage.db.crud import get_chat_settings, get_user_settings
@@ -17,18 +20,92 @@ from utils.arq_pool import get_arq_pool
 from utils.file_utils import delete_files
 from utils.statistics_helper import log_download_event
 
-from .service import YTMusicService, cache_check
+from .utils import cache_check
 
 ytmusic_router = Router(name="ytmusic")
-
 logger = logging.getLogger(__name__)
-
 
 YTMUSIC_REGEX = r"https:\/\/music\.youtube\.com\/(watch\?v=[\w-]+(&[\w=-]+)*|playlist\?list=[\w-]+(&[\w=-]+)*)"
 
 
+async def fetch_core_download(
+    http_client: httpx.AsyncClient, payload: dict, url: str
+) -> dict:
+    res = await http_client.post(
+        "http://lossless-core:7856/download", json=payload, timeout=600
+    )
+    if res.status_code != 200:
+        raise BotError(
+            code=ErrorCode.INTERNAL_ERROR,
+            url=url,
+            message=f"Download Error:\n {res.text}",
+            is_logged=True,
+            critical=False,
+        )
+    return res.json()["data"]
+
+
+async def process_track(
+    track_meta: dict,
+    message: Message,
+    db_session: AsyncSession,
+    http_client: httpx.AsyncClient,
+    original_url: str,
+    chat_id: int,
+):
+    isrc = track_meta["isrc"]
+    cache_key = f"{isrc}:default"
+    send_manager = MediaSender()
+
+    cached = await cache_check(db_session, cache_key)
+    if cached:
+        logger.info(f"Serving cached quality for {isrc}")
+        await send_manager.send(
+            message,
+            content=[cached],
+            skip_reaction=True,
+            service="ytmusic",
+            db_session=db_session,
+        )
+        return True
+
+    payload = {"isrc": isrc, "search_query": f"{track_meta['artist']} - {track_meta['title']}", "lossless": False}
+    async with ChatActionSender.record_voice(bot=message.bot, chat_id=chat_id):
+        track_data = await task_manager.run_download(
+            user_id=chat_id,
+            url=original_url,
+            coro=fetch_core_download(http_client, payload, original_url),
+        )
+
+    media_content = MediaContent(
+        type=MediaType.AUDIO,
+        path=Path(track_data["audio_path"]),
+        duration=int(track_meta["duration"]),
+        title=track_meta["title"],
+        performer=track_meta["artist"],
+        cover=track_data["small_cover_path"],
+        full_cover=track_data["large_cover_path"],
+    )
+
+    await send_manager.send(
+        message,
+        content=[media_content],
+        skip_reaction=True,
+        service="ytmusic",
+        cache_key=cache_key,
+        db_session=db_session,
+    )
+    return True
+
+
 @ytmusic_router.message(F.text.regexp(YTMUSIC_REGEX))
-async def ytmusic_handler(message: Message, config: Config, i18n: TranslatorRunner, db_session: AsyncSession):
+async def ytmusic_handler(
+    message: Message,
+    config: Config,
+    i18n: TranslatorRunner,
+    db_session: AsyncSession,
+    http_client: httpx.AsyncClient,
+):
     if not message.text or not message.from_user:
         return
 
@@ -36,71 +113,32 @@ async def ytmusic_handler(message: Message, config: Config, i18n: TranslatorRunn
     chat_id = message.chat.id
     user_id = message.from_user.id
 
-    # --- Settings ---
-    if chat_id < 0:
-        settings = await get_chat_settings(db_session, chat_id)
-    else:
-        settings = await get_user_settings(db_session, chat_id)
-
-    # --- Initialize service ---
-    arq = await get_arq_pool('light')
-    service = YTMusicService(arq=arq)
+    settings = (
+        await get_chat_settings(db_session, chat_id)
+        if chat_id < 0
+        else await get_user_settings(db_session, chat_id)
+    )
 
     async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=chat_id):
-        media_metadata = await service.get_info(url, config=config)
-        if not media_metadata:
+        response = await http_client.post(
+            "http://lossless-core:7856/metadata", json={"url": url}
+        )
+        if response.status_code != 200:
             raise BotError(
                 code=ErrorCode.METADATA_ERROR,
-                message="Failed to get metadata",
                 url=url,
-                service=Services.YTMUSIC,
-                is_logged=True
+                message=f"Metadata Error:\n {response.text}",
+                is_logged=True,
+                critical=False,
             )
+        metadata = response.json()["data"]
 
-    # =========================================================================
-    # SINGLE TRACK
-    # =========================================================================
-    if media_metadata.media_type == "track":
-        if not media_metadata.performer or not media_metadata.title:
-            raise BotError(
-                code=ErrorCode.METADATA_ERROR,
-                message="Failed to get track metadata",
-                url=url,
-                service=Services.YTMUSIC,
-                is_logged=True
-            )
+    if metadata["type"] == "song":
+        await process_track(
+            metadata, message, db_session, http_client, url, chat_id
+        )
 
-        # Cache-first (нет лосслесс — один ключ без суффикса)
-        cache_key = media_metadata.cache_key
-
-        if cache_key:
-            cached = await cache_check(db_session, cache_key)
-            if cached:
-                send_manager = MediaSender()
-                await send_manager.send(message, [cached], service="ytmusic", db_session=db_session)
-                return
-
-        try:
-            async with ChatActionSender.record_voice(bot=message.bot, chat_id=chat_id):
-                media_content = await task_manager.run_download(
-                    user_id=user_id,
-                    url=url,
-                    coro=service.download(url)
-                )
-
-            if media_content:
-                send_manager = MediaSender()
-                await send_manager.send(message, media_content, service="ytmusic",
-                                        cache_key=cache_key, db_session=db_session)
-
-        except BotError as e:
-            await log_download_event(db_session, user_id, Services.YTMUSIC, 'failed_download')
-            raise e
-
-    # =========================================================================
-    # PLAYLIST
-    # =========================================================================
-    elif media_metadata.media_type == "playlist":
+    elif metadata["type"] in ["album", "playlist"]:
         if chat_id < 0 and not settings.profile.allow_playlists:
             raise BotError(
                 code=ErrorCode.NOT_ALLOWED,
@@ -108,64 +146,77 @@ async def ytmusic_handler(message: Message, config: Config, i18n: TranslatorRunn
                 service=Services.YTMUSIC,
             )
 
-        # Build info message
-        text = f"{media_metadata.title} by {media_metadata.performer}\n"
-        if media_metadata.description:
-            text += f"<i>{media_metadata.description}</i>\n"
-        text += i18n.get('total-tracks', count=media_metadata.extra.get('track_count', 'Unknown')) + "\n"
-        if media_metadata.extra.get('year'):
-            text += i18n.get('year', year=media_metadata.extra.get('year')) + "\n"
+        text = f"{metadata['title']} by {metadata['author']}\n"
+        if metadata.get("description"):
+            text += f"<i>{metadata['description']}</i>\n"
+        text += i18n.get("total-tracks", count=metadata["track_count"]) + "\n"
+        if metadata.get("release_date"):
+            text += i18n.get("release-date", date=metadata["release_date"]) + "\n"
 
-        if media_metadata.cover:
-            await message.answer_photo(
-                photo=FSInputFile(media_metadata.cover),
-                caption=text,
-                parse_mode=ParseMode.HTML
+        if metadata["cover"]:
+            arq = await get_arq_pool("light")
+            cover_job = await arq.enqueue_job(
+                "universal_download",
+                metadata["cover"],
+                f"storage/temp/ytmusic_album_{metadata['id']}.png",
             )
-            await delete_files([media_metadata.cover])
-        else:
-            await message.answer(text, parse_mode=ParseMode.HTML)
+            cover_path = await cover_job.result()
+            await message.answer_photo(
+                photo=FSInputFile(cover_path), caption=text, parse_mode=ParseMode.HTML
+            )
+            await delete_files([cover_path])
 
-        await message.reply(i18n.get('downloading-tracks'))
+        await message.reply(i18n.get("downloading-tracks"))
 
-        send_manager = MediaSender()
+        success_count, failed_count = 0, 0
+        skipped_cancelled = False
 
-        for track_meta in media_metadata.items:
-            # --- Cancellation check at top of every iteration ---
+        for track_meta in metadata["tracks"]:
             if task_manager.is_cancelled(user_id):
-                await message.answer(i18n.get('playlist-stopped'))
+                await message.answer(i18n.get("playlist-stopped"))
+                skipped_cancelled = True
                 break
 
-            try:
-                if not track_meta.performer or not track_meta.title:
-                    logger.warning("Skipping track with missing metadata")
-                    continue
-
-                track_cache_key = track_meta.cache_key
-
-                # Cache-first
-                if track_cache_key:
-                    cached = await cache_check(db_session, track_cache_key)
-                    if cached:
-                        await send_manager.send(message, [cached], skip_reaction=True,
-                                                service="ytmusic", db_session=db_session)
-                        continue
-
-                # Download using track URL
-                async with ChatActionSender.record_voice(bot=message.bot, chat_id=chat_id):
-                    media_content = await task_manager.run_download(
-                        user_id=user_id,
-                        url=track_meta.url,
-                        coro=service.download(track_meta.url)
-                    )
-
-                if media_content:
-                    await send_manager.send(message, media_content, skip_reaction=True,
-                                            service="ytmusic", cache_key=track_cache_key,
-                                            db_session=db_session)
-
-            except BotError as e:
-                logger.warning(f"Skipping track '{track_meta.title}': {e}")
-                await log_download_event(db_session, user_id, Services.YTMUSIC, 'failed_download')
-                await message.answer(i18n.get('skipped-track', title=track_meta.title))
+            if not track_meta.get("artist") or not track_meta.get("title"):
+                failed_count += 1
                 continue
+
+            try:
+                await process_track(
+                    track_meta,
+                    message,
+                    db_session,
+                    http_client,
+                    track_meta.get("url", url),
+                    chat_id,
+                )
+                success_count += 1
+            except BotError as e:
+                if e.code == ErrorCode.DOWNLOAD_CANCELLED:
+                    await message.answer(i18n.get("playlist-stopped"))
+                    skipped_cancelled = True
+                    break
+                logger.warning(f"Skipping track '{track_meta.get('title')}'")
+                await log_download_event(
+                    db_session, user_id, Services.YTMUSIC, "failed_download"
+                )
+                await message.answer(
+                    i18n.get("skipped-track", title=track_meta.get("title"))
+                )
+                failed_count += 1
+
+        if not skipped_cancelled:
+            if failed_count == 0:
+                await message.answer(i18n.get("all-tracks-success"))
+            else:
+                await message.answer(
+                    i18n.get(
+                        "download-stats", success=success_count, failed=failed_count
+                    )
+                )
+    else:
+        raise BotError(
+            code=ErrorCode.NOT_FOUND,
+            message="Unknown media type",
+            service=Services.YTMUSIC,
+        )

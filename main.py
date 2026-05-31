@@ -42,7 +42,7 @@ async def main():
     logger.info("⚙️ Setting up workflow data...")
     core_client = httpx.AsyncClient(
         base_url="http://lossless-core:7865",
-        # timeout=httpx.Timeout(30.0)
+        timeout=None
     )
     dp.workflow_data.update(
         http_client=core_client,
