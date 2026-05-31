@@ -16,11 +16,10 @@ async def sponsor_command(message: Message):
         "🌟 **Become a Charlotte Sponsor!**\n\n"
         "Unlock Sponsor features for 30 days while helping keep the project alive.\n\n"
         "💎 **Sponsor Benefits:**\n"
-        "- Download YT video in high quality\n"
+        "- Download large YouTube videos (>100MB, up to 1GB)\n"
         "- Trim Youtube Video\n"
-        "- NSFW content unlocked\n"
-        "- Your name gets added to the `/support` wall!\n"
-        "- Access to priority download queues\n\n"
+        "- NSFW content unlocked (Twitter & Reddit)\n"
+        "- Your name gets added to the `/support` wall!\n\n"
         "⭐ Support Charlotte with 100 Stars to become a Sponsor for 30 days!"
     )
 
