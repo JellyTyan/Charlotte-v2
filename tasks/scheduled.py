@@ -68,7 +68,7 @@ async def notify_expired_premium(bot: Bot):
             from storage.db.models import Users
 
             async with database_manager.async_session() as session:
-                now = datetime.datetime.now(datetime.timezone.utc)
+                now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
                 # Query users whose premium has ended
                 result = await session.execute(
                     select(Users).where(

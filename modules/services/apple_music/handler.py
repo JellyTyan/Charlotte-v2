@@ -1,5 +1,7 @@
 import logging
+from pathlib import Path
 
+import httpx
 from aiogram import F, Router
 from aiogram.enums import ParseMode
 from aiogram.types import FSInputFile, Message
@@ -9,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import Config
 from models.errors import BotError, ErrorCode
+from models.media import MediaContent, MediaType
 from models.service_list import Services
 from senders.media_sender import MediaSender
 from storage.db.crud import get_chat_settings, get_user_settings
@@ -17,47 +20,165 @@ from utils.arq_pool import get_arq_pool
 from utils.file_utils import delete_files
 from utils.statistics_helper import log_download_event
 
-from .service import AppleMusicService
 from .utils import cache_check
 
 apple_router = Router(name="applemusic")
-
 logger = logging.getLogger(__name__)
-
 
 APPLE_REGEX = r"^https?:\/\/music\.apple\.com\/[a-z]{2}\/(album|playlist|song)\/[^\s]+$"
 
+
+async def fetch_core_download(
+    http_client: httpx.AsyncClient, payload: dict, url: str
+) -> dict:
+    res = await http_client.post(
+        "http://lossless-core:7856/download", json=payload, timeout=600
+    )
+    if res.status_code != 200:
+        raise BotError(
+            code=ErrorCode.INTERNAL_ERROR,
+            url=url,
+            message=f"Download Error:\n {res.text}",
+            is_logged=True,
+            critical=False,
+        )
+    return res.json()["data"]
+
+
+async def process_track(
+    track_meta: dict,
+    message: Message,
+    db_session: AsyncSession,
+    http_client: httpx.AsyncClient,
+    lossless_mode: bool,
+    original_url: str,
+    chat_id: int,
+):
+    isrc = track_meta["isrc"]
+    cache_key_lossless = f"{isrc}:lossless"
+    cache_key_default = f"{isrc}:default"
+    send_manager = MediaSender()
+
+    target_cache_key = cache_key_lossless if lossless_mode else cache_key_default
+    cached = await cache_check(db_session, target_cache_key)
+
+    if cached:
+        logger.info(f"Serving cached quality for {isrc}")
+        await send_manager.send(
+            message,
+            content=[cached],
+            skip_reaction=True,
+            service="applemusic",
+            db_session=db_session,
+        )
+        return True
+
+    track_data = None
+    current_lossless = lossless_mode
+    search_query = f"{track_meta['artist']} - {track_meta['title']}"
+
+    if current_lossless:
+        try:
+            payload = {"isrc": isrc, "search_query": search_query, "lossless": True}
+            async with ChatActionSender.record_voice(bot=message.bot, chat_id=chat_id):
+                track_data = await task_manager.run_download(
+                    user_id=chat_id,
+                    url=original_url,
+                    coro=fetch_core_download(http_client, payload, original_url),
+                )
+        except BotError as e:
+            if e.code == ErrorCode.DOWNLOAD_CANCELLED:
+                raise e
+            logger.info(
+                f"Lossless unavailable for {isrc}, falling back to standard quality"
+            )
+            current_lossless = False
+
+    if not current_lossless:
+        cached_default = await cache_check(db_session, cache_key_default)
+        if cached_default:
+            await send_manager.send(
+                message,
+                content=[cached_default],
+                skip_reaction=True,
+                service="applemusic",
+                db_session=db_session,
+            )
+            return True
+
+        payload = {"isrc": isrc, "search_query": search_query, "lossless": False}
+        async with ChatActionSender.record_voice(bot=message.bot, chat_id=chat_id):
+            track_data = await task_manager.run_download(
+                user_id=chat_id,
+                url=original_url,
+                coro=fetch_core_download(http_client, payload, original_url),
+            )
+
+    media_content = MediaContent(
+        type=MediaType.AUDIO,
+        path=Path(track_data["audio_path"]),
+        duration=int(track_meta["duration"]),
+        title=track_meta["title"],
+        performer=track_meta["artist"],
+        cover=track_data["small_cover_path"],
+        full_cover=track_data["large_cover_path"],
+    )
+
+    download_type = track_data.get("download_type", "standard")
+    final_cache_key = (
+        cache_key_lossless if download_type == "lossless" else cache_key_default
+    )
+
+    await send_manager.send(
+        message,
+        content=[media_content],
+        skip_reaction=True,
+        service="applemusic",
+        cache_key=final_cache_key,
+        db_session=db_session,
+    )
+    return True
+
+
 @apple_router.message(F.text.regexp(APPLE_REGEX))
-async def apple_handler(message: Message, config: Config, i18n: TranslatorRunner, db_session: AsyncSession):
+async def apple_handler(
+    message: Message,
+    config: Config,
+    i18n: TranslatorRunner,
+    db_session: AsyncSession,
+    http_client: httpx.AsyncClient,
+):
     url = message.text
     chat_id = message.chat.id
     user_id = message.from_user.id
 
-    # Getting chat/user settings
-    if chat_id < 0:
-        settings = await get_chat_settings(db_session, chat_id)
-    else:
-        settings = await get_user_settings(db_session, chat_id)
+    settings = (
+        await get_chat_settings(db_session, chat_id)
+        if chat_id < 0
+        else await get_user_settings(db_session, chat_id)
+    )
     lossless_mode = settings.services.applemusic.lossless if settings else False
 
-    # Initialize Apple Music Service
-    arq = await get_arq_pool('light')
-    service = AppleMusicService(arq=arq)
-
-    # Getting info
-    async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=message.chat.id):
-        media_metadata = await service.get_info(message.text, config=config)
-        if not media_metadata:
+    async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=chat_id):
+        response = await http_client.post(
+            "http://lossless-core:7856/metadata", json={"url": url}
+        )
+        if response.status_code != 200:
             raise BotError(
                 code=ErrorCode.METADATA_ERROR,
-                message="Failed to get metadata",
-                url=message.text,
-                service=Services.APPLE_MUSIC,
-                is_logged=True
+                url=url,
+                message=f"Metadata Error:\n {response.text}",
+                is_logged=True,
+                critical=False,
             )
+        metadata = response.json()["data"]
 
-    if media_metadata.media_type in ["album", "playlist"]:
-        # Check if playlists are allowed in chat
+    if metadata["type"] == "song":
+        await process_track(
+            metadata, message, db_session, http_client, lossless_mode, url, chat_id
+        )
+
+    elif metadata["type"] in ["album", "playlist"]:
         if chat_id < 0 and not settings.profile.allow_playlists:
             raise BotError(
                 code=ErrorCode.NOT_ALLOWED,
@@ -65,133 +186,78 @@ async def apple_handler(message: Message, config: Config, i18n: TranslatorRunner
                 service=Services.APPLE_MUSIC,
             )
 
-        # Build playlist info message
-        text = f"{media_metadata.title} by {media_metadata.performer}\n"
-        if media_metadata.media_type == "playlist":
-            text += f"<i>{media_metadata.description}</i>\n"
-        text += i18n.get('total-tracks', count=media_metadata.extra.get('track_count', 'Unknown')) + "\n"
-        if media_metadata.media_type == "album":
-            text += i18n.get('release-date', date=media_metadata.extra.get('release_date', 'Unknown')) + "\n"
-        if media_metadata.cover:
-            await message.answer_photo(
-                photo=FSInputFile(media_metadata.cover),
-                caption=text,
-                parse_mode=ParseMode.HTML
+        text = f"{metadata['title']} by {metadata['author']}\n"
+        if metadata.get("description"):
+            text += f"<i>{metadata['description']}</i>\n"
+        text += i18n.get("total-tracks", count=metadata["track_count"]) + "\n"
+        if metadata.get("release_date"):
+            text += i18n.get("release-date", date=metadata["release_date"]) + "\n"
+
+        if metadata["cover"]:
+            arq = await get_arq_pool("light")
+            cover_job = await arq.enqueue_job(
+                "universal_download",
+                metadata["cover"],
+                f"storage/temp/apple_album_{metadata['id']}.png",
             )
-            await delete_files([media_metadata.cover])
-        await message.reply(i18n.get('downloading-tracks'))
+            cover_path = await cover_job.result()
+            await message.answer_photo(
+                photo=FSInputFile(cover_path), caption=text, parse_mode=ParseMode.HTML
+            )
+            await delete_files([cover_path])
 
-        send_manager = MediaSender()
+        await message.reply(i18n.get("downloading-tracks"))
 
-        # Downloading
-        for track_meta in media_metadata.items:
+        success_count, failed_count = 0, 0
+        skipped_cancelled = False
+
+        for track_meta in metadata["tracks"]:
             if task_manager.is_cancelled(user_id):
-                await message.answer(i18n.get('playlist-stopped'))
+                await message.answer(i18n.get("playlist-stopped"))
+                skipped_cancelled = True
                 break
-            try:
-                if track_meta.performer is None or track_meta.title is None:
-                    logger.warning("Skipping track with missing metadata")
-                    continue
 
-                cache_key_lossless = track_meta.cache_key + ":lossless"
-                cache_key_default = track_meta.cache_key + ":default"
-
-                if lossless_mode:
-                    cached = await cache_check(db_session, cache_key_lossless)
-                else:
-                    cached = await cache_check(db_session, cache_key_default)
-
-                if cached:
-                    await send_manager.send(message, [cached], skip_reaction=True, service="applemusic", db_session=db_session)
-                    continue
-
-                try:
-                    async with ChatActionSender.record_voice(bot=message.bot, chat_id=message.chat.id):
-                        media_content = await task_manager.run_download(
-                            user_id=chat_id,
-                            url=track_meta.url,
-                            coro=service.download(track_meta, lossless_mode=lossless_mode)
-                        )
-                except BotError as e:
-                    if e.code == ErrorCode.LOSSLESS_UNAVAILABLE:
-                        # Tidal недоступен — проверяем дефолтный кэш без лишней скачки
-                        logger.info(f"Lossless unavailable for {track_meta.cache_key}, checking default cache")
-                        default_cached = await cache_check(db_session, cache_key_default)
-                        if default_cached:
-                            logger.info(f"Serving default from cache for {track_meta.cache_key}")
-                            await send_manager.send(message, [default_cached], skip_reaction=True, service="applemusic", db_session=db_session)
-                            continue
-                        # Дефолтного кэша нет — скачиваем стандарт
-                        async with ChatActionSender.record_voice(bot=message.bot, chat_id=message.chat.id):
-                            media_content = await task_manager.run_download(
-                                user_id=chat_id,
-                                url=track_meta.url,
-                                coro=service.download(track_meta, lossless_mode=False)
-                            )
-                    else:
-                        raise e
-
-                if media_content:
-                    if media_content.is_lossless:
-                        await send_manager.send(message, [media_content], skip_reaction=True, service="applemusic", cache_key=cache_key_lossless, db_session=db_session)
-                    else:
-                        await send_manager.send(message, [media_content], skip_reaction=True, service="applemusic", cache_key=cache_key_default, db_session=db_session)
-            except BotError as e:
-                logger.warning(f"Skipping track '{track_meta.title}': {e}")
-                await log_download_event(db_session, user_id, Services.APPLE_MUSIC, 'failed_download')
-                await message.answer(i18n.get('skipped-track', title=track_meta.title))
+            if not track_meta.get("artist") or not track_meta.get("title"):
+                failed_count += 1
                 continue
+
+            try:
+                await process_track(
+                    track_meta,
+                    message,
+                    db_session,
+                    http_client,
+                    lossless_mode,
+                    track_meta.get("url", url),
+                    chat_id,
+                )
+                success_count += 1
+            except BotError as e:
+                if e.code == ErrorCode.DOWNLOAD_CANCELLED:
+                    await message.answer(i18n.get("playlist-stopped"))
+                    skipped_cancelled = True
+                    break
+                logger.warning(f"Skipping track '{track_meta.get('title')}'")
+                await log_download_event(
+                    db_session, user_id, Services.APPLE_MUSIC, "failed_download"
+                )
+                await message.answer(
+                    i18n.get("skipped-track", title=track_meta.get("title"))
+                )
+                failed_count += 1
+
+        if not skipped_cancelled:
+            if failed_count == 0:
+                await message.answer(i18n.get("all-tracks-success"))
+            else:
+                await message.answer(
+                    i18n.get(
+                        "download-stats", success=success_count, failed=failed_count
+                    )
+                )
     else:
-        # Single track download
-        try:
-            cache_key_lossless = media_metadata.cache_key + ":lossless"
-            cache_key_default = media_metadata.cache_key + ":default"
-
-            if lossless_mode:
-                cached = await cache_check(db_session, cache_key_lossless)
-            else:
-                cached = await cache_check(db_session, cache_key_default)
-
-            if cached:
-                send_manager = MediaSender()
-                await send_manager.send(message, [cached], skip_reaction=True, service="applemusic", db_session=db_session)
-            else:
-                try:
-                    async with ChatActionSender.record_voice(bot=message.bot, chat_id=message.chat.id):
-                        media_content = await task_manager.run_download(
-                            user_id=chat_id,
-                            url=url,
-                            coro=service.download(media_metadata, lossless_mode=lossless_mode)
-                        )
-                except BotError as e:
-                    if e.code == ErrorCode.LOSSLESS_UNAVAILABLE:
-                        # Tidal недоступен — проверяем дефолтный кэш без лишней скачки
-                        logger.info(f"Lossless unavailable for {media_metadata.cache_key}, checking default cache")
-                        default_cached = await cache_check(db_session, cache_key_default)
-                        if default_cached:
-                            logger.info(f"Serving default from cache for {media_metadata.cache_key}")
-                            send_manager = MediaSender()
-                            await send_manager.send(message, [default_cached], skip_reaction=True, service="applemusic", db_session=db_session)
-                            return
-                        # Дефолтного кэша нет — скачиваем стандарт
-                        async with ChatActionSender.record_voice(bot=message.bot, chat_id=message.chat.id):
-                            media_content = await task_manager.run_download(
-                                user_id=chat_id,
-                                url=url,
-                                coro=service.download(media_metadata, lossless_mode=False)
-                            )
-                    else:
-                        raise e
-
-                if media_content:
-                    send_manager = MediaSender()
-                    if media_content.is_lossless:
-                        await send_manager.send(message, [media_content], skip_reaction=True, service="applemusic",
-                                            cache_key=cache_key_lossless, db_session=db_session)
-                    else:
-                        await send_manager.send(message, [media_content], skip_reaction=True, service="applemusic",
-                                            cache_key=cache_key_default, db_session=db_session)
-
-        except BotError as e:
-            await log_download_event(db_session, user_id, Services.APPLE_MUSIC, 'failed_download')
-            raise e
+        raise BotError(
+            code=ErrorCode.NOT_FOUND,
+            message="Unknown media type",
+            service=Services.APPLE_MUSIC,
+        )

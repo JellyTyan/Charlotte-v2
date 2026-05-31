@@ -82,17 +82,49 @@ async def refund_command(message: Message, bot: Bot, db_session: AsyncSession):
     if message.from_user.id != Config.ADMIN_ID:
         return
 
-    args = message.text.split(maxsplit=1)
+    args = message.text.split()
     if len(args) < 2:
-        await message.answer("Usage: /refund <telegram_payment_charge_id>")
+        await message.answer(
+            "Usage:\n"
+            "• `/refund <telegram_payment_charge_id>` (if payment exists in database)\n"
+            "• `/refund <telegram_payment_charge_id> <user_id>` (if payment not found in database)",
+            parse_mode=ParseMode.MARKDOWN
+        )
         return
 
     charge_id = args[1].strip()
+    user_id = None
+    if len(args) >= 3:
+        try:
+            user_id = int(args[2].strip())
+        except ValueError:
+            await message.answer("❌ User ID must be an integer.")
+            return
 
     payment = await get_payment_by_charge_id(db_session, charge_id)
 
     if not payment:
-        await message.answer("❌ Payment not found")
+        if not user_id:
+            await message.answer(
+                "❌ Payment not found in database.\n"
+                "To attempt a refund for a payment not in the database, please specify the User ID:\n"
+                "Usage: `/refund <telegram_payment_charge_id> <user_id>`",
+                parse_mode=ParseMode.MARKDOWN
+            )
+            return
+
+        try:
+            await bot.refund_star_payment(
+                user_id=user_id,
+                telegram_payment_charge_id=charge_id
+            )
+            await message.answer(
+                f"✅ Successfully refunded payment <code>{charge_id}</code> to user <code>{user_id}</code> (directly, bypassed DB)",
+                parse_mode=ParseMode.HTML
+            )
+        except Exception as e:
+            logger.error(f"Direct refund failed: {e}")
+            await message.answer(f"❌ Refund failed: {e}")
         return
 
     if payment.status == "refunded":

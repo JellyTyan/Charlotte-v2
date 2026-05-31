@@ -1,6 +1,8 @@
+from aiogram import Dispatcher
 from dotenv import load_dotenv
 import os
 
+import httpx
 from core.config import Config
 from core.logger import setup_logger
 from core.bot_commands import set_default_commands
@@ -38,7 +40,15 @@ async def main():
     logger.info(f"✅ Bot initialized: @{bot_info.username} ({bot_info.first_name})")
 
     logger.info("⚙️ Setting up workflow data...")
-    dp.workflow_data.update(config=config, logger=logger)
+    core_client = httpx.AsyncClient(
+        base_url="http://lossless-core:7865",
+        # timeout=httpx.Timeout(30.0)
+    )
+    dp.workflow_data.update(
+        http_client=core_client,
+        config=config,
+        logger=logger
+    )
 
     logger.info("⚙️ Setting up translation...")
 
@@ -114,6 +124,11 @@ async def main():
     logger.info("🎉 Bot successfully started and ready to receive messages!")
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot, skip_updates=True)
+
+async def on_shutdown(dispatcher: Dispatcher):
+    core_client: httpx.AsyncClient = dispatcher.workflow_data.get("http_client")
+    if core_client:
+        await core_client.aclose()
 
 if __name__ == "__main__":
     import asyncio

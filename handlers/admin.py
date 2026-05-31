@@ -35,7 +35,8 @@ from storage.db.crud import (
     get_news_subscribers_ids,
     get_all_chat_ids,
     get_db_overview_stats,
-    get_cache_counts_by_service
+    get_cache_counts_by_service,
+    grant_sponsorship
 )
 from states import NewsSpamGroup
 from utils import escape_markdown
@@ -53,6 +54,7 @@ class AdminStates(StatesGroup):
     waiting_for_user_id = State()
     waiting_for_user_id_ban = State()
     waiting_for_user_id_pardon = State()
+    waiting_for_user_id_grant_month = State()
 
 # === Keyboards ===
 statistic_kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -238,6 +240,9 @@ async def admin_panel_premium(callback: CallbackQuery, state: FSMContext):
             InlineKeyboardButton(text="🍄 Toggle whom lifetime", callback_data="admin_panel_toggle_lifetime_premium"),
         ],
         [
+            InlineKeyboardButton(text="📅 Grant 1 Month", callback_data="admin_panel_grant_month_premium"),
+        ],
+        [
             InlineKeyboardButton(text="🔙 Back", callback_data="admin_panel_back"),
         ]
     ])
@@ -328,6 +333,51 @@ async def process_user_id(message: types.Message, state: FSMContext, db_session:
         except Exception as e:
             import logging
             logging.error(f"Failed to send premium notification to user {user_id}: {e}")
+
+    await state.clear()
+
+@admin_router.callback_query(lambda c: c.data == "admin_panel_grant_month_premium")
+async def handle_grant_month_premium_callback(callback: CallbackQuery, state: FSMContext):
+    text = ("📅 Please send the user ID to grant 30 days of premium:")
+
+    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
+        if callback.bot is None:
+            return
+        await callback.bot.send_message(callback.from_user.id, text)
+    else:
+        await callback.message.edit_text(text)
+    await state.set_state(AdminStates.waiting_for_user_id_grant_month)
+    await callback.answer()
+
+@admin_router.message(AdminStates.waiting_for_user_id_grant_month)
+async def process_grant_month_premium(message: types.Message, state: FSMContext, db_session: AsyncSession, i18n: TranslatorRunner):
+    message_text = message.text
+    if message_text is None:
+        return
+    user_id_text = message_text.strip()
+
+    if not user_id_text.isdigit():
+        await message.answer("❌ Invalid user ID. Please send only numbers.")
+        return
+
+    user_id = int(user_id_text)
+
+    await grant_sponsorship(session=db_session, user_id=user_id, days=30)
+    await db_session.commit()
+
+    await message.answer(
+        (
+            f"✅ Granted 30 days of premium to user ID: `{user_id}`"
+        ),
+        parse_mode=ParseMode.HTML,
+    )
+
+    # Send notification to user
+    if message.bot:
+        try:
+            await message.bot.send_message(user_id, i18n.get("premium-granted"))
+        except Exception as e:
+            logger.error(f"Failed to send premium notification to user {user_id}: {e}")
 
     await state.clear()
 

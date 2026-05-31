@@ -38,6 +38,7 @@ class MediaMetadata:
     width: int | None = None                 # width (video/image)
     height: int | None = None                # height
     cache_key: str | None = None             # cache key (for caching purposes)
+    isrc: str | None = None
 
     # Extra service-specific info
     extra: dict = field(default_factory=dict)
