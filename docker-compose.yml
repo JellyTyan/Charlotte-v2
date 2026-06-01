@@ -91,6 +91,7 @@ services:
     environment:
       - APPLE_MUSIC_TOKEN=${APPLEMUSIC_DEV_TOKEN}
       - PORT=7856
+      - BGUTIL_URL=${BGUTIL_URL}
     networks:
       - charlotte-net
     deploy:
