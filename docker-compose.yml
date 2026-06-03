@@ -108,7 +108,8 @@ services:
     volumes:
       - ./storage:/app/storage
     environment:
-      - PORT=9546
+      - PORT=${MEDIA_CORE_PORT}
+      - INSTAGRAM_IPV6_SUBNET=${INSTAGRAM_IPV6_SUBNET}
     networks:
       - charlotte-net
     deploy:
