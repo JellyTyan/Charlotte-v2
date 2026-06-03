@@ -99,6 +99,23 @@ services:
         limits:
           cpus: '2'
 
+  media-core:
+    image: ghcr.io/jellytyan/media-core:latest
+    container_name: media-core
+    restart: always
+    ports:
+      - "9546:9546"
+    volumes:
+      - ./storage:/app/storage
+    environment:
+      - PORT=9546
+    networks:
+      - charlotte-net
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+
   telegram-bot-api:
     image: aiogram/telegram-bot-api:latest
     container_name: telegram-bot-api

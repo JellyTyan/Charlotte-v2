@@ -28,7 +28,6 @@ from modules.services.twitter.service import TwitterService
 from modules.services.twitter.utils import get_cache_key as twitter_cache_key
 
 from modules.services.instagram.handler import INSTAGRAM_REGEX
-from modules.services.instagram.utils import get_cache_key as instagram_cache_key
 
 from modules.services.pinterest.handler import PINTEREST_REGEX
 from modules.services.pinterest.service import PinterestService
@@ -102,6 +101,16 @@ def ytmusic_cache_key(url: str, format_choice: str = None) -> str | None:
     if match:
         return f"ytmusic:{match.group(1)}"
     return None
+
+
+def instagram_cache_key(url: str) -> str | None:
+    match = re.search(r"/(?:p|reels?|tv)/([A-Za-z0-9_-]+)", url)
+    if match:
+        return f"ig:{match.group(1)}"
+    clean_url = url.split('?')[0].rstrip('/')
+    hashed = hashlib.md5(clean_url.encode('utf-8')).hexdigest()
+    return f"ig:{hashed}"
+
 
 inline_router = Router(name="inline_handler")
 
