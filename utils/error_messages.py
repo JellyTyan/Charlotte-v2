@@ -9,7 +9,7 @@ def get_i18n_error_message(code: ErrorCode, i18n: TranslatorRunner) -> str | Non
         case ErrorCode.LARGE_FILE:
             return i18n.error.large.file()
         case ErrorCode.SIZE_CHECK_FAIL:
-            return i18n.error.fail.check()
+            return i18n.error.size.fail.check()
         case ErrorCode.DOWNLOAD_FAILED:
             return i18n.error.download.error()
         case ErrorCode.DOWNLOAD_CANCELLED:
@@ -24,6 +24,8 @@ def get_i18n_error_message(code: ErrorCode, i18n: TranslatorRunner) -> str | Non
             return i18n.error.no.allowed()
         case ErrorCode.AGE_RESTRICTED:
             return i18n.error.age.restricted()
+        case ErrorCode.UNSUPPORTED_CONTENT:
+            return i18n.error.unsupported.content()
         case ErrorCode.INTERNAL_ERROR:
             return i18n.error.internal()
         case _:

@@ -10,3 +10,4 @@ error-internal = Oh no, something broke inside me! Try again later? 🧡
 error-generic = ❌ Something went wrong. I'm sorry!
 error-no-allowed = Sorry, this function isn't allowed in this chat.
 error-age-restricted = 🔞 Oops, this one's 18+ content and I can't reach it! 😳
+error-unsupported-content = Oops, I don't support this type of content yet... 🥺

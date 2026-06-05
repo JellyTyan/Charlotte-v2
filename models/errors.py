@@ -21,6 +21,8 @@ class ErrorCode(Enum):
     ACCOUNT_BANNED = "E503"
     AGE_RESTRICTED = "E010"
     LOSSLESS_UNAVAILABLE = "E011"  # Lossless service (Tidal) is unavailable
+    UNSUPPORTED_CONTENT = "E012"
+
 
 @dataclass
 class BotError(Exception):

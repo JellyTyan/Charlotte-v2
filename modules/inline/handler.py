@@ -37,8 +37,7 @@ from modules.services.reddit.handler import REDDIT_REGEX
 from modules.services.reddit.service import RedditService
 from modules.services.reddit.utils import get_cache_key as reddit_cache_key
 
-from modules.services.tiktok.handler import TIKTOK_REGEX
-from modules.services.tiktok.utils import get_cache_key as tiktok_cache_key
+from modules.services.tiktok.handler import TIKTOK_REGEX, get_cache_key as tiktok_cache_key
 
 from modules.services.youtube.handler import YOUTUBE_REGEX
 from modules.services.youtube.utils import get_cache_key as youtube_cache_key

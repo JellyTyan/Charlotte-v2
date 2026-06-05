@@ -14,6 +14,7 @@ from models.media import MediaContent, MediaType
 from models.service_list import Services
 from senders.media_sender import MediaSender
 from storage.db.crud import get_media_cache, check_if_user_premium
+from tasks.task_manager import task_manager
 from utils import truncate_string, escape_html
 from utils.statistics_helper import log_download_event
 
@@ -45,8 +46,12 @@ async def instagram_handler(message: Message, db_session: AsyncSession, http_cli
                 "url": url,
                 "sponsor": sponsor,
             }
-            res = await http_client.post(
-                "http://media-core:9546/download/instagram", json=payload,
+            res = await task_manager.run_download(
+                user_id=user_id,
+                url=url,
+                coro=http_client.post(
+                    "http://media-core:9546/download/instagram", json=payload,
+                ),
             )
 
             if res.status_code == 401:

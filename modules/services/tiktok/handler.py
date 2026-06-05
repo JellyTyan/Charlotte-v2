@@ -1,18 +1,22 @@
+import hashlib
 import logging
+import re
+from pathlib import Path
 
+import httpx
 from aiogram import F, Router
 from aiogram.types import Message
 from aiogram.utils.chat_action import ChatActionSender
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.errors import BotError, ErrorCode
+from models.media import MediaContent, MediaType
 from models.service_list import Services
 from senders.media_sender import MediaSender
+from storage.db.crud import get_media_cache
 from tasks.task_manager import task_manager
-from utils.arq_pool import get_arq_pool
+from utils import escape_html, truncate_string
 from utils.statistics_helper import log_download_event
-from .service import TiktokService
-from .utils import get_cache_key, cache_check
 
 tiktok_router = Router(name="tiktok")
 
@@ -21,12 +25,8 @@ logger = logging.getLogger(__name__)
 TIKTOK_REGEX = r"https?://(?:www\.)?(?:tiktok\.com/.*|(vm|vt)\.tiktok\.com/.+)"
 
 @tiktok_router.message(F.text.regexp(TIKTOK_REGEX))
-async def tiktok_handler(message: Message, db_session: AsyncSession):
-    if not message.text or not message.from_user:
-        return
-
+async def tiktok_handler(message: Message, db_session: AsyncSession, http_client: httpx.AsyncClient):
     url = message.text
-    chat_id = message.chat.id
     user_id = message.from_user.id
 
     async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=message.chat.id):
@@ -38,31 +38,137 @@ async def tiktok_handler(message: Message, db_session: AsyncSession):
             await send_manager.send(message, cached, service="tiktok", db_session=db_session)
             return
 
-    arq = await get_arq_pool('light')
-    service = TiktokService(arq=arq)
-
     try:
         async with ChatActionSender.record_video_note(bot=message.bot, chat_id=message.chat.id):
-            media_content = await task_manager.run_download(
+            payload = {
+                "url": url,
+            }
+            res = await task_manager.run_download(
                 user_id=user_id,
                 url=url,
-                coro=service.download(url)
+                coro=http_client.post(
+                    "http://media-core:9546/download/tiktok", json=payload,
+                ),
             )
 
-        if media_content:
-            await send_manager.send(message, media_content, service="tiktok", cache_key=cache_key, db_session=db_session)
+            if res.status_code == 422:
+                raise BotError(
+                    code=ErrorCode.UNSUPPORTED_CONTENT,
+                    url=url,
+                    message=f"Download Error:\n {res.text}",
+                    is_logged=True,
+                    critical=False,
+                )
 
+            if res.status_code == 404:
+                raise BotError(
+                    code=ErrorCode.NOT_FOUND,
+                    url=url,
+                    message=f"Download Error:\n {res.text}",
+                    is_logged=True,
+                    critical=False,
+                )
+
+            if res.status_code != 200:
+                raise BotError(
+                    code=ErrorCode.INTERNAL_ERROR,
+                    url=url,
+                    message=f"Download Error:\n {res.text}",
+                    is_logged=True,
+                    critical=True,
+                )
+            metadata = res.json()["data"]
+
+            author_username = metadata.get('author_username')
+            description = escape_html((metadata.get('caption') or "").strip())
+            author_link = f"<a href='https://www.tiktok.com/@{author_username}/'>{author_username}</a>" if author_username else ""
+            parts = [p for p in [author_link, description] if p]
+            caption = " - ".join(parts)
+
+            media_content = []
+            for media in metadata.get('items', []):
+                media_content.append(
+                    MediaContent(
+                        type=MediaType.PHOTO if media.get('type') == 'photo' else MediaType.VIDEO,
+                        path=Path(media.get('path')),
+                        title=truncate_string(caption, 1024),
+                        width=media.get('width', None),
+                        height=media.get('height', None),
+                        cover=Path(media.get('cover')) if media.get('cover') else None,
+                    )
+                )
+
+
+            music_info = metadata.get('music_info', {})
+            if music_info and music_info.get('path'):
+                media_content.append(
+                    MediaContent(
+                        type=MediaType.AUDIO,
+                        path=Path(music_info.get('path')),
+                        title=music_info.get('title'),
+                        performer=music_info.get('author'),
+                        cover=Path(music_info.get('cover')),
+                        duration=music_info.get('duration'),
+                    )
+                )
     except BotError as e:
         await log_download_event(db_session, user_id, Services.TIKTOK, 'failed_download')
-        logger.error(f"Tiktok download error: {e}")
         raise e
-    except Exception as e:
-        await log_download_event(db_session, user_id, Services.TIKTOK, 'failed_download')
-        logger.error(f"Unexpected TikTok error: {e}")
-        raise BotError(
-            code=ErrorCode.DOWNLOAD_FAILED,
-            message=str(e),
-            url=url,
-            service=Services.TIKTOK,
-            is_logged=True
-        )
+
+    if media_content:
+        await send_manager.send(message, media_content, service="tiktok", cache_key=cache_key, db_session=db_session)
+
+
+def get_cache_key(url: str) -> str:
+    match = re.search(r"/(?:video|photo)/(\d+)", url)
+    if match:
+        return f"tt:{match.group(1)}"
+
+    clean_url = url.split('?')[0].rstrip('/')
+    hashed = hashlib.md5(clean_url.encode('utf-8')).hexdigest()
+    return f"tt:{hashed}"
+
+
+async def cache_check(db_session: AsyncSession, key: str) -> list[MediaContent] | None:
+    cached = await get_media_cache(db_session, key)
+    if not cached:
+        return None
+
+    if cached.media_type == "gallery":
+        results = []
+        for c_item in cached.data.items:
+            t_type = MediaType(c_item.media_type) if c_item.media_type else MediaType.PHOTO
+            results.append(MediaContent(
+                type=t_type,
+                telegram_file_id=c_item.file_id,
+                telegram_document_file_id=c_item.raw_file_id,
+                cover_file_id=c_item.cover,
+                full_cover_file_id=cached.data.full_cover,
+                title=cached.data.title,
+                performer=cached.data.author,
+                duration=c_item.duration or cached.data.duration,
+                width=c_item.width or cached.data.width,
+                height=c_item.height or cached.data.height,
+                is_blurred=c_item.is_blurred if c_item.is_blurred is not None else cached.data.is_blurred
+            ))
+        return results
+
+    try:
+        media_type = MediaType(cached.media_type)
+    except ValueError:
+        media_type = MediaType.VIDEO if cached.data.width else MediaType.PHOTO
+
+    return [MediaContent(
+        type=media_type,
+        telegram_file_id=cached.telegram_file_id,
+        telegram_document_file_id=cached.telegram_document_file_id,
+        cover_file_id=cached.data.cover,
+        full_cover_file_id=cached.data.full_cover,
+        title=cached.data.title,
+        performer=cached.data.author,
+        duration=cached.data.duration,
+        width=cached.data.width,
+        height=cached.data.height,
+        is_blurred=cached.data.is_blurred
+    )]
+

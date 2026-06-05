@@ -634,21 +634,9 @@ class MediaSender:
         self._check_file_size(audio, is_audio=True)
         media_input = self._get_input_media(audio, as_document=False)
 
-        service_settings = getattr(settings.services, service, None) if service else None
         final_caption = ""
-        if caption and getattr(service_settings, "caption", False):
-            if getattr(service_settings, "translate_caption", False):
-                caption = await translate_text(
-                    caption, str(settings.profile.title_language)
-                )
-            final_caption = truncate_string(caption, 1000)
-
         if show_ad:
-            ad_text = "\n\n<a href='https://t.me/CharlotteFox_Bot'>Charlotte 🧡</a>"
-            if final_caption:
-                final_caption += ad_text
-            else:
-                final_caption = ad_text
+            final_caption = "<a href='https://t.me/CharlotteFox_Bot'>Charlotte 🧡</a>"
                 
         if not final_caption:
             final_caption = None
