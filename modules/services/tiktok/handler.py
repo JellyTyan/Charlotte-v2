@@ -55,6 +55,7 @@ async def tiktok_handler(message: Message, db_session: AsyncSession, http_client
                 raise BotError(
                     code=ErrorCode.UNSUPPORTED_CONTENT,
                     url=url,
+                    service=Services.TIKTOK,
                     message=f"Download Error:\n {res.text}",
                     is_logged=True,
                     critical=False,
@@ -64,6 +65,7 @@ async def tiktok_handler(message: Message, db_session: AsyncSession, http_client
                 raise BotError(
                     code=ErrorCode.NOT_FOUND,
                     url=url,
+                    service=Services.TIKTOK,
                     message=f"Download Error:\n {res.text}",
                     is_logged=True,
                     critical=False,
@@ -73,6 +75,7 @@ async def tiktok_handler(message: Message, db_session: AsyncSession, http_client
                 raise BotError(
                     code=ErrorCode.INTERNAL_ERROR,
                     url=url,
+                    service=Services.TIKTOK,
                     message=f"Download Error:\n {res.text}",
                     is_logged=True,
                     critical=True,

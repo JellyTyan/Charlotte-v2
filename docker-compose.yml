@@ -110,6 +110,8 @@ services:
     environment:
       - PORT=${MEDIA_CORE_PORT}
       - INSTAGRAM_IPV6_SUBNET=${INSTAGRAM_IPV6_SUBNET}
+      - TWITTER_AUTH_TOKEN=${AUTH_TOKEN}
+      - TWITTER_CSRF_TOKEN=${CSRF_TOKEN}
     networks:
       - charlotte-net
     deploy:

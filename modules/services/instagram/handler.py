@@ -58,6 +58,7 @@ async def instagram_handler(message: Message, db_session: AsyncSession, http_cli
                 raise BotError(
                     code=ErrorCode.AGE_RESTRICTED,
                     url=url,
+                    service=Services.INSTAGRAM,
                     message=f"Download Error:\n {res.text}",
                     is_logged=True,
                     critical=False,
@@ -67,6 +68,7 @@ async def instagram_handler(message: Message, db_session: AsyncSession, http_cli
                 raise BotError(
                     code=ErrorCode.NOT_FOUND,
                     url=url,
+                    service=Services.INSTAGRAM,
                     message=f"Download Error:\n {res.text}",
                     is_logged=True,
                     critical=False,
@@ -76,6 +78,7 @@ async def instagram_handler(message: Message, db_session: AsyncSession, http_cli
                 raise BotError(
                     code=ErrorCode.INTERNAL_ERROR,
                     url=url,
+                    service=Services.INSTAGRAM,
                     message=f"Download Error:\n {res.text}",
                     is_logged=True,
                     critical=True,

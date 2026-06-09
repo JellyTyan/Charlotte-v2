@@ -23,15 +23,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fluentogram import TranslatorRunner
 
 # Service Regexes & Utils
-from modules.services.twitter.handler import TWITTER_REGEX
-from modules.services.twitter.service import TwitterService
-from modules.services.twitter.utils import get_cache_key as twitter_cache_key
+from modules.services.twitter.handler import TWITTER_REGEX, get_cache_key as twitter_cache_key
 
 from modules.services.instagram.handler import INSTAGRAM_REGEX
 
-from modules.services.pinterest.handler import PINTEREST_REGEX
-from modules.services.pinterest.service import PinterestService
-from modules.services.pinterest.utils import get_cache_key as pinterest_cache_key
+from modules.services.pinterest.handler import PINTEREST_REGEX, get_cache_key as pinterest_cache_key
 
 from modules.services.reddit.handler import REDDIT_REGEX
 from modules.services.reddit.service import RedditService
@@ -116,7 +112,7 @@ inline_router = Router(name="inline_handler")
 logger = logging.getLogger(__name__)
 
 # Списки сервисов для разной логики
-FAST_TRACK_SERVICES = ["twitter", "reddit", "pinterest"]
+FAST_TRACK_SERVICES = ["reddit"]
 
 @inline_router.inline_query(F.query.regexp(r"^https?://"))
 async def inline_media_handler(inline_query: InlineQuery, config: Config, db_session: AsyncSession, i18n: TranslatorRunner):
@@ -196,19 +192,13 @@ async def inline_media_handler(inline_query: InlineQuery, config: Config, db_ses
         # 2. КЭША НЕТ. Решаем, качать или сразу отправить в ЛС
         if not media_items:
             if service_name in FAST_TRACK_SERVICES:
-                # Пытаемся скачать (Twitter, Reddit, Pinterest)
+                # Пытаемся скачать (Reddit)
                 arq = await get_arq_pool('light')
                 service_obj = None
                 coro = None
                 
-                if service_name == "twitter":
-                    service_obj = TwitterService(arq=arq)
-                    coro = service_obj.download(url, premium=False, config=config, allow_nsfw=True)
-                elif service_name == "reddit":
+                if service_name == "reddit":
                     service_obj = RedditService(arq=arq)
-                    coro = service_obj.download(url)
-                elif service_name == "pinterest":
-                    service_obj = PinterestService(arq=arq)
                     coro = service_obj.download(url)
 
                 if coro:

@@ -52,6 +52,7 @@ async def fetch_core_download(
         raise BotError(
             code=ErrorCode.INTERNAL_ERROR,
             url=url,
+            service=Services.YTMUSIC,
             message=f"Download Error:\n {res.text}",
             is_logged=True,
             critical=False,
@@ -141,6 +142,7 @@ async def ytmusic_handler(
             raise BotError(
                 code=ErrorCode.METADATA_ERROR,
                 url=url,
+                service=Services.YTMUSIC,
                 message=f"Metadata Error:\n {response.text}",
                 is_logged=True,
                 critical=False,

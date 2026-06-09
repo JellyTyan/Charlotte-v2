@@ -104,16 +104,32 @@ def sanitize_filename(s: str, restricted: bool = False, is_id: bool = False) -> 
 
 
 def compress_image_sync(file_path: str, max_size_bytes: int = 10 * 1024 * 1024) -> Optional[str]:
-    """Compresses an image to be under max_size_bytes, returns path to new compressed image or None if failed."""
+    """Compresses/resizes an image to fit Telegram limits (size < 10MB, sum of dimensions < 10000, aspect ratio < 20:1)."""
     import os
-    if os.path.getsize(file_path) <= max_size_bytes:
-        return file_path
-        
+    from PIL import Image
+    
     try:
-        from PIL import Image
+        size_ok = os.path.getsize(file_path) <= max_size_bytes
+        
         with Image.open(file_path) as img:
+            w, h = img.size
+            dims_ok = (w + h <= 9500) and (w / h <= 19.0) and (h / w <= 19.0)
+            
+            if size_ok and dims_ok:
+                return file_path
+                
             if img.mode != "RGB":
                 img = img.convert("RGB")
+                
+            if w + h > 9500:
+                factor = 9500 / (w + h)
+                img = img.resize((int(w * factor), int(h * factor)), Image.Resampling.LANCZOS)
+                
+            w, h = img.size
+            if w / h > 19.0:
+                img = img.resize((int(19.0 * h), h), Image.Resampling.LANCZOS)
+            elif h / w > 19.0:
+                img = img.resize((w, int(19.0 * w)), Image.Resampling.LANCZOS)
                 
             path_obj = Path(file_path)
             compressed_path = str(path_obj.with_stem(f"{path_obj.stem}_compressed").with_suffix(".jpg"))
@@ -125,27 +141,44 @@ def compress_image_sync(file_path: str, max_size_bytes: int = 10 * 1024 * 1024) 
                     return compressed_path
                 quality -= 15
                 
-            # If still too big, resize
             if os.path.getsize(compressed_path) > max_size_bytes:
-                width, height = img.size
-                img = img.resize((int(width * 0.7), int(height * 0.7)), Image.Resampling.LANCZOS)
+                w, h = img.size
+                img = img.resize((int(w * 0.7), int(h * 0.7)), Image.Resampling.LANCZOS)
                 img.save(compressed_path, format="JPEG", quality=60, optimize=True)
                 return compressed_path
+                
     except Exception as e:
         logger.error(f"Failed to compress image {file_path}: {e}")
         return None
 
+
 def compress_image_bytes_sync(content: bytes, max_size_bytes: int = 10 * 1024 * 1024) -> Optional[bytes]:
-    """Compresses image bytes to be under max_size_bytes, returns new bytes or None if failed."""
-    if len(content) <= max_size_bytes:
-        return content
-        
+    """Compresses/resizes image bytes to fit Telegram limits."""
+    import io
+    from PIL import Image
+    
     try:
-        import io
-        from PIL import Image
+        size_ok = len(content) <= max_size_bytes
+        
         with Image.open(io.BytesIO(content)) as img:
+            w, h = img.size
+            dims_ok = (w + h <= 9500) and (w / h <= 19.0) and (h / w <= 19.0)
+            
+            if size_ok and dims_ok:
+                return content
+                
             if img.mode != "RGB":
                 img = img.convert("RGB")
+                
+            if w + h > 9500:
+                factor = 9500 / (w + h)
+                img = img.resize((int(w * factor), int(h * factor)), Image.Resampling.LANCZOS)
+                
+            w, h = img.size
+            if w / h > 19.0:
+                img = img.resize((int(19.0 * h), h), Image.Resampling.LANCZOS)
+            elif h / w > 19.0:
+                img = img.resize((w, int(19.0 * w)), Image.Resampling.LANCZOS)
                 
             quality = 95
             while quality > 10:
@@ -155,12 +188,12 @@ def compress_image_bytes_sync(content: bytes, max_size_bytes: int = 10 * 1024 * 
                     return out.getvalue()
                 quality -= 15
                 
-            # If still too big, resize
             out = io.BytesIO()
-            width, height = img.size
-            img = img.resize((int(width * 0.7), int(height * 0.7)), Image.Resampling.LANCZOS)
+            w, h = img.size
+            img = img.resize((int(w * 0.7), int(h * 0.7)), Image.Resampling.LANCZOS)
             img.save(out, format="JPEG", quality=60, optimize=True)
             return out.getvalue()
+            
     except Exception as e:
         logger.error(f"Failed to compress image bytes: {e}")
         return None

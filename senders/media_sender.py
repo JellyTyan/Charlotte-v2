@@ -400,7 +400,28 @@ class MediaSender:
                     elif item.content:
                         size = len(item.content)
                     
+                    need_compress = False
                     if size > 10 * 1024 * 1024:
+                        need_compress = True
+                    else:
+                        # Check dimensions to avoid PHOTO_INVALID_DIMENSIONS
+                        try:
+                            from PIL import Image
+                            if item.path:
+                                with Image.open(item.path) as img:
+                                    w, h = img.size
+                                    if w + h > 9500 or w / h > 19.0 or h / w > 19.0:
+                                        need_compress = True
+                            elif item.content:
+                                import io
+                                with Image.open(io.BytesIO(item.content)) as img:
+                                    w, h = img.size
+                                    if w + h > 9500 or w / h > 19.0 or h / w > 19.0:
+                                        need_compress = True
+                        except Exception as e:
+                            logger.warning(f"Failed to check image dimensions: {e}")
+
+                    if need_compress:
                         try:
                             if item.path:
                                 from utils.file_utils import compress_image_sync
