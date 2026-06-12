@@ -29,9 +29,7 @@ from modules.services.instagram.handler import INSTAGRAM_REGEX
 
 from modules.services.pinterest.handler import PINTEREST_REGEX, get_cache_key as pinterest_cache_key
 
-from modules.services.reddit.handler import REDDIT_REGEX
-from modules.services.reddit.service import RedditService
-from modules.services.reddit.utils import get_cache_key as reddit_cache_key
+from modules.services.reddit.handler import REDDIT_REGEX, get_cache_key as reddit_cache_key
 
 from modules.services.tiktok.handler import TIKTOK_REGEX, get_cache_key as tiktok_cache_key
 
@@ -111,8 +109,7 @@ inline_router = Router(name="inline_handler")
 
 logger = logging.getLogger(__name__)
 
-# Списки сервисов для разной логики
-FAST_TRACK_SERVICES = ["reddit"]
+FAST_TRACK_SERVICES = []
 
 @inline_router.inline_query(F.query.regexp(r"^https?://"))
 async def inline_media_handler(inline_query: InlineQuery, config: Config, db_session: AsyncSession, i18n: TranslatorRunner):
@@ -192,29 +189,7 @@ async def inline_media_handler(inline_query: InlineQuery, config: Config, db_ses
         # 2. КЭША НЕТ. Решаем, качать или сразу отправить в ЛС
         if not media_items:
             if service_name in FAST_TRACK_SERVICES:
-                # Пытаемся скачать (Reddit)
-                arq = await get_arq_pool('light')
-                service_obj = None
-                coro = None
-                
-                if service_name == "reddit":
-                    service_obj = RedditService(arq=arq)
-                    coro = service_obj.download(url)
-
-                if coro:
-                    try:
-                        # ⏳ 7 секунд на всё про всё
-                        downloaded_content = await asyncio.wait_for(coro, timeout=7.0)
-                        if downloaded_content:
-                            sender = MediaSender()
-                            dump_success = await sender._dump_media_to_cache_channel(inline_query.bot, downloaded_content)
-                            if dump_success:
-                                await sender._save_to_cache(downloaded_content, cache_key, service_name, downloaded_content[0].title, db_session)
-                                media_items = downloaded_content
-                    except asyncio.TimeoutError:
-                        logger.warning(f"Inline timeout for {url}")
-                    except Exception as e:
-                        logger.error(f"Inline download error: {e}")
+                pass
             else:
                 # Для остальных сервисов (Instagram, TikTok, YouTube и т.д.) - сразу фолбэк
                 pass

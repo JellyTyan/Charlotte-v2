@@ -170,10 +170,10 @@ class MediaSender:
             return cache_id
 
         if not as_document:
-            if item.compressed_path:
-                return types.FSInputFile(os.path.abspath(item.compressed_path))
-            if getattr(item, "compressed_content", None) and item.filename:
-                return types.BufferedInputFile(item.compressed_content, item.filename)
+            if item.optimized_path:
+                return types.FSInputFile(os.path.abspath(item.optimized_path))
+            if getattr(item, "optimized_content", None) and item.filename:
+                return types.BufferedInputFile(item.optimized_content, item.filename)
 
         if item.path:
             return types.FSInputFile(os.path.abspath(item.path))
@@ -196,10 +196,10 @@ class MediaSender:
         content_to_check = item.content
         
         if not as_document and item.type == MediaType.PHOTO:
-            if item.compressed_path:
-                path_to_check = item.compressed_path
-            elif getattr(item, "compressed_content", None):
-                content_to_check = item.compressed_content
+            if item.optimized_path:
+                path_to_check = item.optimized_path
+            elif getattr(item, "optimized_content", None):
+                content_to_check = item.optimized_content
 
         if not path_to_check and not content_to_check:
             return
@@ -381,6 +381,7 @@ class MediaSender:
         service: Optional[str] = None,
         db_session: Optional[AsyncSession] = None,
         cache_key: Optional[str] = None,
+        skip_notification: bool = False,
     ) -> None:
 
         if not message.bot:
@@ -391,57 +392,12 @@ class MediaSender:
             )
 
         try:
-            # 0. Сжимаем большие фото (Telegram Photo limit = 10MB)
-            for item in content:
-                if item.type == MediaType.PHOTO:
-                    size = 0
-                    if item.path:
-                        size = item.path.stat().st_size
-                    elif item.content:
-                        size = len(item.content)
-                    
-                    need_compress = False
-                    if size > 10 * 1024 * 1024:
-                        need_compress = True
-                    else:
-                        # Check dimensions to avoid PHOTO_INVALID_DIMENSIONS
-                        try:
-                            from PIL import Image
-                            if item.path:
-                                with Image.open(item.path) as img:
-                                    w, h = img.size
-                                    if w + h > 9500 or w / h > 19.0 or h / w > 19.0:
-                                        need_compress = True
-                            elif item.content:
-                                import io
-                                with Image.open(io.BytesIO(item.content)) as img:
-                                    w, h = img.size
-                                    if w + h > 9500 or w / h > 19.0 or h / w > 19.0:
-                                        need_compress = True
-                        except Exception as e:
-                            logger.warning(f"Failed to check image dimensions: {e}")
-
-                    if need_compress:
-                        try:
-                            if item.path:
-                                from utils.file_utils import compress_image_sync
-                                new_path = await asyncio.to_thread(compress_image_sync, str(item.path))
-                                if new_path and new_path != str(item.path):
-                                    item.compressed_path = Path(new_path)
-                            elif item.content:
-                                from utils.file_utils import compress_image_bytes_sync
-                                new_content = await asyncio.to_thread(compress_image_bytes_sync, item.content)
-                                if new_content:
-                                    item.compressed_content = new_content
-                        except Exception as e:
-                            logger.error(f"Failed to compress photo: {e}")
-
             # 1. Сразу собираем пути для гарантированной очистки (Броня от утечек памяти)
             for item in content:
                 if item.path:
                     self._files_to_cleanup.append(item.path)
-                if item.compressed_path:
-                    self._files_to_cleanup.append(item.compressed_path)
+                if item.optimized_path:
+                    self._files_to_cleanup.append(item.optimized_path)
                 if item.cover:
                     self._files_to_cleanup.append(item.cover)
                 if item.full_cover:
@@ -486,15 +442,15 @@ class MediaSender:
             # 6. Отправка пользователю
             if media_items:
                 await self._send_media_group(
-                    message, media_items, caption, settings, service, show_ad
+                    message, media_items, caption, settings, service, show_ad, skip_notification
                 )
 
             for audio in audio_items:
                 async with ChatActionSender.upload_voice(bot=message.bot, chat_id=message.chat.id):
-                    await self._send_audio(message, audio, settings, service, caption, show_ad)
+                    await self._send_audio(message, audio, settings, service, caption, show_ad, skip_notification)
 
             for gif in gif_items:
-                await self._send_gif(message, gif, settings, service, caption, show_ad)
+                await self._send_gif(message, gif, settings, service, caption, show_ad, skip_notification)
 
             # 7. Реакции
             if settings.profile.reactions and not skip_reaction:
@@ -550,6 +506,7 @@ class MediaSender:
         settings: Union[UserSettingsJson, ChatSettingsJson],
         service: Optional[str] = None,
         show_ad: bool = True,
+        skip_notification: bool = False,
     ) -> None:
         if not content:
             return
@@ -614,7 +571,7 @@ class MediaSender:
                         message,
                         "answer_media_group",
                         media=media_group.build(),
-                        disable_notification=not settings.profile.notifications,
+                        disable_notification=skip_notification or not settings.profile.notifications,
                     )
                 # Кэшируем новые file_id, если их не было
                 if isinstance(sent_messages, list):
@@ -651,6 +608,7 @@ class MediaSender:
         service: Optional[str] = None,
         caption: Optional[str] = None,
         show_ad: bool = True,
+        skip_notification: bool = False,
     ) -> None:
         self._check_file_size(audio, is_audio=True)
         media_input = self._get_input_media(audio, as_document=False)
@@ -667,7 +625,7 @@ class MediaSender:
                 message,
                 "answer_audio",
                 audio=media_input,
-                disable_notification=not settings.profile.reactions,
+                disable_notification=skip_notification or not settings.profile.reactions,
                 thumbnail=self._get_thumb(audio.cover)
                 if not audio.telegram_file_id
                 else None,
@@ -700,7 +658,7 @@ class MediaSender:
                     message,
                     "answer_document",
                     document=cover_input,
-                    disable_notification=not settings.profile.notifications,
+                    disable_notification=skip_notification or not settings.profile.notifications,
                 )
                 if sent_cover.document:
                     audio.full_cover_file_id = sent_cover.document.file_id
@@ -713,6 +671,7 @@ class MediaSender:
         service: Optional[str] = None,
         caption: Optional[str] = None,
         show_ad: bool = True,
+        skip_notification: bool = False,
     ) -> None:
         service_settings = (
             getattr(settings.services, service, None) if service else None
@@ -744,7 +703,7 @@ class MediaSender:
             final_caption = None
 
         kwargs = {
-            "disable_notification": not settings.profile.notifications,
+            "disable_notification": skip_notification or not settings.profile.notifications,
             "caption": final_caption
         }
         if send_as_raw:
@@ -815,6 +774,7 @@ class MediaSender:
                         width=item.width,
                         height=item.height,
                         is_blurred=item.is_blurred,
+                        is_nsfw=item.is_nsfw,
                     ),
                 )
             else:
@@ -841,6 +801,7 @@ class MediaSender:
                             is_blurred=item.is_blurred
                             if item.is_blurred is not None
                             else getattr(e_item, "is_blurred", None),
+                            is_nsfw=item.is_nsfw if item.is_nsfw is not None else getattr(e_item, "is_nsfw", None),
                         )
                     )
                 dto = MediaCacheDTO(

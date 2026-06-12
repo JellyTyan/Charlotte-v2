@@ -11,6 +11,7 @@ class CacheItemMetadata(BaseModel):
     width: int | None = None
     height: int | None = None
     is_blurred: bool | None = None
+    is_nsfw: bool | None = None
 
 class CacheMetadata(BaseModel):
     title: str | None = None
@@ -22,6 +23,7 @@ class CacheMetadata(BaseModel):
     width: int | None = None
     height: int | None = None
     is_blurred: bool | None = None
+    is_nsfw: bool | None = None
     items: list[CacheItemMetadata] = Field(default_factory=list)
 
 class MediaCacheDTO(BaseModel):

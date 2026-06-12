@@ -96,10 +96,12 @@ async def instagram_handler(message: Message, db_session: AsyncSession, http_cli
                 media_content.append(
                     MediaContent(
                         type=MediaType.PHOTO if media.get('type') == 'photo' else MediaType.VIDEO,
-                        path=Path(media.get('path')),
+                        path=Path(media.get('path')) if media.get('path') else None,
+                        optimized_path=Path(media.get('optimized_path')) if media.get('optimized_path') else None,
                         title=truncate_string(caption, 1024),
                         width=media.get('width', None),
                         height=media.get('height', None),
+                        duration=media.get('duration', None),
                         cover=Path(media.get('cover')) if media.get('cover') else None,
                     )
                 )

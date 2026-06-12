@@ -124,7 +124,7 @@ async def pinterest_handler(message: Message, db_session: AsyncSession, http_cli
             metadata = res.json()["data"]
 
             if metadata.get("type") == "multi":
-                for sub_pin in metadata.get('items', []):
+                for i, sub_pin in enumerate(metadata.get('items', [])):
                     sub_author = sub_pin.get('author_username')
                     sub_caption = escape_html((sub_pin.get('caption') or "").strip())
                     sub_author_link = f"<a href='https://www.pinterest.com/{sub_author}/'>{sub_author}</a>" if sub_author else ""
@@ -136,10 +136,12 @@ async def pinterest_handler(message: Message, db_session: AsyncSession, http_cli
                         sub_media_content.append(
                             MediaContent(
                                 type=MediaType.PHOTO if media.get('type') == 'photo' else MediaType.VIDEO,
-                                path=Path(media.get('path')),
+                                path=Path(media.get('path')) if media.get('path') else None,
+                                optimized_path=Path(media.get('optimized_path')) if media.get('optimized_path') else None,
                                 title=truncate_string(caption, 1024),
                                 width=media.get('width', None),
                                 height=media.get('height', None),
+                                duration=media.get('duration', None),
                                 cover=Path(media.get('cover')) if media.get('cover') else None,
                             )
                         )
@@ -148,7 +150,15 @@ async def pinterest_handler(message: Message, db_session: AsyncSession, http_cli
                     sub_cache_key = f"pin:{sub_pin_id}" if sub_pin_id else None
 
                     if sub_media_content:
-                        await send_manager.send(message, sub_media_content, service="pinterest", cache_key=sub_cache_key, db_session=db_session)
+                        await send_manager.send(
+                            message,
+                            sub_media_content,
+                            service="pinterest",
+                            cache_key=sub_cache_key,
+                            db_session=db_session,
+                            skip_reaction=(i > 0),
+                            skip_notification=(i > 0),
+                        )
             else:
                 author = metadata.get('author_username')
                 caption_text = escape_html((metadata.get('caption') or "").strip())
@@ -161,10 +171,12 @@ async def pinterest_handler(message: Message, db_session: AsyncSession, http_cli
                     media_content.append(
                         MediaContent(
                             type=MediaType.PHOTO if media.get('type') == 'photo' else MediaType.VIDEO,
-                            path=Path(media.get('path')),
+                            path=Path(media.get('path')) if media.get('path') else None,
+                            optimized_path=Path(media.get('optimized_path')) if media.get('optimized_path') else None,
                             title=truncate_string(caption, 1024),
                             width=media.get('width', None),
                             height=media.get('height', None),
+                            duration=media.get('duration', None),
                             cover=Path(media.get('cover')) if media.get('cover') else None,
                         )
                     )

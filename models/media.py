@@ -15,8 +15,8 @@ class MediaContent:
     type: MediaType
     path: Optional[Path] = None
     content: Optional[bytes] = None
-    compressed_path: Optional[Path] = None
-    compressed_content: Optional[bytes] = None
+    optimized_path: Optional[Path] = None
+    optimized_content: Optional[bytes] = None
     telegram_file_id: Optional[str] = None
     telegram_document_file_id: Optional[str] = None
     cover_file_id: Optional[str] = None
@@ -31,5 +31,6 @@ class MediaContent:
     full_cover: Optional[Path] = None
     performer: Optional[str] = None
     is_blurred: bool | None = None
-    is_lossless: bool = False  # True only when actual lossless (FLAC) was delivered
+    is_lossless: bool = False
+    is_nsfw: bool = False
 

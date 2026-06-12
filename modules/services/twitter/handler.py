@@ -44,17 +44,37 @@ async def twitter_handler(
 
     async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=chat_id):
         send_manager = MediaSender()
-        cache_key = get_cache_key(url, sponsor)
-
-        cached = await cache_check(db_session, cache_key)
-        if cached:
-            await send_manager.send(message, cached, service="twitter", db_session=db_session)
-            return
+        cache_key = get_cache_key(url)
 
         allow_nsfw = True
         if chat_id < 0:
             settings = await get_chat_settings(db_session, chat_id)
             allow_nsfw = settings.profile.allow_nsfw
+
+        cached = await cache_check(db_session, cache_key)
+        if cached:
+            is_nsfw = any(item.is_nsfw for item in cached)
+            if is_nsfw:
+                if not sponsor:
+                    raise BotError(
+                        code=ErrorCode.INVALID_URL,
+                        url=url,
+                        service=Services.TWITTER,
+                        message="NSFW content is only available to sponsors",
+                        is_logged=False,
+                        critical=False
+                    )
+                if not allow_nsfw:
+                    raise BotError(
+                        code=ErrorCode.NOT_ALLOWED,
+                        url=url,
+                        service=Services.TWITTER,
+                        message="NSFW content is not allowed in this chat",
+                        is_logged=False,
+                        critical=False
+                    )
+            await send_manager.send(message, cached, service="twitter", db_session=db_session)
+            return
 
     try:
         async with ChatActionSender.record_video_note(bot=message.bot, chat_id=chat_id):
@@ -83,11 +103,11 @@ async def twitter_handler(
 
             if res.status_code == 403:
                 raise BotError(
-                    code=ErrorCode.NOT_ALLOWED,
+                    code=ErrorCode.INVALID_URL if not sponsor else ErrorCode.NOT_ALLOWED,
                     url=url,
                     service=Services.TWITTER,
                     message=f"Download Error:\n {res.text}",
-                    is_logged=True,
+                    is_logged=False,
                     critical=False,
                 )
 
@@ -136,16 +156,26 @@ async def twitter_handler(
                 )
             )
 
-            # If content is NSFW but NSFW is not allowed in this chat, block it
-            if is_nsfw and not allow_nsfw:
-                raise BotError(
-                    code=ErrorCode.NOT_ALLOWED,
-                    url=url,
-                    service=Services.TWITTER,
-                    message="NSFW content is not allowed",
-                    is_logged=False,
-                    critical=False
-                )
+            # If content is NSFW
+            if is_nsfw:
+                if not sponsor:
+                    raise BotError(
+                        code=ErrorCode.INVALID_URL,
+                        url=url,
+                        service=Services.TWITTER,
+                        message="NSFW content is not allowed",
+                        is_logged=False,
+                        critical=False
+                    )
+                if not allow_nsfw:
+                    raise BotError(
+                        code=ErrorCode.NOT_ALLOWED,
+                        url=url,
+                        service=Services.TWITTER,
+                        message="NSFW content is not allowed",
+                        is_logged=False,
+                        critical=False
+                    )
 
             author_username = metadata.get('author_username')
             description = escape_html((metadata.get('caption') or "").strip())
@@ -166,12 +196,15 @@ async def twitter_handler(
                 media_content.append(
                     MediaContent(
                         type=type_val,
-                        path=Path(media.get('path')),
+                        path=Path(media.get('path')) if media.get('path') else None,
+                        optimized_path=Path(media.get('optimized_path')) if media.get('optimized_path') else None,
                         title=truncate_string(caption, 1024),
                         width=media.get('width', None),
                         height=media.get('height', None),
+                        duration=media.get('duration', None),
                         cover=Path(media.get('cover')) if media.get('cover') else None,
                         is_blurred=is_nsfw,
+                        is_nsfw=is_nsfw,
                     )
                 )
 
@@ -183,17 +216,13 @@ async def twitter_handler(
         await send_manager.send(message, media_content, service="twitter", cache_key=cache_key, db_session=db_session)
 
 
-def get_cache_key(url: str, sponsor: bool = False) -> str:
+def get_cache_key(url: str) -> str:
     match = re.search(r"status/(\d+)", url)
     if match:
-        if sponsor:
-            return f"tw:{match.group(1)}:sponsor"
         return f"tw:{match.group(1)}"
 
     clean_url = url.split('?')[0].rstrip('/')
     hashed = hashlib.md5(clean_url.encode('utf-8')).hexdigest()
-    if sponsor:
-        return f"tw:{hashed}:sponsor"
     return f"tw:{hashed}"
 
 
@@ -217,7 +246,8 @@ async def cache_check(db_session: AsyncSession, key: str) -> list[MediaContent] 
                 duration=c_item.duration or cached.data.duration,
                 width=c_item.width or cached.data.width,
                 height=c_item.height or cached.data.height,
-                is_blurred=c_item.is_blurred if c_item.is_blurred is not None else cached.data.is_blurred
+                is_blurred=c_item.is_blurred if c_item.is_blurred is not None else cached.data.is_blurred,
+                is_nsfw=c_item.is_nsfw if c_item.is_nsfw is not None else cached.data.is_nsfw
             ))
         return results
 
@@ -237,5 +267,6 @@ async def cache_check(db_session: AsyncSession, key: str) -> list[MediaContent] 
         duration=cached.data.duration,
         width=cached.data.width,
         height=cached.data.height,
-        is_blurred=cached.data.is_blurred
+        is_blurred=cached.data.is_blurred,
+        is_nsfw=cached.data.is_nsfw
     )]
