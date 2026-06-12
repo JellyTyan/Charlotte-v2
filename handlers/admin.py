@@ -751,7 +751,7 @@ async def admin_panel_service_usage(callback: CallbackQuery, state: FSMContext):
                 Statistics.service_name,
                 func.count(Statistics.event_id).label('total'),
                 func.sum(case((Statistics.status == 'success', 1), else_=0)).label('success'),
-                func.sum(case((Statistics.status == 'failed', 1), else_=0)).label('failed'),
+                func.sum(case((Statistics.status == 'failed_download', 1), else_=0)).label('failed'),
                 func.count(func.distinct(Statistics.user_id)).label('unique_users')
             )
             .where(Statistics.event_time >= since)
@@ -767,14 +767,24 @@ async def admin_panel_service_usage(callback: CallbackQuery, state: FSMContext):
     success_all = 0
     failed_all = 0
 
+    music_platforms = {"applemusic", "spotify", "soundcloud", "deezer", "ytmusic"}
+    total_music_cache = sum(cache_counts.get(p, 0) for p in music_platforms)
+
     for service, total, success, failed, unique_users in stats:
         success_rate = (success / total * 100) if total > 0 else 0
+        
+        service_lower = service.lower()
+        if service_lower in music_platforms:
+            cached_count = total_music_cache
+        else:
+            cached_count = cache_counts.get(service_lower, 0)
+
         text += f"<b>{service}</b>\n"
         text += f"  👥 Users: {unique_users}\n"
         text += f"  Total requests: {total}\n"
         text += f"  ✅ Success: {success} ({success_rate:.1f}%)\n"
         text += f"  ❌ Failed: {failed}\n"
-        text += f"  📦 Cached files: {cache_counts.get(service, 0)}\n\n"
+        text += f"  📦 Cached files: {cached_count}\n\n"
         total_all += total
         success_all += success
         failed_all += failed

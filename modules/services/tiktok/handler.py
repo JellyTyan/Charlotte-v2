@@ -38,87 +38,83 @@ async def tiktok_handler(message: Message, db_session: AsyncSession, http_client
             await send_manager.send(message, cached, service="tiktok", db_session=db_session)
             return
 
-    try:
-        async with ChatActionSender.record_video_note(bot=message.bot, chat_id=message.chat.id):
-            payload = {
-                "url": url,
-            }
-            res = await task_manager.run_download(
-                user_id=user_id,
+    async with ChatActionSender.record_video_note(bot=message.bot, chat_id=message.chat.id):
+        payload = {
+            "url": url,
+        }
+        res = await task_manager.run_download(
+            user_id=user_id,
+            url=url,
+            coro=http_client.post(
+                "http://media-core:9546/download/tiktok", json=payload,
+            ),
+        )
+
+        if res.status_code == 422:
+            raise BotError(
+                code=ErrorCode.UNSUPPORTED_CONTENT,
                 url=url,
-                coro=http_client.post(
-                    "http://media-core:9546/download/tiktok", json=payload,
-                ),
+                service=Services.TIKTOK,
+                message=f"Download Error:\n {res.text}",
+                is_logged=True,
+                critical=False,
             )
 
-            if res.status_code == 422:
-                raise BotError(
-                    code=ErrorCode.UNSUPPORTED_CONTENT,
-                    url=url,
-                    service=Services.TIKTOK,
-                    message=f"Download Error:\n {res.text}",
-                    is_logged=True,
-                    critical=False,
+        if res.status_code == 404:
+            raise BotError(
+                code=ErrorCode.NOT_FOUND,
+                url=url,
+                service=Services.TIKTOK,
+                message=f"Download Error:\n {res.text}",
+                is_logged=True,
+                critical=False,
+            )
+
+        if res.status_code != 200:
+            raise BotError(
+                code=ErrorCode.INTERNAL_ERROR,
+                url=url,
+                service=Services.TIKTOK,
+                message=f"Download Error:\n {res.text}",
+                is_logged=True,
+                critical=True,
+            )
+        metadata = res.json()["data"]
+
+        author_username = metadata.get('author_username')
+        description = escape_html((metadata.get('caption') or "").strip())
+        author_link = f"<a href='https://www.tiktok.com/@{author_username}/'>{author_username}</a>" if author_username else ""
+        parts = [p for p in [author_link, description] if p]
+        caption = " - ".join(parts)
+
+        media_content = []
+        for media in metadata.get('items', []):
+            media_content.append(
+                MediaContent(
+                    type=MediaType.PHOTO if media.get('type') == 'photo' else MediaType.VIDEO,
+                    path=Path(media.get('path')) if media.get('path') else None,
+                    optimized_path=Path(media.get('optimized_path')) if media.get('optimized_path') else None,
+                    title=truncate_string(caption, 1024),
+                    width=media.get('width', None),
+                    height=media.get('height', None),
+                    duration=media.get('duration', None),
+                    cover=Path(media.get('cover')) if media.get('cover') else None,
                 )
+            )
 
-            if res.status_code == 404:
-                raise BotError(
-                    code=ErrorCode.NOT_FOUND,
-                    url=url,
-                    service=Services.TIKTOK,
-                    message=f"Download Error:\n {res.text}",
-                    is_logged=True,
-                    critical=False,
+
+        music_info = metadata.get('music_info', {})
+        if music_info and music_info.get('path'):
+            media_content.append(
+                MediaContent(
+                    type=MediaType.AUDIO,
+                    path=Path(music_info.get('path')),
+                    title=music_info.get('title'),
+                    performer=music_info.get('author'),
+                    cover=Path(music_info.get('cover')),
+                    duration=music_info.get('duration'),
                 )
-
-            if res.status_code != 200:
-                raise BotError(
-                    code=ErrorCode.INTERNAL_ERROR,
-                    url=url,
-                    service=Services.TIKTOK,
-                    message=f"Download Error:\n {res.text}",
-                    is_logged=True,
-                    critical=True,
-                )
-            metadata = res.json()["data"]
-
-            author_username = metadata.get('author_username')
-            description = escape_html((metadata.get('caption') or "").strip())
-            author_link = f"<a href='https://www.tiktok.com/@{author_username}/'>{author_username}</a>" if author_username else ""
-            parts = [p for p in [author_link, description] if p]
-            caption = " - ".join(parts)
-
-            media_content = []
-            for media in metadata.get('items', []):
-                media_content.append(
-                    MediaContent(
-                        type=MediaType.PHOTO if media.get('type') == 'photo' else MediaType.VIDEO,
-                        path=Path(media.get('path')) if media.get('path') else None,
-                        optimized_path=Path(media.get('optimized_path')) if media.get('optimized_path') else None,
-                        title=truncate_string(caption, 1024),
-                        width=media.get('width', None),
-                        height=media.get('height', None),
-                        duration=media.get('duration', None),
-                        cover=Path(media.get('cover')) if media.get('cover') else None,
-                    )
-                )
-
-
-            music_info = metadata.get('music_info', {})
-            if music_info and music_info.get('path'):
-                media_content.append(
-                    MediaContent(
-                        type=MediaType.AUDIO,
-                        path=Path(music_info.get('path')),
-                        title=music_info.get('title'),
-                        performer=music_info.get('author'),
-                        cover=Path(music_info.get('cover')),
-                        duration=music_info.get('duration'),
-                    )
-                )
-    except BotError as e:
-        await log_download_event(db_session, user_id, Services.TIKTOK, 'failed_download')
-        raise e
+            )
 
     if media_content:
         await send_manager.send(message, media_content, service="tiktok", cache_key=cache_key, db_session=db_session)

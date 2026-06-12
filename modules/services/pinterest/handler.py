@@ -58,117 +58,81 @@ async def pinterest_handler(message: Message, db_session: AsyncSession, http_cli
                 await send_manager.send(message, cached, service="pinterest", db_session=db_session)
                 return
 
-    try:
-        async with ChatActionSender.record_video_note(bot=message.bot, chat_id=message.chat.id):
-            payload = {
-                "url": resolved_url,
-            }
-            res = await task_manager.run_download(
-                user_id=user_id,
+    async with ChatActionSender.record_video_note(bot=message.bot, chat_id=message.chat.id):
+        payload = {
+            "url": resolved_url,
+        }
+        res = await task_manager.run_download(
+            user_id=user_id,
+            url=url,
+            coro=http_client.post(
+                "http://media-core:9546/download/pinterest", json=payload,
+            ),
+        )
+
+        if res.status_code == 400:
+            raise BotError(
+                code=ErrorCode.INVALID_URL,
                 url=url,
-                coro=http_client.post(
-                    "http://media-core:9546/download/pinterest", json=payload,
-                ),
+                service=Services.PINTEREST,
+                message=f"Download Error:\n {res.text}",
+                is_logged=True,
+                critical=False,
             )
 
-            if res.status_code == 400:
-                raise BotError(
-                    code=ErrorCode.INVALID_URL,
-                    url=url,
-                    service=Services.PINTEREST,
-                    message=f"Download Error:\n {res.text}",
-                    is_logged=True,
-                    critical=False,
-                )
+        if res.status_code == 403:
+            raise BotError(
+                code=ErrorCode.NOT_ALLOWED,
+                url=url,
+                service=Services.PINTEREST,
+                message=f"Download Error:\n {res.text}",
+                is_logged=True,
+                critical=False,
+            )
 
-            if res.status_code == 403:
-                raise BotError(
-                    code=ErrorCode.NOT_ALLOWED,
-                    url=url,
-                    service=Services.PINTEREST,
-                    message=f"Download Error:\n {res.text}",
-                    is_logged=True,
-                    critical=False,
-                )
+        if res.status_code == 413:
+            raise BotError(
+                code=ErrorCode.LARGE_FILE,
+                url=url,
+                service=Services.PINTEREST,
+                message=f"Download Error:\n {res.text}",
+                is_logged=True,
+                critical=False,
+            )
 
-            if res.status_code == 413:
-                raise BotError(
-                    code=ErrorCode.LARGE_FILE,
-                    url=url,
-                    service=Services.PINTEREST,
-                    message=f"Download Error:\n {res.text}",
-                    is_logged=True,
-                    critical=False,
-                )
+        if res.status_code == 404:
+            raise BotError(
+                code=ErrorCode.NOT_FOUND,
+                url=url,
+                service=Services.PINTEREST,
+                message=f"Download Error:\n {res.text}",
+                is_logged=True,
+                critical=False,
+            )
 
-            if res.status_code == 404:
-                raise BotError(
-                    code=ErrorCode.NOT_FOUND,
-                    url=url,
-                    service=Services.PINTEREST,
-                    message=f"Download Error:\n {res.text}",
-                    is_logged=True,
-                    critical=False,
-                )
+        if res.status_code != 200:
+            raise BotError(
+                code=ErrorCode.INTERNAL_ERROR,
+                url=url,
+                service=Services.PINTEREST,
+                message=f"Download Error:\n {res.text}",
+                is_logged=True,
+                critical=True,
+            )
 
-            if res.status_code != 200:
-                raise BotError(
-                    code=ErrorCode.INTERNAL_ERROR,
-                    url=url,
-                    service=Services.PINTEREST,
-                    message=f"Download Error:\n {res.text}",
-                    is_logged=True,
-                    critical=True,
-                )
+        metadata = res.json()["data"]
 
-            metadata = res.json()["data"]
-
-            if metadata.get("type") == "multi":
-                for i, sub_pin in enumerate(metadata.get('items', [])):
-                    sub_author = sub_pin.get('author_username')
-                    sub_caption = escape_html((sub_pin.get('caption') or "").strip())
-                    sub_author_link = f"<a href='https://www.pinterest.com/{sub_author}/'>{sub_author}</a>" if sub_author else ""
-                    parts = [p for p in [sub_author_link, sub_caption] if p]
-                    caption = " - ".join(parts)
-
-                    sub_media_content = []
-                    for media in sub_pin.get('items', []):
-                        sub_media_content.append(
-                            MediaContent(
-                                type=MediaType.PHOTO if media.get('type') == 'photo' else MediaType.VIDEO,
-                                path=Path(media.get('path')) if media.get('path') else None,
-                                optimized_path=Path(media.get('optimized_path')) if media.get('optimized_path') else None,
-                                title=truncate_string(caption, 1024),
-                                width=media.get('width', None),
-                                height=media.get('height', None),
-                                duration=media.get('duration', None),
-                                cover=Path(media.get('cover')) if media.get('cover') else None,
-                            )
-                        )
-
-                    sub_pin_id = sub_pin.get("id")
-                    sub_cache_key = f"pin:{sub_pin_id}" if sub_pin_id else None
-
-                    if sub_media_content:
-                        await send_manager.send(
-                            message,
-                            sub_media_content,
-                            service="pinterest",
-                            cache_key=sub_cache_key,
-                            db_session=db_session,
-                            skip_reaction=(i > 0),
-                            skip_notification=(i > 0),
-                        )
-            else:
-                author = metadata.get('author_username')
-                caption_text = escape_html((metadata.get('caption') or "").strip())
-                author_link = f"<a href='https://www.pinterest.com/{author}/'>{author}</a>" if author else ""
-                parts = [p for p in [author_link, caption_text] if p]
+        if metadata.get("type") == "multi":
+            for i, sub_pin in enumerate(metadata.get('items', [])):
+                sub_author = sub_pin.get('author_username')
+                sub_caption = escape_html((sub_pin.get('caption') or "").strip())
+                sub_author_link = f"<a href='https://www.pinterest.com/{sub_author}/'>{sub_author}</a>" if sub_author else ""
+                parts = [p for p in [sub_author_link, sub_caption] if p]
                 caption = " - ".join(parts)
 
-                media_content = []
-                for media in metadata.get('items', []):
-                    media_content.append(
+                sub_media_content = []
+                for media in sub_pin.get('items', []):
+                    sub_media_content.append(
                         MediaContent(
                             type=MediaType.PHOTO if media.get('type') == 'photo' else MediaType.VIDEO,
                             path=Path(media.get('path')) if media.get('path') else None,
@@ -181,16 +145,46 @@ async def pinterest_handler(message: Message, db_session: AsyncSession, http_cli
                         )
                     )
 
-                final_pin_id = metadata.get("id") or pin_id
-                final_cache_key = f"pin:{final_pin_id}" if final_pin_id else None
+                sub_pin_id = sub_pin.get("id")
+                sub_cache_key = f"pin:{sub_pin_id}" if sub_pin_id else None
 
-                if media_content:
-                    await send_manager.send(message, media_content, service="pinterest", cache_key=final_cache_key, db_session=db_session)
+                if sub_media_content:
+                    await send_manager.send(
+                        message,
+                        sub_media_content,
+                        service="pinterest",
+                        cache_key=sub_cache_key,
+                        db_session=db_session,
+                        skip_reaction=(i > 0),
+                        skip_notification=(i > 0),
+                    )
+        else:
+            author = metadata.get('author_username')
+            caption_text = escape_html((metadata.get('caption') or "").strip())
+            author_link = f"<a href='https://www.pinterest.com/{author}/'>{author}</a>" if author else ""
+            parts = [p for p in [author_link, caption_text] if p]
+            caption = " - ".join(parts)
 
-    except BotError as e:
-        await log_download_event(db_session, user_id, Services.PINTEREST, 'failed_download')
-        logger.error(f"Pinterest download error: {e}")
-        raise e
+            media_content = []
+            for media in metadata.get('items', []):
+                media_content.append(
+                    MediaContent(
+                        type=MediaType.PHOTO if media.get('type') == 'photo' else MediaType.VIDEO,
+                        path=Path(media.get('path')) if media.get('path') else None,
+                        optimized_path=Path(media.get('optimized_path')) if media.get('optimized_path') else None,
+                        title=truncate_string(caption, 1024),
+                        width=media.get('width', None),
+                        height=media.get('height', None),
+                        duration=media.get('duration', None),
+                        cover=Path(media.get('cover')) if media.get('cover') else None,
+                    )
+                )
+
+            final_pin_id = metadata.get("id") or pin_id
+            final_cache_key = f"pin:{final_pin_id}" if final_pin_id else None
+
+            if media_content:
+                await send_manager.send(message, media_content, service="pinterest", cache_key=final_cache_key, db_session=db_session)
 
 
 def get_cache_key(url: str) -> str:

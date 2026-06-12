@@ -205,11 +205,9 @@ async def pixiv_handler(
                     )
                 )
 
-    except BotError as e:
-        await log_download_event(db_session, user_id, Services.PIXIV, 'failed_download')
-        raise e
     except Exception as e:
-        await log_download_event(db_session, user_id, Services.PIXIV, 'failed_download')
+        if isinstance(e, BotError):
+            raise e
         logger.error(f"Error processing Pixiv URL: {e}")
         raise BotError(
             code=ErrorCode.INTERNAL_ERROR,

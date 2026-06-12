@@ -56,11 +56,9 @@ async def twitch_handler(message: Message, db_session: AsyncSession):
         if media_content:
             await send_manager.send(message, media_content, service="twitch", cache_key=cache_key, db_session=db_session)
 
-    except BotError as e:
-        await log_download_event(db_session, user_id, Services.TWITCH, 'failed_download')
-        raise e
     except Exception as e:
-        await log_download_event(db_session, user_id, Services.TWITCH, 'failed_download')
+        if isinstance(e, BotError):
+            raise e
         logger.error(f"Error processing Twitch URL: {e}")
         raise BotError(
             code=ErrorCode.DOWNLOAD_FAILED,

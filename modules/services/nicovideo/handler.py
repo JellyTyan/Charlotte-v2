@@ -147,23 +147,18 @@ async def process_nicovideo_download(
 
     action = "record_audio" if media_type == "audio" else "record_video"
 
-    try:
-        async with ChatActionSender(bot=message.bot, chat_id=message.chat.id, action=action):
-            media_content = await task_manager.run_download(
-                user_id=user_id,
-                url=url,
-                coro=service.download(url, video_id=video_id, audio_id=audio_id, media_type=media_type)
-            )
+    async with ChatActionSender(bot=message.bot, chat_id=message.chat.id, action=action):
+        media_content = await task_manager.run_download(
+            user_id=user_id,
+            url=url,
+            coro=service.download(url, video_id=video_id, audio_id=audio_id, media_type=media_type)
+        )
 
-        if media_content:
-            await send_manager.send(
-                message, 
-                media_content, 
-                service="nicovideo",
-                cache_key=cache_key,
-                db_session=db_session
-            )
-
-    except BotError as e:
-        await log_download_event(db_session, user_id, Services.NICOVIDEO, "failed_download")
-        raise e
+    if media_content:
+        await send_manager.send(
+            message, 
+            media_content, 
+            service="nicovideo",
+            cache_key=cache_key,
+            db_session=db_session
+        )

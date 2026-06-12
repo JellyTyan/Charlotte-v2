@@ -258,7 +258,7 @@ async def spotify_handler(
                     break
                 logger.warning(f"Skipping track '{track_meta.get('title')}'")
                 await log_download_event(
-                    db_session, user_id, Services.SPOTIFY, "failed_download"
+                    db_session, user_id, Services.SPOTIFY, "failed_download", error_code=e.code
                 )
                 await message.answer(
                     i18n.get("skipped-track", title=track_meta.get("title"))

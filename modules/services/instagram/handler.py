@@ -40,74 +40,70 @@ async def instagram_handler(message: Message, db_session: AsyncSession, http_cli
             await send_manager.send(message, cached, service="instagram", db_session=db_session)
             return
 
-    try:
-        async with ChatActionSender.record_video_note(bot=message.bot, chat_id=message.chat.id):
-            payload = {
-                "url": url,
-                "sponsor": sponsor,
-            }
-            res = await task_manager.run_download(
-                user_id=user_id,
+    async with ChatActionSender.record_video_note(bot=message.bot, chat_id=message.chat.id):
+        payload = {
+            "url": url,
+            "sponsor": sponsor,
+        }
+        res = await task_manager.run_download(
+            user_id=user_id,
+            url=url,
+            coro=http_client.post(
+                "http://media-core:9546/download/instagram", json=payload,
+            ),
+        )
+
+        if res.status_code == 401:
+            raise BotError(
+                code=ErrorCode.AGE_RESTRICTED,
                 url=url,
-                coro=http_client.post(
-                    "http://media-core:9546/download/instagram", json=payload,
-                ),
+                service=Services.INSTAGRAM,
+                message=f"Download Error:\n {res.text}",
+                is_logged=True,
+                critical=False,
             )
 
-            if res.status_code == 401:
-                raise BotError(
-                    code=ErrorCode.AGE_RESTRICTED,
-                    url=url,
-                    service=Services.INSTAGRAM,
-                    message=f"Download Error:\n {res.text}",
-                    is_logged=True,
-                    critical=False,
-                )
+        if res.status_code == 404:
+            raise BotError(
+                code=ErrorCode.NOT_FOUND,
+                url=url,
+                service=Services.INSTAGRAM,
+                message=f"Download Error:\n {res.text}",
+                is_logged=True,
+                critical=False,
+            )
 
-            if res.status_code == 404:
-                raise BotError(
-                    code=ErrorCode.NOT_FOUND,
-                    url=url,
-                    service=Services.INSTAGRAM,
-                    message=f"Download Error:\n {res.text}",
-                    is_logged=True,
-                    critical=False,
-                )
+        if res.status_code != 200:
+            raise BotError(
+                code=ErrorCode.INTERNAL_ERROR,
+                url=url,
+                service=Services.INSTAGRAM,
+                message=f"Download Error:\n {res.text}",
+                is_logged=True,
+                critical=True,
+            )
+        metadata = res.json()["data"]
 
-            if res.status_code != 200:
-                raise BotError(
-                    code=ErrorCode.INTERNAL_ERROR,
-                    url=url,
-                    service=Services.INSTAGRAM,
-                    message=f"Download Error:\n {res.text}",
-                    is_logged=True,
-                    critical=True,
-                )
-            metadata = res.json()["data"]
+        author_username = metadata.get('author_username')
+        description = escape_html((metadata.get('caption') or "").strip())
+        author_link = f"<a href='https://www.instagram.com/{author_username}/'>{author_username}</a>" if author_username else ""
+        parts = [p for p in [author_link, description] if p]
+        caption = " - ".join(parts)
 
-            author_username = metadata.get('author_username')
-            description = escape_html((metadata.get('caption') or "").strip())
-            author_link = f"<a href='https://www.instagram.com/{author_username}/'>{author_username}</a>" if author_username else ""
-            parts = [p for p in [author_link, description] if p]
-            caption = " - ".join(parts)
-
-            media_content = []
-            for media in metadata.get('items', []):
-                media_content.append(
-                    MediaContent(
-                        type=MediaType.PHOTO if media.get('type') == 'photo' else MediaType.VIDEO,
-                        path=Path(media.get('path')) if media.get('path') else None,
-                        optimized_path=Path(media.get('optimized_path')) if media.get('optimized_path') else None,
-                        title=truncate_string(caption, 1024),
-                        width=media.get('width', None),
-                        height=media.get('height', None),
-                        duration=media.get('duration', None),
-                        cover=Path(media.get('cover')) if media.get('cover') else None,
-                    )
+        media_content = []
+        for media in metadata.get('items', []):
+            media_content.append(
+                MediaContent(
+                    type=MediaType.PHOTO if media.get('type') == 'photo' else MediaType.VIDEO,
+                    path=Path(media.get('path')) if media.get('path') else None,
+                    optimized_path=Path(media.get('optimized_path')) if media.get('optimized_path') else None,
+                    title=truncate_string(caption, 1024),
+                    width=media.get('width', None),
+                    height=media.get('height', None),
+                    duration=media.get('duration', None),
+                    cover=Path(media.get('cover')) if media.get('cover') else None,
                 )
-    except BotError as e:
-        await log_download_event(db_session, user_id, Services.INSTAGRAM, 'failed_download')
-        raise e
+            )
 
     if media_content:
         await send_manager.send(message, media_content, service="instagram", cache_key=cache_key, db_session=db_session)

@@ -58,11 +58,9 @@ async def bluesky_handler(message: Message, config: Config, i18n: TranslatorRunn
         if media_content:
             await send_manager.send(message, media_content, service="bluesky", cache_key=cache_key, db_session=db_session)
 
-    except BotError as e:
-        await log_download_event(db_session, user_id, Services.BLUESKY, 'failed_download')
-        raise e
     except Exception as e:
-        await log_download_event(db_session, user_id, Services.BLUESKY, 'failed_download')
+        if isinstance(e, BotError):
+            raise e
         logger.error(f"Error processing BlueSky URL: {e}")
         raise BotError(
             code=ErrorCode.DOWNLOAD_FAILED,

@@ -181,7 +181,8 @@ async def process_youtube_download(message: Message, url: str, format_choice: st
             )
 
     except Exception as e:
-        await log_download_event(db_session, user_id, Services.YOUTUBE, 'failed_download')
+        err_code = e.code if isinstance(e, BotError) else ErrorCode.DOWNLOAD_FAILED
+        await log_download_event(db_session, user_id, Services.YOUTUBE, 'failed_download', error_code=err_code)
 
         # Логика возврата средств (Refund), если скачивание упало после оплаты
         if payment_charge_id and message.bot:
@@ -306,7 +307,8 @@ async def trim_get_end(message: Message, i18n: TranslatorRunner, state: FSMConte
 
     except Exception as e:
         await process_message.delete()
-        await log_download_event(db_session, user_id, Services.YOUTUBE, 'failed_download')
+        err_code = e.code if isinstance(e, BotError) else ErrorCode.DOWNLOAD_FAILED
+        await log_download_event(db_session, user_id, Services.YOUTUBE, 'failed_download', error_code=err_code)
         
         if isinstance(e, BotError):
             raise e

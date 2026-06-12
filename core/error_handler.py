@@ -69,6 +69,20 @@ async def global_error_handler(event: ErrorEvent):
     if isinstance(exception, BotError):
         logger.info(f"Handling BotError: code={exception.code}, message={exception.message}")
 
+        if exception.service:
+            from utils.statistics_helper import log_download_event
+            user_id = user.id if user else (chat.id if chat else None)
+            if user_id:
+                async with database_manager.async_session() as log_session:
+                    await log_download_event(
+                        log_session,
+                        user_id=user_id,
+                        service=exception.service,
+                        status="failed_download",
+                        error_code=exception.code
+                    )
+                    await log_session.commit()
+
         if exception.send_user_message:
             from utils.error_messages import get_i18n_error_message
             error_message = get_i18n_error_message(exception.code, i18n)

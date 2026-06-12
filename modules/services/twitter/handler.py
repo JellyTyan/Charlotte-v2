@@ -76,141 +76,136 @@ async def twitter_handler(
             await send_manager.send(message, cached, service="twitter", db_session=db_session)
             return
 
-    try:
-        async with ChatActionSender.record_video_note(bot=message.bot, chat_id=chat_id):
-            payload = {
-                "url": url,
-                "sponsor": sponsor,
-                "nsfw": allow_nsfw
-            }
-            res = await task_manager.run_download(
-                user_id=user_id,
+    async with ChatActionSender.record_video_note(bot=message.bot, chat_id=chat_id):
+        payload = {
+            "url": url,
+            "sponsor": sponsor,
+            "nsfw": allow_nsfw
+        }
+        res = await task_manager.run_download(
+            user_id=user_id,
+            url=url,
+            coro=http_client.post(
+                "http://media-core:9546/download/twitter", json=payload,
+            ),
+        )
+
+        if res.status_code == 400:
+            raise BotError(
+                code=ErrorCode.INVALID_URL,
                 url=url,
-                coro=http_client.post(
-                    "http://media-core:9546/download/twitter", json=payload,
-                ),
+                service=Services.TWITTER,
+                message=f"Download Error:\n {res.text}",
+                is_logged=True,
+                critical=False,
             )
 
-            if res.status_code == 400:
+        if res.status_code == 403:
+            raise BotError(
+                code=ErrorCode.INVALID_URL if not sponsor else ErrorCode.NOT_ALLOWED,
+                url=url,
+                service=Services.TWITTER,
+                message=f"Download Error:\n {res.text}",
+                is_logged=False,
+                critical=False,
+            )
+
+        if res.status_code == 413:
+            raise BotError(
+                code=ErrorCode.LARGE_FILE,
+                url=url,
+                service=Services.TWITTER,
+                message=f"Download Error:\n {res.text}",
+                is_logged=True,
+                critical=False,
+            )
+
+        if res.status_code == 404:
+            raise BotError(
+                code=ErrorCode.NOT_FOUND,
+                url=url,
+                service=Services.TWITTER,
+                message=f"Download Error:\n {res.text}",
+                is_logged=True,
+                critical=False,
+            )
+
+        if res.status_code != 200:
+            raise BotError(
+                code=ErrorCode.INTERNAL_ERROR,
+                url=url,
+                service=Services.TWITTER,
+                message=f"Download Error:\n {res.text}",
+                is_logged=True,
+                critical=True,
+            )
+
+        metadata = res.json()["data"]
+
+        # Check NSFW status from response
+        is_nsfw = (
+            metadata.get('nsfw') or
+            metadata.get('possibly_sensitive') or
+            metadata.get('is_blurred') or
+            any(
+                item.get('nsfw') or
+                item.get('possibly_sensitive') or
+                item.get('is_blurred')
+                for item in metadata.get('items', [])
+            )
+        )
+
+        # If content is NSFW
+        if is_nsfw:
+            if not sponsor:
                 raise BotError(
                     code=ErrorCode.INVALID_URL,
                     url=url,
                     service=Services.TWITTER,
-                    message=f"Download Error:\n {res.text}",
-                    is_logged=True,
-                    critical=False,
-                )
-
-            if res.status_code == 403:
-                raise BotError(
-                    code=ErrorCode.INVALID_URL if not sponsor else ErrorCode.NOT_ALLOWED,
-                    url=url,
-                    service=Services.TWITTER,
-                    message=f"Download Error:\n {res.text}",
+                    message="NSFW content is not allowed",
                     is_logged=False,
-                    critical=False,
+                    critical=False
                 )
-
-            if res.status_code == 413:
+            if not allow_nsfw:
                 raise BotError(
-                    code=ErrorCode.LARGE_FILE,
+                    code=ErrorCode.NOT_ALLOWED,
                     url=url,
                     service=Services.TWITTER,
-                    message=f"Download Error:\n {res.text}",
-                    is_logged=True,
-                    critical=False,
+                    message="NSFW content is not allowed",
+                    is_logged=False,
+                    critical=False
                 )
 
-            if res.status_code == 404:
-                raise BotError(
-                    code=ErrorCode.NOT_FOUND,
-                    url=url,
-                    service=Services.TWITTER,
-                    message=f"Download Error:\n {res.text}",
-                    is_logged=True,
-                    critical=False,
-                )
+        author_username = metadata.get('author_username')
+        description = escape_html((metadata.get('caption') or "").strip())
+        author_link = f"<a href='https://x.com/{author_username}'>{author_username}</a>" if author_username else ""
+        parts = [p for p in [author_link, description] if p]
+        caption = " - ".join(parts)
 
-            if res.status_code != 200:
-                raise BotError(
-                    code=ErrorCode.INTERNAL_ERROR,
-                    url=url,
-                    service=Services.TWITTER,
-                    message=f"Download Error:\n {res.text}",
-                    is_logged=True,
-                    critical=True,
-                )
+        media_content = []
+        for media in metadata.get('items', []):
+            m_type = media.get('type')
+            if m_type == 'photo':
+                type_val = MediaType.PHOTO
+            elif m_type in ('gif', 'animated_gif'):
+                type_val = MediaType.GIF
+            else:
+                type_val = MediaType.VIDEO
 
-            metadata = res.json()["data"]
-
-            # Check NSFW status from response
-            is_nsfw = (
-                metadata.get('nsfw') or
-                metadata.get('possibly_sensitive') or
-                metadata.get('is_blurred') or
-                any(
-                    item.get('nsfw') or
-                    item.get('possibly_sensitive') or
-                    item.get('is_blurred')
-                    for item in metadata.get('items', [])
+            media_content.append(
+                MediaContent(
+                    type=type_val,
+                    path=Path(media.get('path')) if media.get('path') else None,
+                    optimized_path=Path(media.get('optimized_path')) if media.get('optimized_path') else None,
+                    title=truncate_string(caption, 1024),
+                    width=media.get('width', None),
+                    height=media.get('height', None),
+                    duration=media.get('duration', None),
+                    cover=Path(media.get('cover')) if media.get('cover') else None,
+                    is_blurred=is_nsfw,
+                    is_nsfw=is_nsfw,
                 )
             )
-
-            # If content is NSFW
-            if is_nsfw:
-                if not sponsor:
-                    raise BotError(
-                        code=ErrorCode.INVALID_URL,
-                        url=url,
-                        service=Services.TWITTER,
-                        message="NSFW content is not allowed",
-                        is_logged=False,
-                        critical=False
-                    )
-                if not allow_nsfw:
-                    raise BotError(
-                        code=ErrorCode.NOT_ALLOWED,
-                        url=url,
-                        service=Services.TWITTER,
-                        message="NSFW content is not allowed",
-                        is_logged=False,
-                        critical=False
-                    )
-
-            author_username = metadata.get('author_username')
-            description = escape_html((metadata.get('caption') or "").strip())
-            author_link = f"<a href='https://x.com/{author_username}'>{author_username}</a>" if author_username else ""
-            parts = [p for p in [author_link, description] if p]
-            caption = " - ".join(parts)
-
-            media_content = []
-            for media in metadata.get('items', []):
-                m_type = media.get('type')
-                if m_type == 'photo':
-                    type_val = MediaType.PHOTO
-                elif m_type in ('gif', 'animated_gif'):
-                    type_val = MediaType.GIF
-                else:
-                    type_val = MediaType.VIDEO
-
-                media_content.append(
-                    MediaContent(
-                        type=type_val,
-                        path=Path(media.get('path')) if media.get('path') else None,
-                        optimized_path=Path(media.get('optimized_path')) if media.get('optimized_path') else None,
-                        title=truncate_string(caption, 1024),
-                        width=media.get('width', None),
-                        height=media.get('height', None),
-                        duration=media.get('duration', None),
-                        cover=Path(media.get('cover')) if media.get('cover') else None,
-                        is_blurred=is_nsfw,
-                        is_nsfw=is_nsfw,
-                    )
-                )
-
-    except BotError as e:
-        await log_download_event(db_session, user_id, Services.TWITTER, 'failed_download')
-        raise e
 
     if media_content:
         await send_manager.send(message, media_content, service="twitter", cache_key=cache_key, db_session=db_session)
