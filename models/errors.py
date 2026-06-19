@@ -6,22 +6,16 @@ from .service_list import Services
 
 
 class ErrorCode(Enum):
-    INVALID_URL = "E001"
-    LARGE_FILE = "E002"
-    SIZE_CHECK_FAIL = "E003"
-    DOWNLOAD_FAILED = "E004"
-    DOWNLOAD_CANCELLED = "E005"
-    PLAYLIST_INFO_ERROR = "E006"
-    SPONSORSHIP_ACTIVATE = "E007"
-    METADATA_ERROR = "E008"
-    SEND_ERROR = "E009"
-    NOT_FOUND = "E404"
-    NOT_ALLOWED = "E403"
-    INTERNAL_ERROR = "E500"
-    ACCOUNT_BANNED = "E503"
-    AGE_RESTRICTED = "E010"
-    LOSSLESS_UNAVAILABLE = "E011"  # Lossless service (Tidal) is unavailable
-    UNSUPPORTED_CONTENT = "E012"
+    INVALID_URL = "E001"          # Ссылка неправильная или неподдерживаемая
+    LARGE_FILE = "E002"           # Файл слишком большой для отправки
+    DOWNLOAD_CANCELLED = "E003"   # Загрузка отменена пользователем
+    NOT_FOUND = "E004"            # Ничего не найдено (пост удален или ошибка метаданных)
+    NOT_ALLOWED = "E005"          # Отключено/запрещено в настройках чата
+    INTERNAL_ERROR = "E006"       # Ошибка на стороне сервера / скачивания
+    AGE_RESTRICTED = "E007"       # Возрастные ограничения (18+)
+    PRIVATE_CONTENT = "E008"      # Приватный контент (требуется авторизация)
+    REGION_RESTRICTED = "E009"    # Ограничено по региону (geoblock)
+
 
 
 @dataclass

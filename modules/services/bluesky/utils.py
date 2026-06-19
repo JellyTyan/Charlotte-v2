@@ -24,7 +24,7 @@ async def get_post_info(post_id: str, author_username: str, client: AsyncSession
         return response.json()
     else:
         raise BotError(
-            code=ErrorCode.DOWNLOAD_FAILED,
+            code=ErrorCode.INTERNAL_ERROR,
             message=f"Failed to get bluesky info: response status {response.status_code}",
             url=str(encoded_uri),
             critical=True,

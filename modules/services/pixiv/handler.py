@@ -88,6 +88,17 @@ async def pixiv_handler(
                 ),
             )
 
+            err_msg = res.text.lower() if res.text else ""
+            if res.status_code == 451 or "geo" in err_msg or "country" in err_msg or "region" in err_msg:
+                raise BotError(
+                    code=ErrorCode.REGION_RESTRICTED,
+                    url=url,
+                    service=Services.PIXIV,
+                    message=f"Download Error:\n {res.text}",
+                    is_logged=False,
+                    critical=False,
+                )
+
             if res.status_code == 400:
                 raise BotError(
                     code=ErrorCode.INVALID_URL,

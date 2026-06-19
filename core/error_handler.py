@@ -53,15 +53,18 @@ async def global_error_handler(event: ErrorEvent):
 
     lang = "en"
 
-    async with database_manager.async_session() as session:
-        if chat and chat.type != "private":
-            settings = await get_chat_settings(session, chat.id)
-            if settings:
-                lang = settings.profile.language
-        elif user:
-            settings = await get_user_settings(session, user.id)
-            if settings:
-                lang = settings.profile.language
+    try:
+        async with database_manager.async_session() as session:
+            if chat and chat.type != "private":
+                settings = await get_chat_settings(session, chat.id)
+                if settings:
+                    lang = settings.profile.language
+            elif user:
+                settings = await get_user_settings(session, user.id)
+                if settings:
+                    lang = settings.profile.language
+    except Exception as db_err:
+        logger.error(f"Failed to query database for settings in error handler: {db_err}")
 
     i18n: TranslatorRunner = hub.get_translator_by_locale(lang)
 

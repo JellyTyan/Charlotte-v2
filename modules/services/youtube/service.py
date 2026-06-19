@@ -28,7 +28,7 @@ class YouTubeService:
     async def download(self, url: str, format_choice: str = "") -> List[MediaContent]:
         if not format_choice:
             raise BotError(
-                code=ErrorCode.DOWNLOAD_FAILED,
+                code=ErrorCode.INTERNAL_ERROR,
                 message="Format choice is required",
                 url=url,
                 service=Services.YOUTUBE,
@@ -38,7 +38,7 @@ class YouTubeService:
         parts = format_choice.split('_')
         if len(parts) < 3:
             raise BotError(
-                code=ErrorCode.DOWNLOAD_FAILED,
+                code=ErrorCode.INTERNAL_ERROR,
                 message=f"Invalid format choice: {format_choice}",
                 url=url,
                 service=Services.YOUTUBE,
@@ -84,7 +84,7 @@ class YouTubeService:
                     is_logged=False
                 )
             raise BotError(
-                code=ErrorCode.METADATA_ERROR,
+                code=ErrorCode.NOT_FOUND,
                 message=f"Failed to extract video info: {e}",
                 url=url,
                 service=Services.YOUTUBE,
@@ -95,7 +95,7 @@ class YouTubeService:
 
         if not clean_info:
             raise BotError(
-                code=ErrorCode.METADATA_ERROR,
+                code=ErrorCode.NOT_FOUND,
                 message="No video info returned",
                 url=url,
                 service=Services.YOUTUBE,
@@ -120,7 +120,7 @@ class YouTubeService:
         base_path = os.path.abspath(base_path)
         if not base_path.startswith(os.path.abspath(self.output_path)):
             raise BotError(
-                code=ErrorCode.METADATA_ERROR,
+                code=ErrorCode.NOT_FOUND,
                 message="Invalid file path detected",
                 url=url,
                 service=Services.YOUTUBE,
@@ -261,7 +261,7 @@ class YouTubeService:
                         is_logged=False
                     )
                 raise BotError(
-                    code=ErrorCode.DOWNLOAD_FAILED,
+                    code=ErrorCode.INTERNAL_ERROR,
                     service=Services.YOUTUBE,
                     message=f"Failed to download YouTube video: {e}",
                     url=url,
@@ -273,7 +273,7 @@ class YouTubeService:
 
             if not clean_info:
                 raise BotError(
-                    code=ErrorCode.DOWNLOAD_FAILED,
+                    code=ErrorCode.INTERNAL_ERROR,
                     message="Failed to download video",
                     url=url,
                     service=Services.YOUTUBE,
@@ -300,7 +300,7 @@ class YouTubeService:
         except Exception as e:
             logger.error(f"Failed to download video: {e}")
             raise BotError(
-                code=ErrorCode.DOWNLOAD_FAILED,
+                code=ErrorCode.INTERNAL_ERROR,
                 message=str(e),
                 url=url,
                 service=Services.YOUTUBE,
@@ -341,7 +341,7 @@ class YouTubeService:
                         is_logged=False
                     )
                 raise BotError(
-                    code=ErrorCode.DOWNLOAD_FAILED,
+                    code=ErrorCode.INTERNAL_ERROR,
                     service=Services.YOUTUBE,
                     message=f"Failed to download YouTube audio: {e}",
                     url=url,
@@ -353,7 +353,7 @@ class YouTubeService:
 
             if not clean_info:
                 raise BotError(
-                    code=ErrorCode.DOWNLOAD_FAILED,
+                    code=ErrorCode.INTERNAL_ERROR,
                     message="Failed to download audio",
                     service=Services.YOUTUBE,
                     url=url,
@@ -401,7 +401,7 @@ class YouTubeService:
         except Exception as e:
             logger.error(f"Failed to download audio: {e}")
             raise BotError(
-                code=ErrorCode.DOWNLOAD_FAILED,
+                code=ErrorCode.INTERNAL_ERROR,
                 message=str(e),
                 url=url,
                 service=Services.YOUTUBE,
@@ -450,7 +450,7 @@ class YouTubeService:
                 result = await job.result()
             except Exception as e:
                 raise BotError(
-                    code=ErrorCode.DOWNLOAD_FAILED,
+                    code=ErrorCode.INTERNAL_ERROR,
                     service=Services.YOUTUBE,
                     message=f"Trim download failed: {e}",
                     url=url,
@@ -463,7 +463,7 @@ class YouTubeService:
 
             if not clean_info or not filepath:
                 raise BotError(
-                    code=ErrorCode.DOWNLOAD_FAILED,
+                    code=ErrorCode.INTERNAL_ERROR,
                     message="Trim produced no output file",
                     url=url,
                     service=Services.YOUTUBE,
@@ -490,7 +490,7 @@ class YouTubeService:
         except Exception as e:
             logger.error(f"Trim download error: {e}")
             raise BotError(
-                code=ErrorCode.DOWNLOAD_FAILED,
+                code=ErrorCode.INTERNAL_ERROR,
                 message=str(e),
                 url=url,
                 service=Services.YOUTUBE,

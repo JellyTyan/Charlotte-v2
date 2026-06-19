@@ -81,7 +81,7 @@ class BlueSkyService:
                             await asyncio.gather(*[job.result() for job in tasks], return_exceptions=True)
                         except Exception as e:
                             raise BotError(
-                                code=ErrorCode.DOWNLOAD_FAILED,
+                                code=ErrorCode.INTERNAL_ERROR,
                                 service=Services.BLUESKY,
                                 message=f"Failed to gather photo results: {e}",
                                 url=url,
@@ -100,7 +100,7 @@ class BlueSkyService:
                         job_result = await job.result()
                     except Exception as e:
                         raise BotError(
-                            code=ErrorCode.DOWNLOAD_FAILED,
+                            code=ErrorCode.INTERNAL_ERROR,
                             service=Services.BLUESKY,
                             message=f"Failed to download video: {e}",
                             url=url,

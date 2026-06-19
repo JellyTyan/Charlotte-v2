@@ -67,7 +67,7 @@ async def _download_with_client(
         )
     except RequestsError as e:
         raise BotError(
-            code=ErrorCode.DOWNLOAD_FAILED,
+            code=ErrorCode.INTERNAL_ERROR,
             message=f"Network error: {str(e)}",
             url=url,
             critical=False,
@@ -77,7 +77,7 @@ async def _download_with_client(
     if response.status_code != 200:
         await response.aclose()
         raise BotError(
-            code=ErrorCode.DOWNLOAD_FAILED,
+            code=ErrorCode.INTERNAL_ERROR,
             message=f"Failed to download file: {response.status_code}",
             url=url,
             critical=False,
@@ -90,7 +90,7 @@ async def _download_with_client(
         if max_size and content_length > max_size:
             await response.aclose()
             raise BotError(
-                code=ErrorCode.SIZE_CHECK_FAIL,
+                code=ErrorCode.LARGE_FILE,
                 url=url,
                 critical=False,
             )

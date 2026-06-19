@@ -139,8 +139,18 @@ async def soundcloud_handler(
             "http://lossless-core:7856/metadata", json={"url": url}
         )
         if response.status_code != 200:
+            err_text = response.text.lower() if response.text else ""
+            if "geo" in err_text or "country" in err_text or "region" in err_text:
+                raise BotError(
+                    code=ErrorCode.REGION_RESTRICTED,
+                    url=url,
+                    service=Services.SOUNDCLOUD,
+                    message=f"Metadata Error:\n {response.text}",
+                    is_logged=False,
+                    critical=False,
+                )
             raise BotError(
-                code=ErrorCode.METADATA_ERROR,
+                code=ErrorCode.NOT_FOUND,
                 url=url,
                 service=Services.SOUNDCLOUD,
                 message=f"Metadata Error:\n {response.text}",

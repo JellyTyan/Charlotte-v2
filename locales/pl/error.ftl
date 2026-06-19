@@ -1,13 +1,10 @@
-error-invalid-url = Ups! Ten link wygląda na uszkodzony albo to treść prywatna/18+. 🤯
-error-large-file = Wow, jaki ogromny plik! 🐘 Nie dam rady z takim rozmiarem.
-error-size-fail-check = Uff, plik jest dla mnie za ciężki! Spróbuj mniejszego, proszę 😭
-error-download-error = Wybacz! Starałam się, ale nie udało się pobrać. 💔
-error-download-canceled = Dobra, anuluję pobieranie! 🛑
-error-playlist-info = Nie udało się zdobyć info o playliście. Jest prywatna?
-error-metadata = Nie znalazłam metadanych. Strasznie to dziwne! 👻
-error-no-found = Przepraszam, szukałam wszędzie, ale nic nie znalazłam. 🔍
-error-internal = O nie, coś we mnie pękło! Spróbujesz później? 🧡
+error-invalid-url = Ten link jest nieprawidłowy 🥺
+error-private-content = 🔒 Ta zawartość jest prywatna lub zablokowana przez ustawienia prywatności. Nie mogę do niej dotrzeć! 🥺
+error-large-file = Ojej, jaki wielki plik! 🐘 Nie potrafię jeszcze przesyłać tak dużych plików... 😭
+error-not-allowed = Przepraszam, ale ta funkcja jest wyłączona w ustawieniach tego czatu. ⚙️
+error-internal = O nie, coś się we mnie popsuło na serwerze... Spróbujesz trochę później? 🧡
+error-not-found = Przepraszam, przeszukałam wszystko, ale nic nie znalazłam pod tym linkiem. Czy na pewno nie został usunięty? 🔍
+error-region-restricted = 🌍 Ups, ta zawartość jest zablokowana w moim kraju lub regionie. Nie mogę jej pobrać! 😔
+error-age-restricted = 🔞 Ups! To jest zawartość 18+ z ograniczeniami wiekowymi, do której nie mam dostępu! 😳
+error-download-canceled = Dobrze, anuluję pobieranie na Twoje życzenie! 🛑
 error-generic = ❌ Coś poszło nie tak. Przepraszam!
-error-age-restricted = 🔞 Ups, to treść 18+ i niestety tam nie sięgam! 😳
-error-unsupported-content = Ups, jeszcze nie obsługuję tego typu treści... 🥺
-

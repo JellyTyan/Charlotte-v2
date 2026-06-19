@@ -1,13 +1,10 @@
-error-invalid-url = Jejda! Ten odkaz vypadá rozbitě, nebo je to soukromý/18+ obsah. 🤯
-error-large-file = Páni, to je obří soubor! 🐘 S takovou velikostí si zatím neporadím.
-error-size-fail-check = Uff, ten soubor je na mě moc těžký! Zkus nějaký menší, prosím 😭
-error-download-error = Promiň! Snažila jsem se, ale nepovedlo se to stáhnout. 💔
-error-download-canceled = Dobře, ruším stahování! 🛑
-error-playlist-info = Nepovedlo se zjistit info o playlistu. Je soukromý?
-error-metadata = Nenašla jsem metadata. To je záhada! 👻
-error-no-found = Promiň, hledala jsem všude, ale nic jsem nenašla. 🔍
-error-internal = Jejda, něco se ve mně pokazilo! Zkusíš to později? 🧡
+error-invalid-url = Tento odkaz je neplatný 🥺
+error-private-content = 🔒 Tento obsah je soukromý nebo chráněný nastavením soukromí. Nedokážu se k němu dostat! 🥺
+error-large-file = Páni, to je obří soubor! 🐘 Takto velké soubory zatím neumím posílat... 😭
+error-not-allowed = Omlouvám se, ale tato funkce je v nastavení tohoto chatu vypnutá. ⚙️
+error-internal = Jejda, něco se ve mně na serveru pokazilo... Zkusíš to prosím za chvíli znovu? 🧡
+error-not-found = Promiň, hledala jsem všude, ale pod tímto odkazem jsem nic nenašla. Nebyl smazán? 🔍
+error-region-restricted = 🌍 Jejda, tento obsah je v mé zemi nebo oblasti zablokován. Nemohu ho stáhnout! 😔
+error-age-restricted = 🔞 Jejda! Tento obsah má věkové omezení 18+ a já se k němu nedostanu! 😳
+error-download-canceled = Dobře, ruším stahování na tvou žádost! 🛑
 error-generic = ❌ Něco se pokazilo. Omlouvám se!
-error-age-restricted = 🔞 Jejda, to je obsah 18+ a já se tam prostě nedostanu! 😳
-error-unsupported-content = Jejda, tento typ obsahu zatím nepodporuji... 🥺
-

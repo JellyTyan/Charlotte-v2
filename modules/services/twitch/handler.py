@@ -61,7 +61,7 @@ async def twitch_handler(message: Message, db_session: AsyncSession):
             raise e
         logger.error(f"Error processing Twitch URL: {e}")
         raise BotError(
-            code=ErrorCode.DOWNLOAD_FAILED,
+            code=ErrorCode.INTERNAL_ERROR,
             message=str(e),
             url=url,
             service=Services.TWITCH,

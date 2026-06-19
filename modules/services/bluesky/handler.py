@@ -63,7 +63,7 @@ async def bluesky_handler(message: Message, config: Config, i18n: TranslatorRunn
             raise e
         logger.error(f"Error processing BlueSky URL: {e}")
         raise BotError(
-            code=ErrorCode.DOWNLOAD_FAILED,
+            code=ErrorCode.INTERNAL_ERROR,
             message=str(e),
             url=url,
             service=Services.BLUESKY,

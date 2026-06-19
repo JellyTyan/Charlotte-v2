@@ -45,7 +45,7 @@ class NicoVideoService:
             result = await job.result()
         except Exception as e:
             raise BotError(
-                code=ErrorCode.METADATA_ERROR,
+                code=ErrorCode.NOT_FOUND,
                 service=Services.NICOVIDEO,
                 message=f"Failed to fetch NicoVideo info: {e}",
                 url=url,
@@ -56,7 +56,7 @@ class NicoVideoService:
 
         if not clean_info:
             raise BotError(
-                code=ErrorCode.METADATA_ERROR,
+                code=ErrorCode.NOT_FOUND,
                 message="No video info returned from NicoVideo",
                 url=url,
                 service=Services.NICOVIDEO,
@@ -68,7 +68,7 @@ class NicoVideoService:
         formats = formats_data.get("formats", [])
         if not formats:
             raise BotError(
-                code=ErrorCode.METADATA_ERROR,
+                code=ErrorCode.NOT_FOUND,
                 message="No valid formats found for NicoVideo",
                 url=url,
                 service=Services.NICOVIDEO,

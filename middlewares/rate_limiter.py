@@ -24,7 +24,9 @@ class RateLimiter(BaseMiddleware):
 
         if len(self._user_requests[user_id]) >= self.rate:
             if now - self._user_notified.get(user_id, 0) > self.per:
-                await event.answer("⏳ Too many requests. Please wait.")
+                i18n = data.get("i18n")
+                msg = i18n.get("too-many-requests") if i18n else "⏳ Too many requests. Please wait."
+                await event.answer(msg)
                 self._user_notified[user_id] = now
             return
 

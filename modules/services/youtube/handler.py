@@ -1,4 +1,5 @@
 import logging
+import httpx
 
 from aiofiles import os as aios
 from aiogram import F, Router
@@ -31,15 +32,88 @@ YOUTUBE_REGEX = r"https?://(?:www\.)?(?:m\.)?(?:youtu\.be/|youtube\.com/(?:short
 
 
 @youtube_router.message(F.text.regexp(YOUTUBE_REGEX))
-async def youtube_handler(message: Message, i18n: TranslatorRunner, db_session: AsyncSession):
+async def youtube_handler(message: Message, i18n: TranslatorRunner, db_session: AsyncSession, http_client: httpx.AsyncClient):
     if not message.text or not message.from_user:
         return
 
     url = message.text
     chat_id = message.chat.id
+    user_id = message.from_user.id
 
     async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=chat_id):
         process_message = await message.reply(i18n.get('processing'))
+
+        payload = {
+            "url": url,
+        }
+        res = await task_manager.run_download(
+            user_id=user_id,
+            url=url,
+            coro=http_client.post(
+                "http://media-core:9546/youtube/metadata", json=payload,
+            ),
+        )
+
+        err_msg = res.text.lower() if res.text else ""
+        if res.status_code == 451 or "geo" in err_msg or "country" in err_msg or "region" in err_msg:
+            raise BotError(
+                code=ErrorCode.REGION_RESTRICTED,
+                url=url,
+                service=Services.YOUTUBE,
+                message=f"Download Error:\n {res.text}",
+                is_logged=False,
+                critical=False,
+            )
+
+        if res.status_code == 400:
+            raise BotError(
+                code=ErrorCode.INVALID_URL,
+                url=url,
+                service=Services.YOUTUBE,
+                message=f"Download Error:\n {res.text}",
+                is_logged=True,
+                critical=False,
+            )
+
+        if res.status_code == 401:
+            raise BotError(
+                code=ErrorCode.AGE_RESTRICTED,
+                url=url,
+                service=Services.YOUTUBE,
+                message=f"Download Error:\n {res.text}",
+                is_logged=False,
+                critical=False,
+            )
+
+        if res.status_code == 413:
+            raise BotError(
+                code=ErrorCode.LARGE_FILE,
+                url=url,
+                service=Services.YOUTUBE,
+                message=f"Download Error:\n {res.text}",
+                is_logged=True,
+                critical=False,
+            )
+
+        if res.status_code == 404:
+            raise BotError(
+                code=ErrorCode.NOT_FOUND,
+                url=url,
+                service=Services.YOUTUBE,
+                message=f"Download Error:\n {res.text}",
+                is_logged=True,
+                critical=False,
+            )
+
+        if res.status_code != 200:
+            raise BotError(
+                code=ErrorCode.INTERNAL_ERROR,
+                url=url,
+                service=Services.YOUTUBE,
+                message=f"Download Error:\n {res.text}",
+                is_logged=True,
+                critical=True,
+            )
 
         arq = await get_arq_pool('light')
         service = YouTubeService(arq=arq)
@@ -50,7 +124,7 @@ async def youtube_handler(message: Message, i18n: TranslatorRunner, db_session: 
         if media_metadata is None:
             await process_message.delete()
             raise BotError(
-                code=ErrorCode.METADATA_ERROR,
+                code=ErrorCode.NOT_FOUND,
                 message="Failed to get metadata",
                 url=url,
                 service=Services.YOUTUBE,
@@ -148,11 +222,12 @@ async def format_choice_handler(callback_query: CallbackQuery, callback_data: Yo
         format_choice=format_choice,
         resolution=callback_data.resolution,
         user_id=user_id,
-        db_session=db_session
+        db_session=db_session,
+        i18n=i18n
     )
 
 
-async def process_youtube_download(message: Message, url: str, format_choice: str, resolution: str, user_id: int, db_session: AsyncSession, payment_charge_id: str = None):
+async def process_youtube_download(message: Message, url: str, format_choice: str, resolution: str, user_id: int, db_session: AsyncSession, payment_charge_id: str = None, i18n: TranslatorRunner = None):
     """Linear download process for both free and paid YouTube downloads, with refund support."""
     arq = await get_arq_pool('light')
     service = YouTubeService(arq=arq)
@@ -181,7 +256,7 @@ async def process_youtube_download(message: Message, url: str, format_choice: st
             )
 
     except Exception as e:
-        err_code = e.code if isinstance(e, BotError) else ErrorCode.DOWNLOAD_FAILED
+        err_code = e.code if isinstance(e, BotError) else ErrorCode.INTERNAL_ERROR
         await log_download_event(db_session, user_id, Services.YOUTUBE, 'failed_download', error_code=err_code)
 
         # Логика возврата средств (Refund), если скачивание упало после оплаты
@@ -190,13 +265,14 @@ async def process_youtube_download(message: Message, url: str, format_choice: st
                 await message.bot.refund_star_payment(user_id, telegram_payment_charge_id=payment_charge_id)
                 from storage.db.crud import update_payment_status
                 await update_payment_status(db_session, payment_charge_id, "refunded")
-                await message.answer("❌ Download failed. Your payment has been refunded.")
+                refund_msg = i18n.get("download-failed-refund") if i18n else "❌ Download failed. Your payment has been refunded."
+                await message.answer(refund_msg)
             except Exception as refund_error:
                 logger.error(f"Failed to refund payment: {refund_error}")
 
         if isinstance(e, BotError):
             raise e
-        raise BotError(code=ErrorCode.DOWNLOAD_FAILED, message=str(e), service=Services.YOUTUBE, is_logged=True) from e
+        raise BotError(code=ErrorCode.INTERNAL_ERROR, message=str(e), service=Services.YOUTUBE, is_logged=True) from e
 
 
 @youtube_router.callback_query(YoutubeTrimCallback.filter())
@@ -307,9 +383,9 @@ async def trim_get_end(message: Message, i18n: TranslatorRunner, state: FSMConte
 
     except Exception as e:
         await process_message.delete()
-        err_code = e.code if isinstance(e, BotError) else ErrorCode.DOWNLOAD_FAILED
+        err_code = e.code if isinstance(e, BotError) else ErrorCode.INTERNAL_ERROR
         await log_download_event(db_session, user_id, Services.YOUTUBE, 'failed_download', error_code=err_code)
         
         if isinstance(e, BotError):
             raise e
-        raise BotError(code=ErrorCode.DOWNLOAD_FAILED, message=str(e), service=Services.YOUTUBE, is_logged=True) from e
+        raise BotError(code=ErrorCode.INTERNAL_ERROR, message=str(e), service=Services.YOUTUBE, is_logged=True) from e

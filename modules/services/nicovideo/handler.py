@@ -44,7 +44,7 @@ async def nicovideo_handler(message: Message, i18n: TranslatorRunner, db_session
         if media_metadata is None:
             await process_message.delete()
             raise BotError(
-                code=ErrorCode.METADATA_ERROR,
+                code=ErrorCode.NOT_FOUND,
                 message="Failed to get NicoVideo metadata",
                 url=url,
                 service=Services.NICOVIDEO,

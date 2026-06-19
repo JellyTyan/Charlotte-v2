@@ -95,7 +95,9 @@ class ButtonOwnerMiddleware(BaseMiddleware):
                     f"User {clicker_id} tried to click button owned by {owner_user_id} "
                     f"in chat {chat_id} message {message_id}"
                 )
-                await event.answer("⚠️ You cannot interact with this menu.", show_alert=True)
+                i18n = data.get("i18n")
+                alert_text = i18n.get("menu-not-yours") if i18n else "⚠️ You cannot interact with this menu."
+                await event.answer(alert_text, show_alert=True)
                 return  # Drop the update
 
         return await handler(event, data)

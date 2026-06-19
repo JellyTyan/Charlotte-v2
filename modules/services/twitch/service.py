@@ -51,7 +51,7 @@ class TwitchService:
             result = await job.result()
         except Exception as e:
             raise BotError(
-                code=ErrorCode.DOWNLOAD_FAILED,
+                code=ErrorCode.INTERNAL_ERROR,
                 service=Services.TWITCH,
                 message=f"Failed to download Twitch clip: {e}",
                 url=url,
@@ -64,7 +64,7 @@ class TwitchService:
 
         if not filepath:
             raise BotError(
-                code=ErrorCode.DOWNLOAD_FAILED,
+                code=ErrorCode.INTERNAL_ERROR,
                 message="yt-dlp returned no file path",
                 url=url,
                 service=Services.TWITCH,

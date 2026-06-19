@@ -23,7 +23,8 @@ async def log_download_event(
         ErrorCode.NOT_ALLOWED,
         ErrorCode.LARGE_FILE,
         ErrorCode.AGE_RESTRICTED,
-        ErrorCode.UNSUPPORTED_CONTENT
+        ErrorCode.PRIVATE_CONTENT,
+        ErrorCode.REGION_RESTRICTED
     ):
         logger.debug(f"Skipping statistics log for non-technical error: {error_code}")
         return

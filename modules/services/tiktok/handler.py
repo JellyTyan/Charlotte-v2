@@ -50,9 +50,20 @@ async def tiktok_handler(message: Message, db_session: AsyncSession, http_client
             ),
         )
 
+        err_msg = res.text.lower() if res.text else ""
+        if res.status_code == 451 or "geo" in err_msg or "country" in err_msg or "region" in err_msg:
+            raise BotError(
+                code=ErrorCode.REGION_RESTRICTED,
+                url=url,
+                service=Services.TIKTOK,
+                message=f"Download Error:\n {res.text}",
+                is_logged=False,
+                critical=False,
+            )
+
         if res.status_code == 422:
             raise BotError(
-                code=ErrorCode.UNSUPPORTED_CONTENT,
+                code=ErrorCode.INVALID_URL,
                 url=url,
                 service=Services.TIKTOK,
                 message=f"Download Error:\n {res.text}",

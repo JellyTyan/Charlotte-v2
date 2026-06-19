@@ -1,13 +1,10 @@
-error-invalid-url = Hoppla! Der Link sieht kaputt aus oder es ist privater/18+ Inhalt. 🤯
-error-large-file = Wow, riesige Datei! 🐘 So groß schaffe ich noch nicht.
-error-size-fail-check = Uff, die Datei ist zu schwer für mich! Versuch eine kleinere, bitte 😭
-error-download-error = Sorry! Ich hab's versucht, konnte aber nicht herunterladen. 💔
-error-download-canceled = Alles klar, Download abgebrochen! 🛑
-error-playlist-info = Konnte keine Playlist-Infos finden. Privat?
-error-metadata = Keine Metadaten gefunden. Gruselig! 👻
-error-no-found = Sorry, hab überall gesucht aber nichts gefunden. 🔍
-error-internal = Oh nein, in mir ist was kaputt gegangen! Später nochmal? 🧡
-error-generic = ❌ Ein Fehler ist aufgetreten. Sorry!
-error-age-restricted = 🔞 Hoppla, das ist 18+ Inhalt und da komm ich leider nicht ran! 😳
-error-unsupported-content = Hoppla, diesen Inhaltstyp unterstütze ich noch nicht... 🥺
-
+error-invalid-url = Dieser Link ist ungültig 🥺
+error-private-content = 🔒 Dieser Inhalt ist privat oder durch Privatsphäre-Einstellungen geschützt. Ich kann nicht darauf zugreifen! 🥺
+error-large-file = Wow, was für eine riesige Datei! 🐘 Ich kann so schwere Dateien noch nicht senden... 😭
+error-not-allowed = Entschuldigung, aber diese Funktion ist in den Einstellungen dieses Chats deaktiviert. ⚙️
+error-internal = Oh nein, auf dem Server ist etwas in mir kaputtgegangen... Versuchst du es später noch einmal? 🧡
+error-not-found = Tut mir leid, ich habe überall gesucht, aber unter diesem Link nichts gefunden. Wurde es gelöscht? 🔍
+error-region-restricted = 🌍 Hoppla, dieser Inhalt ist in meinem Land oder meiner Region gesperrt. Ich kann ihn nicht herunterladen! 😔
+error-age-restricted = 🔞 Hoppla! Dieser Inhalt ist ab 18 Jahren freigegeben und ich kann nicht darauf zugreifen! 😳
+error-download-canceled = Alles klar, ich breche den Download auf deinen Wunsch ab! 🛑
+error-generic = ❌ Ein Fehler ist aufgetreten. Entschuldigung!
