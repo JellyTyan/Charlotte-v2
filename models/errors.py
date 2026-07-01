@@ -15,6 +15,7 @@ class ErrorCode(Enum):
     AGE_RESTRICTED = "E007"       # Возрастные ограничения (18+)
     PRIVATE_CONTENT = "E008"      # Приватный контент (требуется авторизация)
     REGION_RESTRICTED = "E009"    # Ограничено по региону (geoblock)
+    SEND_ERROR = "E010"           # Ошибка отправки медиа в Telegram
     PREVIEW_ONLY = "PREVIEW_ONLY" # Скачалось только превью (30 сек)
 
 

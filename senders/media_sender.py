@@ -227,6 +227,8 @@ class MediaSender:
     @with_retry()
     async def _safe_send(self, target_obj, method_name: str, **kwargs):
         """Универсальный и безопасный вызов любого метода aiogram"""
+        if "request_timeout" not in kwargs:
+            kwargs["request_timeout"] = 600
         method = getattr(target_obj, method_name)
         return await method(**kwargs)
 
