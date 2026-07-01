@@ -219,7 +219,7 @@ async def download_youtube_full(
     items = map_items_to_media(res_json["data"])
     if is_topich:
         for item in items:
-            item.type = MediaType.DOCUMENT
+            item.as_document = True
     return items
 
 

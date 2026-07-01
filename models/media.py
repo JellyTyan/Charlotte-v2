@@ -33,4 +33,5 @@ class MediaContent:
     is_blurred: bool | None = None
     is_lossless: bool = False
     is_nsfw: bool = False
+    as_document: bool = False
 

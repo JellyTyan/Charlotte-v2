@@ -514,7 +514,7 @@ class MediaSender:
         service_settings = (
             getattr(settings.services, service, None) if service else None
         )
-        send_as_raw = getattr(service_settings, "raw", False)
+        send_as_raw = getattr(service_settings, "raw", False) or any(item.as_document for item in content)
 
         for i in range(0, len(content), 10):
             group_items = content[i : i + 10]
@@ -676,7 +676,7 @@ class MediaSender:
         service_settings = (
             getattr(settings.services, service, None) if service else None
         )
-        send_as_raw = getattr(service_settings, "raw", False)
+        send_as_raw = getattr(service_settings, "raw", False) or gif.as_document
 
         self._check_file_size(gif, is_audio=False, as_document=send_as_raw)
         media_input = self._get_input_media(gif, as_document=send_as_raw)
