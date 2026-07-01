@@ -81,15 +81,20 @@ def parse_time_range(time_range_str: str) -> Optional[Tuple[str, str, int, int]]
     return start_formatted, end_formatted, start_seconds, end_seconds
 
 
-def get_cache_key(url: str, height: int, is_audio_only: bool) -> str:
-    """Generate a unique cache key based on the video ID, target height, and format type."""
+def get_cache_key(url: str, height: int | str = 0, is_audio_only: bool = False, is_topich: bool = False) -> str:
+    """Generate a unique cache key based on the video ID, target height, format type, and topich."""
     match = YOUTUBE_ID_REGEX.search(url)
     video_id = match.group(1) if match else url
-    format_type = "audio" if is_audio_only else f"{height}p"
+    
+    if is_topich:
+        format_type = "topich"
+    else:
+        format_type = "audio" if is_audio_only else f"{height}p"
 
     base_str = f"{video_id}:{format_type}"
     hashed = hashlib.md5(base_str.encode('utf-8')).hexdigest()
-    return f"youtube:{hashed}"
+    
+    return f"youtube:{hashed}:topich" if is_topich else f"youtube:{hashed}"
 
 
 async def cache_check(db_session: AsyncSession, key: str) -> List[MediaContent] | None:

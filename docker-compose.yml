@@ -17,7 +17,7 @@ services:
       - postgres
       - migrations
       - lossless-core
-      - telegram-bot-api
+#      - telegram-bot-api
 
   redis:
     image: redis:7-alpine
@@ -79,21 +79,21 @@ services:
           cpus: '2'
 
 
-  telegram-bot-api:
-    image: aiogram/telegram-bot-api:latest
-    container_name: telegram-bot-api
-    restart: always
-    ports:
-      - "8081:8081"
-    environment:
-      TELEGRAM_API_ID: ${TELEGRAM_API_ID}
-      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
-      TELEGRAM_LOCAL: ${TELEGRAM_LOCAL}
-    volumes:
-      - telegram-bot-api-data:/var/lib/telegram-bot-api
-      - ./storage:/app/storage
-    networks:
-      - charlotte-net
+#  telegram-bot-api:
+#    image: aiogram/telegram-bot-api:latest
+#    container_name: telegram-bot-api
+#    restart: always
+#    ports:
+#      - "8081:8081"
+#    environment:
+#      TELEGRAM_API_ID: ${TELEGRAM_API_ID}
+#      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
+#      TELEGRAM_LOCAL: ${TELEGRAM_LOCAL}
+#    volumes:
+#      - telegram-bot-api-data:/var/lib/telegram-bot-api
+#      - ./storage:/app/storage
+#    networks:
+#      - charlotte-net
 
   postgres:
     image: postgres:15-alpine

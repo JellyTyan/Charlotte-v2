@@ -171,16 +171,20 @@ async def download_youtube_full(
     url: str,
     target_height: int,
     is_audio_only: bool,
-    sponsor: bool
+    sponsor: bool,
+    is_topich: bool = False
 ) -> list[MediaContent]:
     payload: dict[str, Any] = {
         "url": url,
         "sponsor": sponsor
     }
-    if target_height > 0:
-        payload["target_height"] = target_height
-    if is_audio_only:
-        payload["is_audio_only"] = True
+    if is_topich:
+        payload["topich"] = True
+    else:
+        if target_height > 0:
+            payload["target_height"] = target_height
+        if is_audio_only:
+            payload["is_audio_only"] = True
 
     try:
         res = await http_client.post(
@@ -212,7 +216,11 @@ async def download_youtube_full(
             critical=True
         )
 
-    return map_items_to_media(res_json["data"])
+    items = map_items_to_media(res_json["data"])
+    if is_topich:
+        for item in items:
+            item.type = MediaType.DOCUMENT
+    return items
 
 
 async def download_youtube_clip(
@@ -660,9 +668,10 @@ async def process_youtube_download(
     is_audio_only: bool,
     user_id: int,
     db_session: AsyncSession,
-    http_client: httpx.AsyncClient = None,
-    payment_charge_id: str = None,
-    i18n: TranslatorRunner = None
+    i18n: TranslatorRunner | None = None,
+    payment_charge_id: str | None = None,
+    http_client: httpx.AsyncClient | None = None,
+    is_topich: bool = False
 ):
     send_manager = MediaSender()
 
@@ -685,7 +694,7 @@ async def process_youtube_download(
             user = await get_user(db_session, user_id)
             is_premium = (user.is_premium if user else False) or (payment_charge_id is not None)
 
-            cache_key = get_cache_key(url, target_height, is_audio_only)
+            cache_key = get_cache_key(url, target_height, is_audio_only, is_topich)
             cached = await cache_check(db_session, cache_key)
             if cached:
                 await send_manager.send(message, cached, service="youtube", db_session=db_session)
@@ -703,7 +712,8 @@ async def process_youtube_download(
                             url=url,
                             target_height=target_height,
                             is_audio_only=is_audio_only,
-                            sponsor=is_premium
+                            sponsor=is_premium,
+                            is_topich=is_topich
                         )
                     )
 

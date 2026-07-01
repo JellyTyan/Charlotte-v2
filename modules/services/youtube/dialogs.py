@@ -172,12 +172,30 @@ async def get_advanced_data(dialog_manager: DialogManager, **kwargs) -> dict[str
             "is_audio": True
         })
 
-    trim_active = dialog_data.get("trim_active", False)
     i18n: TranslatorRunner = dialog_manager.middleware_data.get("i18n")
+
+    topich_id = "topich"
+    check = "✓ " if topich_id == selected_id else ""
+    topich_lbl = i18n.get("yt-btn-topich") if i18n else "ТОПИЧ"
+    if not is_premium:
+        topich_lbl = f"★ {topich_lbl}"
+        
+    items.append({
+        "id": topich_id,
+        "text": f"{check}{topich_lbl}",
+        "height": 0,
+        "size_mb": 0.0,
+        "is_audio": False
+    })
+
+    trim_active = dialog_data.get("trim_active", False)
     if i18n:
         trim_label = i18n.get("yt-btn-trim-active") if trim_active else i18n.get("yt-btn-trim")
     else:
         trim_label = "✓ Обрезка" if trim_active else "Обрезка"
+        
+    if not is_premium:
+        trim_label = f"★ {trim_label}"
 
     common = await get_common_metadata(dialog_manager)
     common["advanced_formats"] = items
@@ -191,7 +209,8 @@ async def trigger_download(
     dialog_manager: DialogManager,
     height: int,
     is_audio: bool,
-    size_mb: float = 0.0
+    size_mb: float = 0.0,
+    is_topich: bool = False
 ):
     from .handler import process_youtube_download
     start_data = dialog_manager.start_data or {}
@@ -252,7 +271,8 @@ async def trigger_download(
         is_audio_only=is_audio,
         user_id=user_id,
         db_session=db_session,
-        i18n=i18n
+        i18n=i18n,
+        is_topich=is_topich
     ))
 
 
@@ -287,6 +307,15 @@ async def on_balance_format_click(c: CallbackQuery, widget: Any, manager: Dialog
 
 
 async def on_advanced_format_click(c: CallbackQuery, widget: Any, manager: DialogManager, item_id: str):
+    start_data = manager.start_data or {}
+    is_premium = start_data.get("is_premium", False)
+
+    if item_id == "topich" and not is_premium:
+        i18n: TranslatorRunner = manager.middleware_data.get("i18n")
+        msg = i18n.get("yt-sponsor-only") if i18n else "🌟 Эта фича только для Спонсоров!"
+        await c.answer(msg, show_alert=True)
+        return
+
     manager.dialog_data["selected_format"] = item_id
 
 
@@ -306,7 +335,7 @@ async def on_toggle_trim(c: CallbackQuery, button: Button, manager: DialogManage
     i18n: TranslatorRunner = manager.middleware_data.get("i18n")
 
     if not is_premium:
-        msg = i18n.get("yt-trim-sponsor-only") if i18n else "🌟 Trim is for Sponsors only!"
+        msg = i18n.get("yt-sponsor-only") if i18n else "🌟 Эта фича только для Спонсоров!"
         await c.answer(msg, show_alert=True)
         return
 
@@ -326,7 +355,15 @@ async def on_advanced_continue(c: CallbackQuery, button: Button, manager: Dialog
         options = start_data.get("options", [])
         audio_only = start_data.get("audio_only", {})
 
-        if selected_id == "audio":
+        if selected_id == "topich":
+            is_premium = start_data.get("is_premium", False)
+            if not is_premium:
+                i18n: TranslatorRunner = manager.middleware_data.get("i18n")
+                msg = i18n.get("yt-sponsor-only") if i18n else "🌟 Эта фича только для Спонсоров!"
+                await c.answer(msg, show_alert=True)
+                return
+            await trigger_download(manager, height=0, is_audio=False, size_mb=0.0, is_topich=True)
+        elif selected_id == "audio":
             a_h = audio_only.get("target_height", 0) if audio_only else 0
             a_size = audio_only.get("size_mb", 0.0) if audio_only else 0.0
             await trigger_download(manager, height=a_h, is_audio=True, size_mb=a_size)

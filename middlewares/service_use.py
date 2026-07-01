@@ -15,6 +15,10 @@ class ServiceUseMiddleware(BaseMiddleware):
         if isinstance(event, Message) and not event.from_user:
             return
 
+        if isinstance(event, Message) and event.from_user:
+            from tasks.task_manager import task_manager
+            task_manager.clear_cancel(event.from_user.id)
+
         # Check is banned
         session = data.get("db_session")
         if session and event.from_user:
