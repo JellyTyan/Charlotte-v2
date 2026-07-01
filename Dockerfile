@@ -31,7 +31,6 @@ COPY --chown=charlotte:charlotte states/ states/
 COPY --chown=charlotte:charlotte storage/ storage/
 COPY --chown=charlotte:charlotte tasks/ tasks/
 COPY --chown=charlotte:charlotte utils/ utils/
-COPY --chown=charlotte:charlotte workers/__init__.py workers/__init__.py
 COPY --chown=charlotte:charlotte alembic/ alembic/
 COPY --chown=charlotte:charlotte alembic.ini .
 COPY --chown=charlotte:charlotte main.py .

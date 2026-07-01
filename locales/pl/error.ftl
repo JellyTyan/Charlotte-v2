@@ -8,3 +8,4 @@ error-region-restricted = 🌍 Ups, ta zawartość jest zablokowana w moim kraju
 error-age-restricted = 🔞 Ups! To jest zawartość 18+ z ograniczeniami wiekowymi, do której nie mam dostępu! 😳
 error-download-canceled = Dobrze, anuluję pobieranie na Twoje życzenie! 🛑
 error-generic = ❌ Coś poszło nie tak. Przepraszam!
+error-preview-only = 🛑 Pobrano tylko podgląd (30 sekund)! 😔

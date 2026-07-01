@@ -74,9 +74,21 @@ general-error = ❌ Ein Fehler ist aufgetreten. Bitte versuche es später noch e
 
 # YouTube Trim Feature
 yt-trim-sponsor-only = ✂️ Video zuschneiden ist nur für Sponsoren verfügbar!
-yt-trim-ask-start = ✂️ Startzeit eingeben (z. B. 01:30 oder 00:01:30):
-yt-trim-ask-end = ⏱ Endzeit eingeben (z. B. 02:00 oder 00:02:00):
-yt-trim-invalid-time = ❌ Ungültiges Format. Bitte MM:SS oder HH:MM:SS verwenden. Versuch es nochmal:
+yt-trim-ask-range = ✂️ Zeitbereich für das Zuschneiden eingeben (z. B. `01:20-02:45` oder `90-165`):
+yt-trim-invalid-range = ❌ Ungültiges Format. Bitte START-ENDE (z. B. `1:30-2:45`) verwenden. Versuch es nochmal:
 yt-trim-end-before-start = ❌ Die Endzeit muss nach der Startzeit liegen. Versuch es nochmal:
 yt-trim-processing = ✂️ Clip wird zugeschnitten, bitte warten...
-yt-trim-out-of-bounds = ❌ Zeit überschreitet die Videodauer ({  }). Versuch es nochmal:
+yt-trim-out-of-bounds = ❌ Bereich überschreitet die Videodauer ({  }). Versuch es nochmal:
+yt-btn-full = 🎬 Ganzes Video
+yt-btn-trim-locked = ★ ✂️ Zuschneiden
+yt-btn-cancel = ❌ Abbrechen
+yt-ask-quality = 🎬 Qualität wählen:
+yt-btn-video = Video herunterladen
+yt-btn-audio = Audio herunterladen
+yt-btn-continue = Weiter
+yt-btn-advanced = Erweiterte Einstellungen
+yt-btn-trim = Zuschneiden
+yt-btn-trim-active = ✓ Zuschneiden
+yt-btn-back = Zurück
+yt-label-channel = Kanal: { $uploader }
+yt-label-duration = Dauer: { $duration }

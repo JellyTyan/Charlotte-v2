@@ -87,6 +87,9 @@ async def main():
     dp.include_router(inline_router)
     dp.include_router(service_router)
 
+    from aiogram_dialog import setup_dialogs
+    setup_dialogs(dp)
+
     logger.info("✅ All handlers registered")
 
     logger.info("⏰ Starting scheduled tasks...")

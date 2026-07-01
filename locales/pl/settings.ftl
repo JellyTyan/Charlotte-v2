@@ -109,3 +109,23 @@ btn-bot-sign = { $is_enabled ->
    *[false] 🧡 Bot Ad [OFF]
 }
 desc-bot-sign = Append a promotional signature "Charlotte 🧡" to downloaded media. Disabling this requires Sponsorship 🌟.
+
+btn-simple-mode = { $is_enabled ->
+    [true] ✅ Prosty interfejs
+   *[false] ❌ Prosty interfejs
+}
+desc-simple =
+    Prosty interfejs YouTube:
+    Włączony — tylko dwa przyciski (Wideo lub Audio), pobieranie w maksymalnej jakości do 100 MB (do 1 GB dla Sponsorów).
+    Wyłączony — wybór rozdzielczości, przycinanie wideo (dla Sponsorów).
+
+btn-youtube-ui-mode = Interfejs YouTube
+yt-ui-mode-simple = Prosty
+yt-ui-mode-balance = Zrównoważony
+yt-ui-mode-advanced = Zaawansowany
+desc-youtube-ui-mode =
+    Wybierz styl interfejsu do pobierania z YouTube:
+    
+    • Prosty — 2 przyciski (Wideo / Audio) do pobierania 1 kliknięciem.
+    • Zrównoważony — najlepsze jakości za 1 kliknięciem + dostęp do zaawansowanych ustawień.
+    • Zaawansowany — pola wyboru dla rozdzielczości, ścieżki dźwiękowej i przycinania wideo (Trim).

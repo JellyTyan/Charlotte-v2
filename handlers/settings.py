@@ -173,6 +173,21 @@ def build_service_settings_keyboard(settings, service: str, i18n: TranslatorRunn
                 callback_data=f"menu_service_{service}_translate_caption"
             )
         ])
+    if hasattr(svc_settings, 'ui_mode'):
+        current_mode_name = i18n.get(f"yt-ui-mode-{svc_settings.ui_mode}")
+        keyboards.append([
+            InlineKeyboardButton(
+                text=f"{i18n.get('btn-youtube-ui-mode')}: {current_mode_name}",
+                callback_data=f"menu_service_{service}_ui_mode"
+            )
+        ])
+    elif hasattr(svc_settings, 'simple'):
+        keyboards.append([
+            InlineKeyboardButton(
+                text=i18n.btn.simple.mode(is_enabled='true' if svc_settings.simple else 'false'),
+                callback_data=f"menu_service_{service}_simple"
+            )
+        ])
     if hasattr(svc_settings, 'raw'):
         keyboards.append([
             InlineKeyboardButton(
@@ -331,7 +346,6 @@ async def menu_profile_setting(callback: CallbackQuery, i18n: TranslatorRunner, 
 @router.callback_query(lambda c: c.data.startswith("menu_service_"))
 async def menu_service_setting(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
     if callback.message is None or callback.data is None: return
-    parts = callback.data.replace("menu_service_", "").split("_")
 
     service_map = {s.value.lower(): s.value.lower() for s in Services}
     target_service = None
@@ -345,6 +359,28 @@ async def menu_service_setting(callback: CallbackQuery, i18n: TranslatorRunner, 
     settings, is_group = await get_settings_obj(db_session, callback.message.chat.id, callback.from_user.id)
 
     svc_settings = getattr(settings.services, target_service)
+
+    if key == "ui_mode":
+        modes = ["simple", "balance", "advanced"]
+        buttons = []
+        for m in modes:
+            prefix = "✅ " if getattr(svc_settings, "ui_mode", "simple") == m else ""
+            buttons.append([
+                InlineKeyboardButton(
+                    text=f"{prefix}{i18n.get(f'yt-ui-mode-{m}')}",
+                    callback_data=f"set_uimode_{target_service}_{m}"
+                )
+            ])
+        buttons.append([InlineKeyboardButton(text=f"{i18n.get('back')}", callback_data=f"settings_svc_{target_service}")])
+        kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+        description = i18n.get("desc-youtube-ui-mode")
+        title = i18n.settings.service.title(name=target_service.replace('_', ' ').title())
+        text = f"{title}\n\n{description}"
+        await safe_edit_text(callback, text, kb)
+        await callback.answer()
+        return
+
     current_value = getattr(svc_settings, key)
     new_value = not current_value
 
@@ -442,6 +478,29 @@ async def apply_service_setting(callback: CallbackQuery, i18n: TranslatorRunner,
 
     status_text = i18n.get('enabled') if new_value else i18n.get('disabled')
     text = i18n.get('setting-changed', setting=key.replace('_', ' '), status=status_text)
+    await safe_edit_text(callback, text, build_back_keyboard(i18n, f"settings_svc_{target_service}"))
+    await callback.answer(i18n.get('setting-updated'))
+
+
+@router.callback_query(lambda c: c.data is not None and c.data.startswith("set_uimode_"))
+async def apply_service_uimode(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
+    if callback.message is None or callback.data is None: return
+    parts = callback.data.split("_")
+    if len(parts) < 4: return
+    target_service = parts[2]
+    new_mode = parts[3]
+
+    chat_id = callback.message.chat.id
+    settings, is_group = await get_settings_obj(db_session, chat_id, callback.from_user.id)
+    svc_settings = getattr(settings.services, target_service)
+    setattr(svc_settings, "ui_mode", new_mode)
+    if hasattr(svc_settings, "simple"):
+        setattr(svc_settings, "simple", new_mode == "simple")
+    await save_settings_obj(db_session, chat_id, callback.from_user.id, settings)
+
+    mode_title = i18n.get(f"yt-ui-mode-{new_mode}")
+    setting_name = i18n.get('btn-youtube-ui-mode')
+    text = i18n.get('setting-changed', setting=setting_name, status=mode_title)
     await safe_edit_text(callback, text, build_back_keyboard(i18n, f"settings_svc_{target_service}"))
     await callback.answer(i18n.get('setting-updated'))
 

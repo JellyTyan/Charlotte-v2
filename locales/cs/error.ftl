@@ -8,3 +8,4 @@ error-region-restricted = 🌍 Jejda, tento obsah je v mé zemi nebo oblasti zab
 error-age-restricted = 🔞 Jejda! Tento obsah má věkové omezení 18+ a já se k němu nedostanu! 😳
 error-download-canceled = Dobře, ruším stahování na tvou žádost! 🛑
 error-generic = ❌ Něco se pokazilo. Omlouvám se!
+error-preview-only = 🛑 Byl stažen pouze náhled (30 sekund)! 😔

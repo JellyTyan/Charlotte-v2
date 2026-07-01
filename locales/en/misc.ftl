@@ -74,9 +74,21 @@ general-error = ❌ An error occurred. Please try again later.
 
 # YouTube Trim Feature
 yt-trim-sponsor-only = ✂️ Video Trim is available for Sponsors only!
-yt-trim-ask-start = ✂️ Enter start time (e.g. 01:30 or 00:01:30):
-yt-trim-ask-end = ⏱ Enter end time (e.g. 02:00 or 00:02:00):
-yt-trim-invalid-time = ❌ Invalid format. Use MM:SS or HH:MM:SS. Try again:
+yt-trim-ask-range = ✂️ Enter the time range for trimming (e.g. `01:20-02:45` or `90-165`):
+yt-trim-invalid-range = ❌ Invalid range format. Use START-END (e.g. `1:30-2:45`). Try again:
 yt-trim-end-before-start = ❌ End time must be after start time. Try again:
 yt-trim-processing = ✂️ Trimming your clip, please wait...
-yt-trim-out-of-bounds = ❌ Time exceeds video duration ({  }). Try again:
+yt-trim-out-of-bounds = ❌ Range exceeds video duration ({  }). Try again:
+yt-btn-full = 🎬 Full Video
+yt-btn-trim-locked = ★ ✂️ Trimming
+yt-btn-cancel = ❌ Cancel
+yt-ask-quality = 🎬 Select quality:
+yt-btn-video = Download Video
+yt-btn-audio = Download Audio
+yt-btn-continue = Continue
+yt-btn-advanced = Advanced Settings
+yt-btn-trim = Trim
+yt-btn-trim-active = ✓ Trim
+yt-btn-back = Back
+yt-label-channel = Channel: { $uploader }
+yt-label-duration = Duration: { $duration }

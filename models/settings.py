@@ -27,17 +27,19 @@ class MusicSettingsExtra(MusicSettings):
     lossless: bool = False
 
 
+class YoutubeSettings(MediaSettings):
+    simple: bool = True
+    ui_mode: str = "simple"
+
+
 class ServicesSettings(BaseModel):
-    youtube: MediaSettings = MediaSettings()
+    youtube: YoutubeSettings = YoutubeSettings()
     tiktok: MediaSettings = MediaSettings()
     instagram: MediaSettings = MediaSettings()
     twitter: MediaSettingsExtra = MediaSettingsExtra()
-    bluesky: MediaSettingsExtra = MediaSettingsExtra()
     pinterest: MediaSettingsExtra = MediaSettingsExtra()
     pixiv: MediaSettingsExtra = MediaSettingsExtra()
     reddit: MediaSettings = MediaSettings()
-    twitch: MediaSettings = MediaSettings()
-    nicovideo: MediaSettings = MediaSettings()
 
     spotify: MusicSettingsExtra = MusicSettingsExtra()
     deezer: MusicSettingsExtra = MusicSettingsExtra()
@@ -74,12 +76,9 @@ class ChatServicesSettings(BaseModel):
     tiktok: MediaSettings = MediaSettings()
     instagram: MediaSettings = MediaSettings()
     twitter: MediaSettingsExtra = MediaSettingsExtra()
-    bluesky: MediaSettingsExtra = MediaSettingsExtra()
     pinterest: MediaSettingsExtra = MediaSettingsExtra()
     pixiv: MediaSettingsExtra = MediaSettingsExtra()
     reddit: MediaSettings = MediaSettings()
-    twitch: MediaSettings = MediaSettings()
-    nicovideo: MediaSettings = MediaSettings()
 
     spotify: MusicSettingsExtra = MusicSettingsExtra()
     deezer: MusicSettingsExtra = MusicSettingsExtra()

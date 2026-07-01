@@ -22,5 +22,7 @@ def get_i18n_error_message(code: ErrorCode, i18n: TranslatorRunner) -> str | Non
             return i18n.get("error-age-restricted")
         case ErrorCode.DOWNLOAD_CANCELLED:
             return i18n.get("error-download-canceled")
+        case ErrorCode.PREVIEW_ONLY:
+            return i18n.get("error-preview-only")
         case _:
             return None

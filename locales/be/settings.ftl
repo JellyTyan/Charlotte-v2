@@ -109,3 +109,23 @@ btn-bot-sign = { $is_enabled ->
    *[false] 🧡 Bot Ad [OFF]
 }
 desc-bot-sign = Append a promotional signature "Charlotte 🧡" to downloaded media. Disabling this requires Sponsorship 🌟.
+
+btn-simple-mode = { $is_enabled ->
+    [true] ✅ Просты інтэрфейс
+   *[false] ❌ Просты інтэрфейс
+}
+desc-simple =
+    Просты інтэрфейс YouTube:
+    Укл — толькі дзве кнопкі (Відэа ці Аўдыё), спампоўка ў максімальнай якасці да 100 МБ (да 1 ГБ для Спонсараў).
+    Выкл — выбар дазволу, абрэзка відэа (для Спонсараў).
+
+btn-youtube-ui-mode = Інтэрфейс YouTube
+yt-ui-mode-simple = Просты
+yt-ui-mode-balance = Збалансаваны
+yt-ui-mode-advanced = Пашыраны
+desc-youtube-ui-mode =
+    Выберыце стыль інтэрфейсу для спампоўвання з YouTube:
+    
+    • Просты — 2 кнопкі (Відэа / Аўдыё) для спампоўвання ў 1 клік.
+    • Збалансаваны — кнопкі лепшых якасцей у 1 клік + доступ да пашыраных налад.
+    • Пашыраны — выбар якасці чэкбоксамі, аўдыёдарожкі і абрэзкі відэа (Trim).

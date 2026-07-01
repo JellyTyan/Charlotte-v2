@@ -1,17 +1,13 @@
-from typing import Optional
-
 from aiogram.filters.callback_data import CallbackData
 
 
-class YoutubeCallback(CallbackData, prefix="yt"):
-    type: str
-    format_id: str
-    audio_id: Optional[str] = None
-    url_hash: Optional[str] = None
-    sponsored: Optional[bool] = False
-    resolution: Optional[str] = None
+class YoutubeMenuCallback(CallbackData, prefix="yt_menu"):
+    action: str  # "toggle_trim", "download_simple", "cancel"
+    format: str  # "video" or "audio"
+    trim: bool   # True if trim is toggled on
 
 
-class YoutubeTrimCallback(CallbackData, prefix="yt_trim"):
-    url_hash: str
-    duration: Optional[int] = 0
+class YoutubeQualityCallback(CallbackData, prefix="yt_qual"):
+    height: int
+    size_mb: float
+    label: str

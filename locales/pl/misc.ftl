@@ -74,9 +74,21 @@ general-error = ❌ Wystąpił błąd. Spróbuj ponownie później.
 
 # YouTube Trim Feature
 yt-trim-sponsor-only = ✂️ Przycinanie wideo jest dostępne tylko dla Sponsorów!
-yt-trim-ask-start = ✂️ Wprowadź czas rozpoczęcia (np. 01:30 lub 00:01:30):
-yt-trim-ask-end = ⏱ Wprowadź czas zakończenia (np. 02:00 lub 00:02:00):
-yt-trim-invalid-time = ❌ Nieprawidłowy format. Użyj MM:SS lub HH:MM:SS. Spróbuj ponownie:
+yt-trim-ask-range = ✂️ Wprowadź zakres czasu do przycięcia (np. `01:20-02:45` lub `90-165`):
+yt-trim-invalid-range = ❌ Nieprawidłowy format zakresu. Użyj START-KONIEC (np. `1:30-2:45`). Spróbuj ponownie:
 yt-trim-end-before-start = ❌ Czas zakończenia musi być późniejszy niż czas rozpoczęcia. Spróbuj ponownie:
 yt-trim-processing = ✂️ Przycinanie klipu, proszę czekać...
-yt-trim-out-of-bounds = ❌ Czas przekracza długość wideo ({  }). Spróbuj ponownie:
+yt-trim-out-of-bounds = ❌ Zakres przekracza długość wideo ({  }). Spróbuj ponownie:
+yt-btn-full = 🎬 Całe wideo
+yt-btn-trim-locked = ★ ✂️ Przytnij
+yt-btn-cancel = ❌ Anuluj
+yt-ask-quality = 🎬 Wybierz jakość:
+yt-btn-video = Pobierz wideo
+yt-btn-audio = Pobierz audio
+yt-btn-continue = Dalej
+yt-btn-advanced = Ustawienia zaawansowane
+yt-btn-trim = Przycinanie
+yt-btn-trim-active = ✓ Przycinanie
+yt-btn-back = Wstecz
+yt-label-channel = Kanał: { $uploader }
+yt-label-duration = Czas trwania: { $duration }

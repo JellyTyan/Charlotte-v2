@@ -8,3 +8,4 @@ error-region-restricted = 🌍 Hoppla, dieser Inhalt ist in meinem Land oder mei
 error-age-restricted = 🔞 Hoppla! Dieser Inhalt ist ab 18 Jahren freigegeben und ich kann nicht darauf zugreifen! 😳
 error-download-canceled = Alles klar, ich breche den Download auf deinen Wunsch ab! 🛑
 error-generic = ❌ Ein Fehler ist aufgetreten. Entschuldigung!
+error-preview-only = 🛑 Es wurde nur eine Vorschau (30 Sekunden) heruntergeladen! 😔

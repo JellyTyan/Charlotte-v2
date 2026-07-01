@@ -16,7 +16,6 @@ from aiogram.types import (
 from core.config import Config
 from storage.cache.redis_client import cache_set
 from storage.db.crud import get_media_cache
-from utils.arq_pool import get_arq_pool
 from senders.media_sender import MediaSender
 from models.media import MediaType, MediaContent
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,16 +40,7 @@ from modules.services.soundcloud.handler import SOUNDCLOUD_REGEX
 from modules.services.spotify.handler import SPOTIFY_REGEX
 from modules.services.deezer.handler import DEEZER_REGEX
 
-from modules.services.nicovideo.handler import NICOVIDEO_REGEX
-from modules.services.nicovideo.utils import get_cache_key as nicovideo_cache_key
-
 from modules.services.apple_music.handler import APPLE_REGEX as APPLE_MUSIC_REGEX
-
-from modules.services.bluesky.handler import BLUESKY_REGEX
-from modules.services.bluesky.utils import get_cache_key as bluesky_cache_key
-
-from modules.services.twitch.handler import TWITCH_REGEX
-from modules.services.twitch.utils import get_cache_key as twitch_cache_key
 
 
 def apple_music_cache_key(url: str) -> str | None:
@@ -150,18 +140,9 @@ async def inline_media_handler(inline_query: InlineQuery, config: Config, db_ses
     elif re.match(DEEZER_REGEX, url):
         service_name = "deezer"
         cache_key = deezer_cache_key(url)
-    elif re.match(NICOVIDEO_REGEX, url):
-        service_name = "nicovideo"
-        cache_key = nicovideo_cache_key(url, "default")
     elif re.match(APPLE_MUSIC_REGEX, url):
         service_name = "apple_music"
         cache_key = apple_music_cache_key(url)
-    elif re.match(BLUESKY_REGEX, url):
-        service_name = "bluesky"
-        cache_key = bluesky_cache_key(url)
-    elif re.match(TWITCH_REGEX, url):
-        service_name = "twitch"
-        cache_key = twitch_cache_key(url)
         
     if not service_name or not cache_key:
         return await inline_query.answer([], cache_time=10)

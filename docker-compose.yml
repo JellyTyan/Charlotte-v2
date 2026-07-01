@@ -1,6 +1,7 @@
 services:
   charlotte:
     build: .
+    container_name: charlotte_bot
     restart: unless-stopped
     env_file: .env
     volumes:
@@ -8,11 +9,7 @@ services:
       - ./logs:/app/logs
     tmpfs:
       - /tmp:noexec,nosuid,nodev
-    read_only: false # Changing this to false for now as many python libs write to random places, can be hardened later
-    # security_opt:
-    #   - no-new-privileges:true
-    # cap_drop:
-    #   - ALL
+    read_only: false
     networks:
       - charlotte-net
     depends_on:
@@ -20,10 +17,10 @@ services:
       - postgres
       - migrations
       - lossless-core
-      - telegram-bot-api
 
   redis:
     image: redis:7-alpine
+    container_name: charlotte_redis
     restart: unless-stopped
     command: redis-server --save 60 1 --loglevel warning
     volumes:
@@ -31,49 +28,9 @@ services:
     networks:
       - charlotte-net
 
-  light-worker:
-    build:
-      context: .
-      dockerfile: workers/Dockerfile
-    restart: unless-stopped
-    command: arq workers.light_worker.WorkerSettings
-    env_file: .env
-    volumes:
-      - ./storage:/app/storage
-      - ./logs:/app/logs
-    depends_on:
-      - redis
-      - postgres
-    networks:
-      - charlotte-net
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-
-  heavy-worker:
-    build:
-      context: .
-      dockerfile: workers/Dockerfile
-    restart: unless-stopped
-    command: arq workers.heavy_worker.WorkerSettings
-    env_file: .env
-    volumes:
-      - ./storage:/app/storage
-      - ./logs:/app/logs
-    depends_on:
-      - redis
-      - postgres
-    networks:
-      - charlotte-net
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-
   bgutil:
     image: brainicism/bgutil-ytdlp-pot-provider
-    container_name: bgutil
+    container_name: charlotte_bgutil
     ports:
       - "4416:4416"
     networks:
@@ -82,7 +39,7 @@ services:
 
   lossless-core:
     image: ghcr.io/jellytyan/lossless-core:latest
-    container_name: lossless-core
+    container_name: charlotte_lossless_core
     restart: always
     ports:
       - "7856:7856"
@@ -101,7 +58,7 @@ services:
 
   media-core:
     image: ghcr.io/jellytyan/media-core:latest
-    container_name: media-core
+    container_name: charlotte_media_core
     restart: always
     ports:
       - "9546:9546"
@@ -112,6 +69,7 @@ services:
       - INSTAGRAM_IPV6_SUBNET=${INSTAGRAM_IPV6_SUBNET}
       - TWITTER_AUTH_TOKEN=${AUTH_TOKEN}
       - TWITTER_CSRF_TOKEN=${CSRF_TOKEN}
+      - BGUTIL_URL=${BGUTIL_URL}
     networks:
       - charlotte-net
     deploy:
@@ -119,24 +77,26 @@ services:
         limits:
           cpus: '2'
 
-  telegram-bot-api:
-    image: aiogram/telegram-bot-api:latest
-    container_name: telegram-bot-api
-    restart: always
-    ports:
-      - "8081:8081"
-    environment:
-      TELEGRAM_API_ID: ${TELEGRAM_API_ID}
-      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
-      TELEGRAM_LOCAL: ${TELEGRAM_LOCAL}
-    volumes:
-      - telegram-bot-api-data:/var/lib/telegram-bot-api
-      - ./storage:/app/storage
-    networks:
-      - charlotte-net
+
+#  telegram-bot-api:
+#    image: aiogram/telegram-bot-api:latest
+#    container_name: telegram-bot-api
+#    restart: always
+#    ports:
+#      - "8081:8081"
+#    environment:
+#      TELEGRAM_API_ID: ${TELEGRAM_API_ID}
+#      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
+#      TELEGRAM_LOCAL: ${TELEGRAM_LOCAL}
+#    volumes:
+#      - telegram-bot-api-data:/var/lib/telegram-bot-api
+#      - ./storage:/app/storage
+#    networks:
+#      - charlotte-net
 
   postgres:
     image: postgres:15-alpine
+    container_name: charlotte_db
     restart: unless-stopped
     ports:
       - "6543:5432"
@@ -151,7 +111,7 @@ services:
 
   pg_backup:
     image: prodrigestivill/postgres-backup-local
-    container_name: pg_backup
+    container_name: charlotte_db_backup
     depends_on:
       - postgres
     environment:
@@ -172,6 +132,7 @@ services:
 
   migrations:
     build: .
+    container_name: charlotte_migrations
     env_file: .env
     command: alembic upgrade head
     depends_on:

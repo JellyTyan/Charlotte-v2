@@ -109,3 +109,23 @@ btn-bot-sign = { $is_enabled ->
    *[false] 🧡 Bot Ad [OFF]
 }
 desc-bot-sign = Append a promotional signature "Charlotte 🧡" to downloaded media. Disabling this requires Sponsorship 🌟.
+
+btn-simple-mode = { $is_enabled ->
+    [true] ✅ رابط کاربری ساده
+   *[false] ❌ رابط کاربری ساده
+}
+desc-simple =
+    رابط کاربری ساده یوتیوب:
+    فعال — فقط دو دکمه (ویدیو یا صدا)، دانلود با حداکثر کیفیت تا ۱۰۰ مگابایت (تا ۱ گیگابایت برای حامیان مالی).
+    غیرفعال — انتخاب کیفیت، برش ویدیو (برای حامیان مالی).
+
+btn-youtube-ui-mode = رابط کاربری یوتیوب
+yt-ui-mode-simple = ساده
+yt-ui-mode-balance = متوازن
+yt-ui-mode-advanced = پیشرفته
+desc-youtube-ui-mode =
+    سبک رابط کاربری دانلود از یوتیوب را انتخاب کنید:
+    
+    • ساده — ۲ دکمه (ویدیو / صدا) برای دانلود با ۱ کلیک.
+    • متوازن — بهترین کیفیت‌ها با ۱ کلیک + دسترسی به تنظیمات پیشرفته.
+    • پیشرفته — کادرهای علامت‌گذاری برای کیفیت‌ها، ترک صوتی و برش ویدیو (Trim).

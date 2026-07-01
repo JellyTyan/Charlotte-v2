@@ -8,3 +8,4 @@ error-region-restricted = 🌍 Oops, this content is blocked in my country or re
 error-age-restricted = 🔞 Oops! This content has age restrictions and I can't reach it! 😳
 error-download-canceled = Alright, download canceled by your request! 🛑
 error-generic = ❌ Something went wrong. I'm sorry!
+error-preview-only = 🛑 Only a 30-second preview was downloaded, not the full track! 😔

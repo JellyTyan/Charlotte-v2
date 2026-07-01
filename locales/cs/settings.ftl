@@ -109,3 +109,23 @@ btn-bot-sign = { $is_enabled ->
    *[false] 🧡 Bot Ad [OFF]
 }
 desc-bot-sign = Append a promotional signature "Charlotte 🧡" to downloaded media. Disabling this requires Sponsorship 🌟.
+
+btn-simple-mode = { $is_enabled ->
+    [true] ✅ Jednoduché rozhraní
+   *[false] ❌ Jednoduché rozhraní
+}
+desc-simple =
+    Jednoduché rozhraní YouTube:
+    Zapnuto — pouze dvě tlačítka (Video nebo Audio), stahování v maximální kvalitě do 100 MB (do 1 GB pro Sponzory).
+    Vypnuto — výběr rozlišení, ořez videa (pro Sponzory).
+
+btn-youtube-ui-mode = Rozhraní YouTube
+yt-ui-mode-simple = Jednoduché
+yt-ui-mode-balance = Vyvážené
+yt-ui-mode-advanced = Pokročilé
+desc-youtube-ui-mode =
+    Vyberte styl rozhraní pro stahování z YouTube:
+    
+    • Jednoduché — 2 tlačítka (Video / Audio) pro stahování 1 kliknutím.
+    • Vyvážené — nejlepší kvality na 1 kliknutí + přístup k pokročilému nastavení.
+    • Pokročilé — výběr kvality zaškrtávacími políčky, zvukové stopy a ořezu videa (Trim).

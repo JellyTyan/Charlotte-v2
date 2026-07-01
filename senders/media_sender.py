@@ -852,9 +852,6 @@ class MediaSender:
             "deezer": Services.DEEZER,
             "apple_music": Services.APPLE_MUSIC,
             "applemusic": Services.APPLE_MUSIC,
-            "bluesky": Services.BLUESKY,
-            "twitch": Services.TWITCH,
-            "nicovideo": Services.NICOVIDEO,
         }
         return mapping.get(service_name.lower())
 

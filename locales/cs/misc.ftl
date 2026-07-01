@@ -74,9 +74,21 @@ general-error = ❌ Došlo k chybě. Zkuste to prosím později.
 
 # YouTube Trim Feature
 yt-trim-sponsor-only = ✂️ Ořez videa je dostupný pouze pro Sponzory!
-yt-trim-ask-start = ✂️ Zadejte čas začátku (např. 01:30 nebo 00:01:30):
-yt-trim-ask-end = ⏱ Zadejte čas konce (např. 02:00 nebo 00:02:00):
-yt-trim-invalid-time = ❌ Neplatný formát. Použijte MM:SS nebo HH:MM:SS. Zkuste to znovu:
+yt-trim-ask-range = ✂️ Zadejte časový rozsah pro ořez (např. `01:20-02:45` nebo `90-165`):
+yt-trim-invalid-range = ❌ Neplatný formát rozsahu. Použijte ZAČÁTEK-KONEC (např. `1:30-2:45`). Zkuste to znovu:
 yt-trim-end-before-start = ❌ Čas konce musí být větší než čas začátku. Zkuste to znovu:
 yt-trim-processing = ✂️ Ořezáváme klip, prosím čekejte...
-yt-trim-out-of-bounds = ❌ Čas překračuje délku videa ({  }). Zkuste to znovu:
+yt-trim-out-of-bounds = ❌ Rozsah překračuje délku videa ({  }). Zkuste to znovu:
+yt-btn-full = 🎬 Celé video
+yt-btn-trim-locked = ★ ✂️ Ořez
+yt-btn-cancel = ❌ Zrušit
+yt-ask-quality = 🎬 Vyberte kvalitu:
+yt-btn-video = Stáhnout video
+yt-btn-audio = Stáhnout audio
+yt-btn-continue = Pokračovat
+yt-btn-advanced = Pokročilé nastavení
+yt-btn-trim = Ořez
+yt-btn-trim-active = ✓ Ořez
+yt-btn-back = Zpět
+yt-label-channel = Kanál: { $uploader }
+yt-label-duration = Délka: { $duration }

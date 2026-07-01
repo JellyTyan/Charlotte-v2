@@ -17,8 +17,7 @@ from models.media_cache import MediaCacheDTO, CacheMetadata
 from senders.media_sender import MediaSender
 from storage.db.crud import get_chat_settings, get_user_settings, get_media_cache, upsert_media_cache
 from tasks.task_manager import task_manager
-from utils.arq_pool import get_arq_pool
-from utils.file_utils import delete_files
+from utils import delete_files, handle_lossless_response
 from utils.statistics_helper import log_download_event
 
 soundcloud_router = Router(name="soundcloud")
@@ -48,16 +47,7 @@ async def fetch_core_download(
     res = await http_client.post(
         "http://lossless-core:7856/download", json=payload, timeout=600
     )
-    if res.status_code != 200:
-        raise BotError(
-            code=ErrorCode.INTERNAL_ERROR,
-            url=url,
-            service=Services.SOUNDCLOUD,
-            message=f"Download Error:\n {res.text}",
-            is_logged=True,
-            critical=False,
-        )
-    return res.json()["data"]
+    return handle_lossless_response(res, url, Services.SOUNDCLOUD)
 
 
 async def process_track(
@@ -138,26 +128,7 @@ async def soundcloud_handler(
         response = await http_client.post(
             "http://lossless-core:7856/metadata", json={"url": url}
         )
-        if response.status_code != 200:
-            err_text = response.text.lower() if response.text else ""
-            if "geo" in err_text or "country" in err_text or "region" in err_text:
-                raise BotError(
-                    code=ErrorCode.REGION_RESTRICTED,
-                    url=url,
-                    service=Services.SOUNDCLOUD,
-                    message=f"Metadata Error:\n {response.text}",
-                    is_logged=False,
-                    critical=False,
-                )
-            raise BotError(
-                code=ErrorCode.NOT_FOUND,
-                url=url,
-                service=Services.SOUNDCLOUD,
-                message=f"Metadata Error:\n {response.text}",
-                is_logged=True,
-                critical=False,
-            )
-        metadata = response.json()["data"]
+        metadata = handle_lossless_response(response, url, Services.SOUNDCLOUD)
 
     if metadata["type"] == "song":
         await process_track(
@@ -180,17 +151,25 @@ async def soundcloud_handler(
             text += i18n.get("release-date", date=metadata["release_date"]) + "\n"
 
         if metadata["cover"]:
-            arq = await get_arq_pool("light")
-            cover_job = await arq.enqueue_job(
-                "universal_download",
-                metadata["cover"],
-                f"storage/temp/soundcloud_album_{metadata['id']}.png",
-            )
-            cover_path = await cover_job.result()
-            await message.answer_photo(
-                photo=FSInputFile(cover_path), caption=text, parse_mode=ParseMode.HTML
-            )
-            await delete_files([cover_path])
+            cover_path = f"storage/temp/soundcloud_album_{metadata['id']}.png"
+            try:
+                res = await http_client.post(
+                    "http://media-core:9546/tools/download-image",
+                    json={
+                        "url": metadata["cover"],
+                        "destination": cover_path
+                    },
+                    timeout=30.0
+                )
+                if res.status_code == 200:
+                    await message.answer_photo(
+                        photo=FSInputFile(cover_path), caption=text, parse_mode=ParseMode.HTML
+                    )
+                    await delete_files([cover_path])
+                else:
+                    logger.error(f"Failed to download cover via media-core: status={res.status_code}")
+            except Exception as e:
+                logger.error(f"Failed to download cover via media-core: {e}")
 
         await message.reply(i18n.get("downloading-tracks"))
 

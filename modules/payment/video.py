@@ -30,7 +30,7 @@ async def video_pre_checkout(pre_checkout_query: PreCheckoutQuery):
     # Verify hash is still in cache before taking payment
     payload = pre_checkout_query.invoice_payload
     parts = payload.split("_")
-    if len(parts) >= 5:
+    if len(parts) >= 4:
         url_hash = parts[1]
         url = get_url(url_hash)
         if not url:
@@ -58,7 +58,7 @@ async def video_successful_payment(message: Message, bot: Bot, db_session: Async
 
     try:
         parts = payload.split("_")
-        if len(parts) < 5:
+        if len(parts) < 4:
             logger.error(f"Invalid payload format: {payload}")
             await message.answer("⚠️ Error: Invalid payment data.")
             await bot.refund_star_payment(
@@ -69,11 +69,11 @@ async def video_successful_payment(message: Message, bot: Bot, db_session: Async
             return
 
         url_hash = parts[1]
-        resolution = parts[-1]
-        format_choice = "_".join(parts[2:-1])
-
-        if not format_choice.startswith(("youtube_video_", "youtube_audio_")):
-            logger.error(f"Invalid format_choice: {format_choice}")
+        try:
+            target_height = int(parts[2])
+            is_audio_only = parts[3] == "1"
+        except (ValueError, IndexError):
+            logger.error(f"Invalid payload values: {payload}")
             await message.answer("⚠️ Error: Invalid format data.")
             await bot.refund_star_payment(
                 message.from_user.id,
@@ -100,8 +100,8 @@ async def video_successful_payment(message: Message, bot: Bot, db_session: Async
         asyncio.create_task(process_youtube_download(
             message=message,
             url=url,
-            format_choice=format_choice,
-            resolution=resolution,
+            target_height=target_height,
+            is_audio_only=is_audio_only,
             user_id=message.from_user.id,
             db_session=db_session,
             payment_charge_id=payment.telegram_payment_charge_id
