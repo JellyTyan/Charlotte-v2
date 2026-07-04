@@ -49,7 +49,8 @@ def handle_youtube_api_errors(res: httpx.Response, url: str):
 
     err_msg_lower = err_msg.lower()
 
-    if res.status_code == 451 or "geo" in err_msg_lower or "country" in err_msg_lower or "region" in err_msg_lower or "geoblocked" in err_msg_lower:
+    is_error = res.status_code >= 400
+    if res.status_code == 451 or (is_error and ("geo" in err_msg_lower or "country" in err_msg_lower or "region" in err_msg_lower or "geoblocked" in err_msg_lower)):
         raise BotError(
             code=ErrorCode.REGION_RESTRICTED,
             url=url,

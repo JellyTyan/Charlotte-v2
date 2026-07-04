@@ -96,7 +96,8 @@ async def reddit_handler(
         )
 
         err_msg = res.text.lower() if res.text else ""
-        if res.status_code == 451 or "geo" in err_msg or "country" in err_msg or "region" in err_msg:
+        is_error = res.status_code >= 400
+        if res.status_code == 451 or (is_error and ("geo" in err_msg or "country" in err_msg or "region" in err_msg)):
             raise BotError(
                 code=ErrorCode.REGION_RESTRICTED,
                 url=url,

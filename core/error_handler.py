@@ -1,6 +1,7 @@
 import logging
 
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import ErrorEvent
 from fluentogram import TranslatorRunner
 
@@ -13,11 +14,27 @@ from storage.db import database_manager
 logger = logging.getLogger(__name__)
 config = Config()
 
+# Telegram errors that are not actionable and should be silently ignored
+_IGNORABLE_TG_ERRORS = {
+    "TOPIC_CLOSED",
+    "TOPIC_DELETED",
+    "MESSAGE_NOT_MODIFIED",
+    "MESSAGE_TO_DELETE_NOT_FOUND",
+    "MESSAGE_TO_EDIT_NOT_FOUND",
+}
+
 @dp.error()
 async def global_error_handler(event: ErrorEvent):
     """Handle all unhandled errors"""
     exception = event.exception
     logger.error(f"Global error handler triggered: {type(exception).__name__}: {exception}")
+
+    # Silently ignore known non-actionable Telegram errors
+    if isinstance(exception, TelegramBadRequest):
+        for ignorable in _IGNORABLE_TG_ERRORS:
+            if ignorable in str(exception):
+                logger.info(f"Ignoring non-actionable Telegram error: {ignorable}")
+                return
 
     # Get message from update (can be from message or callback_query)
     message = None

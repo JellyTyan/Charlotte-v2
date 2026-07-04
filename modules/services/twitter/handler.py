@@ -91,7 +91,8 @@ async def twitter_handler(
         )
 
         err_msg = res.text.lower() if res.text else ""
-        if res.status_code == 451 or "geo" in err_msg or "country" in err_msg or "region" in err_msg:
+        is_error = res.status_code >= 400
+        if res.status_code == 451 or (is_error and ("geo" in err_msg or "country" in err_msg or "region" in err_msg)):
             raise BotError(
                 code=ErrorCode.REGION_RESTRICTED,
                 url=url,
@@ -112,8 +113,17 @@ async def twitter_handler(
             )
 
         if res.status_code == 403:
+            if "nsfw" in err_msg:
+                raise BotError(
+                    code=ErrorCode.AGE_RESTRICTED,
+                    url=url,
+                    service=Services.TWITTER,
+                    message=f"Download Error:\n {res.text}",
+                    is_logged=False,
+                    critical=False,
+                )
             raise BotError(
-                code=ErrorCode.INVALID_URL if not sponsor else ErrorCode.NOT_ALLOWED,
+                code=ErrorCode.PRIVATE_CONTENT,
                 url=url,
                 service=Services.TWITTER,
                 message=f"Download Error:\n {res.text}",
