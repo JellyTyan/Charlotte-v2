@@ -3,6 +3,7 @@ import logging
 import re
 from pathlib import Path
 
+
 import httpx
 from aiogram import F, Router
 from aiogram.types import Message
@@ -110,7 +111,7 @@ async def tiktok_handler(message: Message, db_session: AsyncSession, http_client
                     width=media.get('width', None),
                     height=media.get('height', None),
                     duration=media.get('duration', None),
-                    cover=Path(media.get('cover')) if media.get('cover') else None,
+                    cover=Path(media.get('cover')) if media.get('cover') and Path(media.get('cover')).exists() else None,
                 )
             )
 
@@ -123,7 +124,7 @@ async def tiktok_handler(message: Message, db_session: AsyncSession, http_client
                     path=Path(music_info.get('path')),
                     title=music_info.get('title'),
                     performer=music_info.get('author'),
-                    cover=Path(music_info.get('cover')),
+                    cover=Path(music_info.get('cover')) if music_info.get('cover') and Path(music_info.get('cover')).exists() else None,
                     duration=music_info.get('duration'),
                 )
             )

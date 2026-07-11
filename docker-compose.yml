@@ -64,13 +64,14 @@ services:
     ports:
       - "9546:9546"
     volumes:
-      - ./storage:/app/storage
+      - ${STORAGE_HOST_PATH}:/app/storage
     environment:
       - PORT=${MEDIA_CORE_PORT}
       - INSTAGRAM_IPV6_SUBNET=${INSTAGRAM_IPV6_SUBNET}
       - TWITTER_AUTH_TOKEN=${AUTH_TOKEN}
       - TWITTER_CSRF_TOKEN=${CSRF_TOKEN}
       - BGUTIL_URL=${BGUTIL_URL}
+      - STORAGE_PATH=/app/storage
     networks:
       - charlotte-net
     deploy:

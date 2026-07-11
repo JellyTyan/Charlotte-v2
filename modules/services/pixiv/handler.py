@@ -3,6 +3,7 @@ import logging
 import re
 from pathlib import Path
 
+
 import httpx
 from aiogram import F, Router
 from aiogram.types import Message
@@ -211,7 +212,7 @@ async def pixiv_handler(
                         width=media.get('width', None),
                         height=media.get('height', None),
                         duration=media.get('duration', None),
-                        cover=Path(media.get('cover')) if media.get('cover') else None,
+                        cover=Path(media.get('cover')) if media.get('cover') and Path(media.get('cover')).exists() else None,
                         is_blurred=is_nsfw,
                         is_nsfw=is_nsfw,
                     )
