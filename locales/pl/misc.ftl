@@ -92,3 +92,7 @@ yt-btn-trim-active = ✓ Przycinanie
 yt-btn-back = Wstecz
 yt-label-channel = Kanał: { $uploader }
 yt-label-duration = Czas trwania: { $duration }
+
+btn-add-group = ➕ Dodaj do grupy
+
+btn-my-settings = ⚙️ Moje ustawienia

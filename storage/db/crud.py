@@ -39,26 +39,20 @@ async def get_user(session: AsyncSession, user_id: int) -> Users | None:
         await cache_set(cache_key, orm_to_dict(user), ttl=3600)
     return user
 
-async def create_user(session: AsyncSession, user_id: int) -> Users | None:
-    """Create user in database
-
-    Args:
-        session (AsyncSession): Database session
-        user_id (int): User ID
-    """
+async def create_user(session: AsyncSession, user_id: int) -> tuple[Users, bool]:
     stmt = select(Users).where(Users.user_id == user_id)
     result = await session.execute(stmt)
     existing_user = result.scalar_one_or_none()
 
     if existing_user:
-        return existing_user
+        return existing_user, False
 
     user = Users(user_id=user_id)
     session.add(user)
     await session.flush()
 
     await cache_set(f"user:{user_id}", orm_to_dict(user), ttl=3600)
-    return user
+    return user, True
 
 async def get_user_settings(session: AsyncSession, user_id: int) -> UserSettingsJson:
     """Get user settings from database
@@ -96,7 +90,7 @@ async def update_user_premium(session: AsyncSession, user_id: int, premium_ends:
 async def grant_sponsorship(session: AsyncSession, user_id: int, days: int, stars_donated: int = 0):
     user = await get_user(session, user_id)
     if not user:
-        user = await create_user(session, user_id)
+        user, _ = await create_user(session, user_id)
         
     now_naive = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     current_end = user.premium_ends if user.premium_ends else now_naive
@@ -359,7 +353,7 @@ async def get_premium_and_donation_stats(session: AsyncSession) -> dict:
 async def check_if_user_premium(session: AsyncSession, user_id: int) -> bool:
     user = await get_user(session=session, user_id=user_id)
     if user is None:
-        await create_user(session=session, user_id=user_id)
+        await create_user(session=session, user_id=user_id)  # noqa: F841
         user = await get_user(session=session, user_id=user_id)
 
     if not user:
@@ -377,7 +371,7 @@ async def toggle_lifetime_premium(session: AsyncSession, user_id: int) -> bool |
     """
     user = await get_user(session=session, user_id=user_id)
     if user is None:
-        await create_user(session=session, user_id=user_id)
+        await create_user(session=session, user_id=user_id)  # noqa: F841
         user = await get_user(session=session, user_id=user_id)
 
     if not user:
@@ -404,7 +398,7 @@ async def toggle_lifetime_premium(session: AsyncSession, user_id: int) -> bool |
 async def ban_user(session: AsyncSession, user_id: int) -> None:
     user = await get_user(session=session, user_id=user_id)
     if user is None:
-        await create_user(session=session, user_id=user_id)
+        await create_user(session=session, user_id=user_id)  # noqa: F841
         user = await get_user(session=session, user_id=user_id)
 
     if not user:
@@ -417,7 +411,7 @@ async def ban_user(session: AsyncSession, user_id: int) -> None:
 async def unban_user(session: AsyncSession, user_id: int) -> None:
     user = await get_user(session=session, user_id=user_id)
     if user is None:
-        await create_user(session=session, user_id=user_id)
+        await create_user(session=session, user_id=user_id)  # noqa: F841
         user = await get_user(session=session, user_id=user_id)
 
     if not user:
@@ -597,16 +591,5 @@ async def delete_media_cache(session: AsyncSession, cache_key: str) -> bool:
 async def clear_all_media_cache(session: AsyncSession) -> int:
     """Удаляет все записи из кэша. Возвращает количество удаленных записей."""
     stmt = delete(MediaCache)
-    result = await session.execute(stmt)
-    return result.rowcount
-
-
-async def clear_old_music_cache(session: AsyncSession) -> int:
-    """Удаляет только старый музыкальный кэш (начинающийся с 'apple:', 'spotify:', 'soundcloud:', 'ytmusic:', 'deezer:').
-    Возвращает количество удаленных записей.
-    """
-    prefixes = ["apple:", "spotify:", "soundcloud:", "ytmusic:", "deezer:"]
-    conditions = [MediaCache.cache_key.like(f"{prefix}%") for prefix in prefixes]
-    stmt = delete(MediaCache).where(or_(*conditions))
     result = await session.execute(stmt)
     return result.rowcount

@@ -90,9 +90,6 @@ panel_kb = InlineKeyboardMarkup(inline_keyboard=[
     [
         InlineKeyboardButton(text="🗑 Сбросить кеш БД", callback_data="admin_panel_clear_db_cache"),
     ],
-    [
-        InlineKeyboardButton(text="🎵 Сбросить старый муз. кеш", callback_data="admin_panel_clear_old_music_cache"),
-    ],
 ])
 
 # === Main page ===
@@ -858,22 +855,6 @@ async def admin_panel_clear_db_cache_handler(callback: CallbackQuery, state: FSM
     await db_session.commit()
     
     text = f"✅ Кеш успешно сброшен!\nУдалено записей: <b>{cleared_count}</b>"
-    
-    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
-        if callback.bot is None:
-            return
-        await callback.bot.send_message(callback.from_user.id, text, parse_mode=ParseMode.HTML, reply_markup=panel_kb)
-    else:
-        await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=panel_kb)
-    await callback.answer()
-
-
-@admin_router.callback_query(lambda c: c.data == "admin_panel_clear_old_music_cache")
-async def admin_panel_clear_old_music_cache_handler(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession):
-    cleared_count = await clear_old_music_cache(db_session)
-    await db_session.commit()
-    
-    text = f"✅ Старый музыкальный кеш успешно сброшен!\nУдалено записей: <b>{cleared_count}</b>"
     
     if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
         if callback.bot is None:

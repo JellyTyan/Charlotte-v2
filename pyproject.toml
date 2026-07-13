@@ -14,25 +14,23 @@ requires-python = ">=3.11"
 # Core
 dependencies = [
     "aiofiles",
-    "curl_cffi==0.15.0",
-    "Pillow==12.2.0"
+    "curl_cffi==0.15.0"
 ]
 
 # Specific
 [project.optional-dependencies]
 bot = [
-    "aiogram[i18n]==3.28.0",
+    "aiogram[i18n]==3.29.1",
     "fluentogram==1.2.1",
     "python-dotenv==1.2.2",
-    "sqlalchemy==2.0.49",
+    "sqlalchemy==2.0.51",
     "asyncpg==0.31.0",
-    "greenlet==3.4.0",
-    "redis~=5.3.1",
+    "greenlet==3.5.3",
+    "redis~=8.0.1",
     "fluentogram==1.2.1",
-    "alembic==1.18.4",
+    "alembic==1.18.5",
     "translators~=6.0.1",
-    "ytmusicapi==1.12.0",
-    "aiogram-dialog~=2.1.0",
+    "aiogram-dialog~=2.6.0",
 ]
 
 # Dev

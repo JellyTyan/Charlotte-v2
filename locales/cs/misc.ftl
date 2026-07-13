@@ -92,3 +92,7 @@ yt-btn-trim-active = ✓ Ořez
 yt-btn-back = Zpět
 yt-label-channel = Kanál: { $uploader }
 yt-label-duration = Délka: { $duration }
+
+btn-add-group = ➕ Přidat do skupiny
+
+btn-my-settings = ⚙️ Moje nastavení

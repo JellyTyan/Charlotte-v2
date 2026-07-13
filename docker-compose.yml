@@ -1,3 +1,9 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   charlotte:
     build: .
@@ -17,33 +23,32 @@ services:
       - postgres
       - migrations
       - lossless-core
-      - telegram-bot-api
+      - media-core
+    logging: *default-logging
 
   redis:
-    image: redis:7-alpine
+    image: valkey/valkey:8-alpine
     container_name: charlotte_redis
     restart: unless-stopped
-    command: redis-server --save 60 1 --loglevel warning
+    command: valkey-server --save 60 1 --loglevel warning
     volumes:
       - redis-data:/data
     networks:
       - charlotte-net
+    logging: *default-logging
 
   bgutil:
     image: brainicism/bgutil-ytdlp-pot-provider
     container_name: charlotte_bgutil
-    ports:
-      - "4416:4416"
     networks:
       - charlotte-net
     restart: always
+    logging: *default-logging
 
   lossless-core:
     image: ghcr.io/jellytyan/lossless-core:latest
     container_name: charlotte_lossless_core
     restart: always
-    ports:
-      - "7856:7856"
     volumes:
       - ./storage:/app/storage
     environment:
@@ -56,13 +61,12 @@ services:
       resources:
         limits:
           cpus: '2'
+    logging: *default-logging
 
   media-core:
     image: ghcr.io/jellytyan/media-core:latest
     container_name: charlotte_media_core
     restart: always
-    ports:
-      - "9546:9546"
     volumes:
       - ${STORAGE_HOST_PATH}:/app/storage
     environment:
@@ -78,14 +82,15 @@ services:
       resources:
         limits:
           cpus: '2'
+    logging: *default-logging
 
 
   telegram-bot-api:
     image: aiogram/telegram-bot-api:latest
     container_name: telegram-bot-api
     restart: always
-    ports:
-      - "8081:8081"
+    profiles:
+      - production
     environment:
       TELEGRAM_API_ID: ${TELEGRAM_API_ID}
       TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
@@ -95,21 +100,21 @@ services:
       - ./storage:/app/storage
     networks:
       - charlotte-net
+    logging: *default-logging
 
   postgres:
     image: postgres:15-alpine
     container_name: charlotte_db
     restart: unless-stopped
-    ports:
-      - "6543:5432"
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-charlotte}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-charlottepass}
-      POSTGRES_DB: ${POSTGRES_DB:-charlotte}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
       - charlotte-net
+    logging: *default-logging
 
   pg_backup:
     image: prodrigestivill/postgres-backup-local
@@ -119,9 +124,9 @@ services:
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
-      POSTGRES_USER: ${POSTGRES_USER:-charlotte}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-charlottepass}
-      POSTGRES_DB: ${POSTGRES_DB:-charlotte}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
       BACKUP_DIR: /backups
       KEEP_BACKUPS: "7"
       BACKUP_SCHEDULE: "0 2 * * *"
@@ -131,6 +136,7 @@ services:
     networks:
       - charlotte-net
     restart: always
+    logging: *default-logging
 
   migrations:
     build: .
@@ -141,6 +147,42 @@ services:
       - postgres
     networks:
       - charlotte-net
+    logging: *default-logging
+
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: charlotte_loki
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki-data:/loki
+    networks:
+      - charlotte-net
+
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: charlotte_promtail
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - charlotte-net
+    depends_on:
+      - loki
+
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: charlotte_grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"  # Порт для входа в интерфейс
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - charlotte-net
+    depends_on:
+      - loki
 
 networks:
   charlotte-net:
@@ -150,3 +192,5 @@ volumes:
   redis-data:
   postgres-data:
   telegram-bot-api-data:
+  loki-data:
+  grafana-data:

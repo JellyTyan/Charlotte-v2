@@ -93,3 +93,7 @@ yt-btn-trim-active = ✓ Обрізка
 yt-btn-back = Назад
 yt-label-channel = Канал: { $uploader }
 yt-label-duration = Тривалість: { $duration }
+
+btn-add-group = ➕ Додати до групи
+
+btn-my-settings = ⚙️ Мої налаштування

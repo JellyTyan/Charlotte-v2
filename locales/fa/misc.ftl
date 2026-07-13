@@ -92,3 +92,7 @@ yt-btn-trim-active = ✓ برش
 yt-btn-back = بازگشت
 yt-label-channel = کانال: { $uploader }
 yt-label-duration = مدت زمان: { $duration }
+
+btn-add-group = ➕ افزودن به گروه
+
+btn-my-settings = ⚙️ تنظیمات من

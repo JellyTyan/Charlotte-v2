@@ -10,17 +10,11 @@ def setup_logger():
 
     format_str = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 
-    file_handler = TimedRotatingFileHandler(
-        "logs/charlotte.log", when="midnight", backupCount=7
-    )
-    file_handler.setFormatter(logging.Formatter(format_str))
-
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(logging.Formatter(format_str))
 
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
-    logger.addHandler(file_handler)
     logger.addHandler(console_handler)
     logging.getLogger("aiogram.event").setLevel(logging.WARNING)
 
