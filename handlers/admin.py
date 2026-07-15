@@ -37,7 +37,6 @@ from storage.db.crud import (
     get_db_overview_stats,
     get_cache_counts_by_service,
     clear_all_media_cache,
-    clear_old_music_cache,
     grant_sponsorship
 )
 from states import NewsSpamGroup

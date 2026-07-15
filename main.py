@@ -18,7 +18,6 @@ async def main():
 
     logger.info("📁 Creating storage directories...")
     os.makedirs("storage/temp", exist_ok=True)
-    os.makedirs("logs", exist_ok=True)
     logger.info("✅ Storage directories created")
 
     logger.info("📋 Initializing DataBase...")
