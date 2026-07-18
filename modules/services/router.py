@@ -1,5 +1,4 @@
 from aiogram import Router
-from middlewares.service_use import ServiceUseMiddleware
 from middlewares.service_block import ServiceBlockMiddleware
 from middlewares.reaction import ReactionMiddleware
 
@@ -14,11 +13,10 @@ from .pixiv.handler import pixiv_router
 from .pinterest.handler import pinterest_router
 from .instagram.handler import insta_router
 from .deezer.handler import deezer_router
-from.apple_music.handler import apple_router
+from .apple_music.handler import apple_router
 
 service_router = Router()
 
-service_router.message.middleware(ServiceUseMiddleware())
 service_router.message.middleware(ServiceBlockMiddleware())
 service_router.message.middleware(ReactionMiddleware())
 

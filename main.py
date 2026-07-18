@@ -1,13 +1,29 @@
-from aiogram import Dispatcher
-from dotenv import load_dotenv
+import asyncio
 import os
 
 import httpx
-from core.config import Config
-from core.logger import setup_logger
+from aiogram_dialog import setup_dialogs
+from dotenv import load_dotenv
+
 from core.bot_commands import set_default_commands
-from utils.i18n import create_translator_hub
+from core.config import settings
+from core.error_handler import register_error_handler
+from core.loader import create_bot_and_dispatcher
+from core.logger import setup_logger
+from handlers import user_router, admin_router
+from middlewares.ban_check import BanCheckMiddleware
+from middlewares.button_owner import UserContextMiddleware, ButtonOwnerMiddleware
+from middlewares.db import DbSessionMiddleware
+from middlewares.force_edit_show_mode import ForceEditShowModeMiddleware
 from middlewares.i18n import TranslatorRunnerMiddleware
+from middlewares.rate_limiter import RateLimiter
+from modules.inline.handler import inline_router
+from modules.payment.router import payment_router
+from modules.services.router import service_router
+from storage.cache.redis_client import init_redis
+from storage.db import database_manager
+from tasks.scheduled import start_scheduled_tasks
+from utils.i18n import create_translator_hub
 
 load_dotenv()
 
@@ -21,120 +37,77 @@ async def main():
     logger.info("✅ Storage directories created")
 
     logger.info("📋 Initializing DataBase...")
-    from storage.db import database_manager
     await database_manager.init_db()
 
     logger.info("📋 Initializing Redis Client...")
-    from storage.cache.redis_client import init_redis
     await init_redis()
 
     logger.info("📋 Loading configuration...")
-    config = Config()
-    logger.info(f"✅ Configuration loaded. Admin ID: {config.ADMIN_ID}")
+    logger.info(f"✅ Configuration loaded. Admin ID: {settings.ADMIN_ID}")
 
     logger.info("🤖 Initializing Bot and Dispatcher...")
-    from core.loader import dp, bot
+    bot, dp = create_bot_and_dispatcher(settings)
 
     bot_info = await bot.get_me()
     logger.info(f"✅ Bot initialized: @{bot_info.username} ({bot_info.first_name})")
 
     logger.info("⚙️ Setting up workflow data...")
     core_client = httpx.AsyncClient(
-        base_url="http://lossless-core:7865",
-        timeout=None
+        base_url=settings.LOSSLESS_CORE_URL,
+        timeout=None,
     )
     dp.workflow_data.update(
         http_client=core_client,
-        config=config,
-        logger=logger
+        config=settings,
+        logger=logger,
     )
 
-    logger.info("⚙️ Setting up translation...")
-
-    from middlewares.db import DbSessionMiddleware
-    dp.update.middleware(DbSessionMiddleware(database_manager.async_session))
-
+    logger.info("⚙️ Setting up middlewares...")
     translator_hub = create_translator_hub()
-
     dp["_translator_hub"] = translator_hub
 
+    dp.update.middleware(DbSessionMiddleware(database_manager.async_session))
     dp.update.middleware(TranslatorRunnerMiddleware())
-
-    from middlewares.ban_check import BanCheckMiddleware
     dp.update.middleware(BanCheckMiddleware())
-
-    from middlewares.button_owner import UserContextMiddleware, ButtonOwnerMiddleware
     dp.update.outer_middleware(UserContextMiddleware())
     dp.callback_query.middleware(ButtonOwnerMiddleware())
-
-    logger.info("📊 Setting up rate limiter...")
-    from middlewares.rate_limiter import RateLimiter
     dp.message.middleware(RateLimiter(rate=10, per=60))
     logger.info("✅ All middlewares registered")
 
-    from core.error_handler import global_error_handler
-    logger.info("✅ Error handler registered")
-
-    from modules.payment.router import payment_router
-    from modules.services.router import service_router
-    from modules.inline.handler import inline_router
-    from handlers import user_router, admin_router
-
+    logger.info("⚙️ Registering routers...")
     dp.include_router(user_router)
     dp.include_router(payment_router)
     dp.include_router(admin_router)
     dp.include_router(inline_router)
     dp.include_router(service_router)
 
-    from aiogram_dialog import setup_dialogs
     setup_dialogs(dp)
-
-    from middlewares.force_edit_show_mode import ForceEditShowModeMiddleware
     dp.update.outer_middleware(ForceEditShowModeMiddleware())
-
     logger.info("✅ All handlers registered")
 
+    register_error_handler(dp, bot)
+    logger.info("✅ Error handler registered")
+
     logger.info("⏰ Starting scheduled tasks...")
-    from tasks.scheduled import start_scheduled_tasks
     start_scheduled_tasks(bot)
     logger.info("✅ Scheduled tasks started")
 
     logger.info("📝 Setting default commands...")
-    await set_default_commands()
+    await set_default_commands(bot)
     logger.info("✅ Default commands set")
 
-    # if config.TELEGRAM_LOCAL:
-    #     logger.info("🌐 Starting webhook mode with local Telegram Bot API...")
-    #     from aiohttp import web
-    #     from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
-    #
-    #     app = web.Application()
-    #     webhook_requests_handler = SimpleRequestHandler(dispatcher=dp, bot=bot)
-    #     webhook_requests_handler.register(app, path=config.WEBHOOK_PATH)
-    #     setup_application(app, dp, bot=bot)
-    #
-    #     runner = web.AppRunner(app)
-    #     await runner.setup()
-    #     site = web.TCPSite(runner, config.WEBAPP_HOST, config.WEBAPP_PORT)
-    #     await site.start()
-    #
-    #     webhook_url = f"{config.WEBHOOK_HOST}{config.WEBHOOK_PATH}"
-    #     await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
-    #     logger.info(f"✅ Webhook set to {webhook_url}")
-    #     logger.info(f"🎉 Bot started in webhook mode on {config.WEBAPP_HOST}:{config.WEBAPP_PORT}")
-    #
-    #     import asyncio
-    #     await asyncio.Event().wait()
-    # else:
+    dp.shutdown.register(on_shutdown)
+
     logger.info("🎉 Bot successfully started and ready to receive messages!")
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot, skip_updates=True)
 
-async def on_shutdown(dispatcher: Dispatcher):
+
+async def on_shutdown(dispatcher):
     core_client: httpx.AsyncClient = dispatcher.workflow_data.get("http_client")
     if core_client:
         await core_client.aclose()
 
+
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(main())

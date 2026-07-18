@@ -1,20 +1,20 @@
 import logging
 
+from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
-from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import ErrorEvent
+from aiogram.exceptions import TelegramBadRequest, TelegramAPIError
+from aiogram.types import ErrorEvent, Message, User, Chat
 from fluentogram import TranslatorRunner
 
-from core.config import Config
-from core.loader import dp, bot
+from core.config import Config, settings
 from models.errors import BotError
-from storage.db.crud import get_chat_settings, get_user_settings
 from storage.db import database_manager
+from storage.db.crud import get_chat_settings, get_user_settings
+from utils import escape_html
 
 logger = logging.getLogger(__name__)
 config = Config()
 
-# Telegram errors that are not actionable and should be silently ignored
 _IGNORABLE_TG_ERRORS = {
     "TOPIC_CLOSED",
     "TOPIC_DELETED",
@@ -23,110 +23,137 @@ _IGNORABLE_TG_ERRORS = {
     "MESSAGE_TO_EDIT_NOT_FOUND",
 }
 
-@dp.error()
-async def global_error_handler(event: ErrorEvent):
-    """Handle all unhandled errors"""
-    exception = event.exception
-    logger.error(f"Global error handler triggered: {type(exception).__name__}: {exception}")
 
-    # Silently ignore known non-actionable Telegram errors
-    if isinstance(exception, TelegramBadRequest):
-        for ignorable in _IGNORABLE_TG_ERRORS:
-            if ignorable in str(exception):
-                logger.info(f"Ignoring non-actionable Telegram error: {ignorable}")
-                return
+def _is_ignorable_tg_error(exception: TelegramBadRequest) -> bool:
+    return any(code in str(exception) for code in _IGNORABLE_TG_ERRORS)
 
-    # Get message from update (can be from message or callback_query)
-    message = None
-    update = event.update
+
+def _extract_message(update) -> Message | None:
     if update.message:
-        message = update.message
-    elif update.callback_query:
-        message = update.callback_query.message
+        return update.message
+    if update.callback_query:
+        return update.callback_query.message
+    return None
 
-    if not message:
-        logger.error(f"Error without message context: {exception}")
-        return
 
-    # Get i18n from workflow_data
-    hub = dp.workflow_data.get("_translator_hub")
-    if not hub:
-        logger.error("TranslatorHub not found in workflow_data")
-        await message.answer("❌ An error occurred. Please try again later.")
-        return
+def _extract_user_and_chat(update) -> tuple[User | None, Chat | None]:
+    if update.message:
+        return update.message.from_user, update.message.chat
+    if update.callback_query:
+        chat = update.callback_query.message.chat if update.callback_query.message else None
+        return update.callback_query.from_user, chat
+    return None, None
 
-    # Get user/chat for locale
-    user = None
-    if update.message and update.message.from_user:
-        user = update.message.from_user
-    elif update.callback_query and update.callback_query.from_user:
-        user = update.callback_query.from_user
 
-    chat = None
-    if update.message and update.message.chat:
-        chat = update.message.chat
-    elif update.callback_query and update.callback_query.message:
-        chat = update.callback_query.message.chat
-
-    lang = "en"
-
+async def _resolve_language(chat: Chat | None, user: User | None) -> str:
     try:
         async with database_manager.async_session() as session:
             if chat and chat.type != "private":
                 settings = await get_chat_settings(session, chat.id)
-                if settings:
-                    lang = settings.profile.language
             elif user:
                 settings = await get_user_settings(session, user.id)
-                if settings:
-                    lang = settings.profile.language
-    except Exception as db_err:
-        logger.error(f"Failed to query database for settings in error handler: {db_err}")
-
-    i18n: TranslatorRunner = hub.get_translator_by_locale(lang)
-
-    # Handle BotError
-    if isinstance(exception, BotError):
-        logger.info(f"Handling BotError: code={exception.code}, message={exception.message}")
-
-        if exception.service:
-            from utils.statistics_helper import log_download_event
-            user_id = user.id if user else (chat.id if chat else None)
-            if user_id:
-                async with database_manager.async_session() as log_session:
-                    await log_download_event(
-                        log_session,
-                        user_id=user_id,
-                        service=exception.service,
-                        status="failed_download",
-                        error_code=exception.code
-                    )
-                    await log_session.commit()
-
-        if exception.send_user_message:
-            from utils.error_messages import get_i18n_error_message
-            error_message = get_i18n_error_message(exception.code, i18n)
-
-            if error_message:
-                logger.info(f"Sending error message to user: {error_message}")
-                await message.answer(error_message)
             else:
-                logger.warning(f"No error message defined for code: {exception.code}")
+                return "en"
+            return settings.profile.language if settings else "en"
+    except Exception as db_err:
+        logger.error(f"Failed to resolve language: {db_err}")
+        return "en"
+
+
+async def _handle_bot_error(
+    exception: BotError,
+    message: Message,
+    user: User | None,
+    chat: Chat | None,
+    i18n: TranslatorRunner,
+    bot: Bot,
+) -> None:
+    if exception.service:
+        await _log_download_failure(exception, user, chat)
+
+    if exception.send_user_message:
+        await _notify_user(message, exception, i18n)
+
+    if exception.critical:
+        await _notify_admin(bot, exception)
+
+    if exception.is_logged:
+        logger.error(f"Error: {exception.message}")
+
+
+async def _log_download_failure(exception: BotError, user: User | None, chat: Chat | None) -> None:
+    user_id = user.id if user else (chat.id if chat else None)
+    if not user_id:
+        return
+    from utils.statistics_helper import log_download_event
+    async with database_manager.async_session() as session:
+        await log_download_event(
+            session, user_id=user_id, service=exception.service,
+            status="failed_download", error_code=exception.code,
+        )
+        await session.commit()
+
+
+async def _notify_user(message: Message, exception: BotError, i18n: TranslatorRunner) -> None:
+    from utils.error_messages import get_i18n_error_message
+    error_message = get_i18n_error_message(exception.code, i18n)
+    if not error_message:
+        logger.warning(f"No error message defined for code: {exception.code}")
+        return
+    try:
+        await message.answer(error_message)
+    except TelegramAPIError as e:
+        logger.warning(f"Failed to notify user: {e}")
+
+
+async def _notify_admin(bot: Bot, exception: BotError) -> None:
+    if not settings.ADMIN_ID:
+        return
+    service_name = exception.service.value if exception.service else "Unknown"
+    text = (
+        f"Sorry, there was an error:\nService: {service_name}\n"
+        f"{escape_html(exception.url)}\n\n<pre>{escape_html(exception.message)}</pre>"
+    )
+    try:
+        await bot.send_message(settings.ADMIN_ID, text, parse_mode=ParseMode.HTML)
+    except TelegramAPIError as e:
+        logger.error(f"Failed to notify admin: {e}")
+
+
+def register_error_handler(dp: Dispatcher, bot: Bot) -> None:
+    @dp.error()
+    async def global_error_handler(event: ErrorEvent):
+        exception = event.exception
+        logger.error(f"Global error handler triggered: {type(exception).__name__}: {exception}")
+
+        if isinstance(exception, TelegramBadRequest) and _is_ignorable_tg_error(exception):
+            logger.info(f"Ignoring non-actionable Telegram error: {exception}")
+            return
+
+        message = _extract_message(event.update)
+        if not message:
+            logger.error(f"Error without message context: {exception}", exc_info=True)
+            return
+
+        hub = dp.workflow_data.get("_translator_hub")
+        if not hub:
+            logger.error("TranslatorHub not found in workflow_data")
+            try:
+                await message.answer("❌ An error occurred. Please try again later.")
+            except TelegramAPIError:
+                pass
+            return
+
+        user, chat = _extract_user_and_chat(event.update)
+        lang = await _resolve_language(chat, user)
+        i18n: TranslatorRunner = hub.get_translator_by_locale(lang)
+
+        if isinstance(exception, BotError):
+            logger.info(f"Handling BotError: code={exception.code}, message={exception.message}")
+            await _handle_bot_error(exception, message, user, chat, i18n, bot)
         else:
-            logger.info("send_user_message is False, skipping notification to user")
-
-        if exception.critical and config.ADMIN_ID:
-            logger.info(f"Sending critical error notification to admin {config.ADMIN_ID}")
-            service_name = exception.service.value if exception.service else "Unknown"
-            await bot.send_message(
-                config.ADMIN_ID,
-                f"Sorry, there was an error:\nService: {service_name}\n{exception.url}\n\n<pre>{exception.message}</pre>",
-                parse_mode=ParseMode.HTML
-            )
-
-        if exception.is_logged:
-            logger.error(f"Error: {exception.message}")
-    else:
-        # Generic error
-        await message.answer(i18n.error.generic())
-        logger.error(f"Unhandled error: {exception}", exc_info=True)
+            try:
+                await message.answer(i18n.error.generic())
+            except TelegramAPIError:
+                pass
+            logger.error(f"Unhandled error: {exception}", exc_info=True)

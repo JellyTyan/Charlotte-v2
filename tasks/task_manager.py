@@ -27,9 +27,6 @@ class TaskManager:
                 finally:
                     self._active_tasks.pop(user_id, None)
 
-    def clear_cancel(self, user_id: int):
-        self._cancelled_users.discard(user_id)
-
     def cancel_user(self, user_id: int) -> bool:
         self._cancelled_users.add(user_id)
 

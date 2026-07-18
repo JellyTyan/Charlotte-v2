@@ -1,6 +1,9 @@
+from typing import Any, Awaitable, Callable, Dict
+
 from aiogram import BaseMiddleware
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message, ReactionTypeEmoji, TelegramObject
-from typing import Callable, Dict, Any, Awaitable
+
 
 class ReactionMiddleware(BaseMiddleware):
     """
@@ -14,9 +17,8 @@ class ReactionMiddleware(BaseMiddleware):
     ) -> Any:
         if isinstance(event, Message):
             try:
-                # Add 👍 reaction to indicate the link is accepted
                 await event.react([ReactionTypeEmoji(emoji="👍")])
-            except Exception:
+            except TelegramBadRequest:
                 # Silently ignore if reactions are not supported or bot lacks permissions
                 pass
         

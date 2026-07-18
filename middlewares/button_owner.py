@@ -1,11 +1,11 @@
+import contextvars
 import logging
 from typing import Any, Awaitable, Callable, Dict
-import contextvars
 
 from aiogram import BaseMiddleware
-from aiogram.types import CallbackQuery, TelegramObject, Message
+from aiogram.types import CallbackQuery, Message, TelegramObject, Update
 
-from storage.cache.redis_client import cache_set, cache_get
+from storage.cache.redis_client import cache_get, cache_set
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,6 @@ class UserContextMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: Dict[str, Any]
     ) -> Any:
-        from aiogram.types import Update
         user_id = None
         if isinstance(event, Update):
             if event.message and event.message.from_user:

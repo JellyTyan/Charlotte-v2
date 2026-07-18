@@ -1,3 +1,4 @@
+from aiogram import Dispatcher, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart, CommandObject
 from aiogram.fsm.context import FSMContext
@@ -8,9 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from storage.cache.redis_client import cache_get, cache_delete
 from storage.db.crud import create_user, create_chat, get_user_settings, update_user_settings
-
-from core.loader import dp
-from aiogram import Router
 
 router = Router()
 
@@ -32,6 +30,7 @@ async def start_command(
     i18n: TranslatorRunner,
     db_session: AsyncSession,
     _translator_hub: TranslatorHub,
+    dp: Dispatcher,
 ):
     if not message.from_user:
         return None

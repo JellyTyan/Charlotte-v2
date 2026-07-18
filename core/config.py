@@ -1,31 +1,17 @@
 """Global Bot Configuration"""
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-import os
-from dataclasses import dataclass
-# todo pydantic settings
-@dataclass
-class Config:
-    DATABASE_URL: str = os.getenv("DATABASE_URL", os.getenv("DB_URL", "sqlite:///charlotte.db"))
-    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379")
-    ADMIN_ID: int = int(os.getenv("ADMIN_ID", 0))
-    DUMP_CHANNEL_ID:int = int(os.getenv("DUMP_CHANNEL_ID", 0))
+class Config(BaseSettings):
+    DATABASE_URL: str
+    REDIS_URL: str
+    ADMIN_ID: int
+    DUMP_CHANNEL_ID: int
+    TELEGRAM_API_ID: str
+    TELEGRAM_API_HASH: str
+    TELEGRAM_LOCAL: bool
+    TELEGRAM_SERVER_URL: str
+    LOSSLESS_CORE_URL: str
 
-    # Telegram API Server Config
-    TELEGRAM_API_ID: str = os.getenv("TELEGRAM_API_ID", "")
-    TELEGRAM_API_HASH: str = os.getenv("TELEGRAM_API_HASH", "")
-    TELEGRAM_LOCAL: bool = os.getenv("TELEGRAM_LOCAL", "False").lower() == "true"
-    TELEGRAM_SERVER_URL: str = os.getenv("TELEGRAM_SERVER_URL", "http://telegram-bot-api:8081")
-    
-    # Webhook Config
-    WEBHOOK_HOST: str = os.getenv("WEBHOOK_HOST", "http://localhost:8081")
-    WEBHOOK_PATH: str = os.getenv("WEBHOOK_PATH", "/webhook")
-    WEBAPP_HOST: str = os.getenv("WEBAPP_HOST", "0.0.0.0")
-    WEBAPP_PORT: int = int(os.getenv("WEBAPP_PORT", "8000"))
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    _instance = None
-
-    @classmethod
-    def instance(cls) -> "Config":
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
+settings = Config()

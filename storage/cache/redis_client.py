@@ -5,11 +5,13 @@ import datetime
 import json
 from typing import Optional, Any, Dict
 
+from redis.asyncio import Redis
+
 logger = logging.getLogger(__name__)
 
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
 
-redis_client = None
+redis_client: Redis | None = None
 
 async def init_redis():
     global redis_client
