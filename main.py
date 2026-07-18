@@ -89,6 +89,9 @@ async def main():
     from aiogram_dialog import setup_dialogs
     setup_dialogs(dp)
 
+    from middlewares.force_edit_show_mode import ForceEditShowModeMiddleware
+    dp.update.outer_middleware(ForceEditShowModeMiddleware())
+
     logger.info("✅ All handlers registered")
 
     logger.info("⏰ Starting scheduled tasks...")

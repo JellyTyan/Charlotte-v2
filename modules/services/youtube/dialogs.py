@@ -4,6 +4,7 @@ import re
 from typing import Any
 
 from aiogram.enums import ContentType
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, Message
 from aiogram_dialog import Dialog, Window, DialogManager
 from aiogram_dialog.api.entities import MediaAttachment
@@ -249,20 +250,20 @@ async def trigger_download(
         )
         invoice_params.pop('chat_id', None)
         await target_message.answer_invoice(**invoice_params)
-        await dialog_manager.done()
         if dialog_msg:
             try:
                 await dialog_msg.delete()
-            except Exception:
-                pass
+            except TelegramBadRequest as e:
+                logger.warning("Failed to delete dialog message %s: %s", dialog_msg.message_id, e)
+        await dialog_manager.done()
         return
 
-    await dialog_manager.done()
     if dialog_msg:
         try:
             await dialog_msg.delete()
-        except Exception:
-            pass
+        except TelegramBadRequest as e:
+            logger.warning("Failed to delete dialog message %s: %s", dialog_msg.message_id, e)
+    await dialog_manager.done()
 
     asyncio.create_task(process_youtube_download(
         message=target_message,
@@ -320,12 +321,12 @@ async def on_advanced_format_click(c: CallbackQuery, widget: Any, manager: Dialo
 
 
 async def on_cancel_click(c: CallbackQuery, button: Button, manager: DialogManager):
-    await manager.done()
     if c.message:
         try:
             await c.message.delete()
-        except Exception:
-            pass
+        except TelegramBadRequest as e:
+            logger.warning("Failed to delete dialog message %s: %s", c.message.message_id, e)
+    await manager.done()
     await c.answer()
 
 
