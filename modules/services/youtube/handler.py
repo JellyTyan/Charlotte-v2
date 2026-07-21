@@ -191,7 +191,7 @@ async def download_youtube_full(
         res = await http_client.post(
             "http://media-core:9546/download/youtube",
             json=payload,
-            timeout=300.0
+            timeout=600.0
         )
     except Exception as e:
         logger.error(f"Failed to download full YouTube media: {e}")
@@ -250,7 +250,7 @@ async def download_youtube_clip(
         res = await http_client.post(
             "http://media-core:9546/download/youtube",
             json=payload,
-            timeout=300.0
+            timeout=600.0
         )
     except Exception as e:
         logger.error(f"Failed to download YouTube clip: {e}")
