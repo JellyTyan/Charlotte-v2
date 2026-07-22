@@ -5,7 +5,7 @@ from aiogram.filters import Command
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.config import Config
+from core.config import settings
 from storage.db.crud import get_global_settings, update_global_settings, get_payment_by_charge_id, update_payment_status
 
 admin_router = Router(name="payment_admin")
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 @admin_router.message(Command("add_supporter"))
 async def add_supporter_command(message: Message, db_session: AsyncSession):
-    if message.from_user.id != Config.ADMIN_ID:
+    if message.from_user.id != settings.ADMIN_ID:
         return
 
     args = message.text.split(maxsplit=1)
@@ -37,7 +37,7 @@ async def add_supporter_command(message: Message, db_session: AsyncSession):
 
 @admin_router.message(Command("remove_supporter"))
 async def remove_supporter_command(message: Message, db_session: AsyncSession):
-    if message.from_user.id != Config.ADMIN_ID:
+    if message.from_user.id != settings.ADMIN_ID:
         return
 
     args = message.text.split(maxsplit=1)
@@ -61,7 +61,7 @@ async def remove_supporter_command(message: Message, db_session: AsyncSession):
 
 @admin_router.message(Command("list_supporters"))
 async def list_supporters_command(message: Message, db_session: AsyncSession):
-    if message.from_user.id != Config.ADMIN_ID:
+    if message.from_user.id != settings.ADMIN_ID:
         return
 
     settings = await get_global_settings(db_session)
@@ -79,7 +79,7 @@ async def list_supporters_command(message: Message, db_session: AsyncSession):
 
 @admin_router.message(Command("refund"))
 async def refund_command(message: Message, bot: Bot, db_session: AsyncSession):
-    if message.from_user.id != Config.ADMIN_ID:
+    if message.from_user.id != settings.ADMIN_ID:
         return
 
     args = message.text.split()

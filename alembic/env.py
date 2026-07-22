@@ -13,10 +13,10 @@ import os
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv())
 
-from core.config import Config
+from core.config import settings
 
 # Формируем URL. Важно: для Alembic используем asyncpg
-DB_URL = Config.DATABASE_URL
+DB_URL = settings.DATABASE_URL
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

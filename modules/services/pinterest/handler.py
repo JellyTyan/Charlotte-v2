@@ -94,6 +94,15 @@ async def pinterest_handler(message: Message, db_session: AsyncSession, http_cli
             )
 
         if res.status_code == 403:
+            if "nsfw" in err_msg:
+                raise BotError(
+                    code=ErrorCode.AGE_RESTRICTED,
+                    url=url,
+                    service=Services.PINTEREST,
+                    message=f"Download Error:\n {res.text}",
+                    is_logged=False,
+                    critical=False,
+                )
             raise BotError(
                 code=ErrorCode.NOT_ALLOWED,
                 url=url,

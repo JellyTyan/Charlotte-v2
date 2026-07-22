@@ -119,8 +119,17 @@ async def reddit_handler(
             )
 
         if res.status_code == 403:
+            if "nsfw" in err_msg:
+                raise BotError(
+                    code=ErrorCode.AGE_RESTRICTED,
+                    url=url,
+                    service=Services.REDDIT,
+                    message=f"Download Error:\n {res.text}",
+                    is_logged=False,
+                    critical=False,
+                )
             raise BotError(
-                code=ErrorCode.INVALID_URL if not sponsor else ErrorCode.NOT_ALLOWED,
+                code=ErrorCode.PRIVATE_CONTENT,
                 url=url,
                 service=Services.REDDIT,
                 message=f"Download Error:\n {res.text}",
