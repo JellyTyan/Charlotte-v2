@@ -568,13 +568,8 @@ async def process_spam_news_to_chats(callback: CallbackQuery, state: FSMContext,
     chat_id = callback.from_user.id
     message_text = data.get("message_text", "")
 
-    await callback.answer("Mailing list started", reply_markup=ReplyKeyboardRemove())
+    await callback.answer("Mailing list started")
     await state.clear()
-
-    start_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    total_chat = 0
-    success_send = 0
-    error_send = 0
 
     if callback.data == "news_spam_subscribers":
         user_ids = await get_news_subscribers_ids(db_session)
@@ -583,12 +578,21 @@ async def process_spam_news_to_chats(callback: CallbackQuery, state: FSMContext,
         chat_ids = await get_all_chat_ids(db_session)
         user_ids.extend(chat_ids)
 
+    asyncio.create_task(
+        _run_broadcast(callback.bot, chat_id, user_ids, message_text)
+    )
+
+
+async def _run_broadcast(bot: Bot, sender_id: int, user_ids: list[int], message_text: str) -> None:
+    start_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    success_send = 0
+    error_send = 0
 
     for user_id in user_ids:
-        if user_id == chat_id:
+        if user_id == sender_id:
             continue
 
-        if await send_message_safe(callback.bot, user_id, message_text):
+        if await send_message_safe(bot, user_id, message_text):
             success_send += 1
         else:
             error_send += 1
@@ -602,17 +606,17 @@ async def process_spam_news_to_chats(callback: CallbackQuery, state: FSMContext,
         "Beginning at {start_time}\n"
         "Ended at {end_time}\n"
         "Number of chats: {total_chat}\n"
-        "Successfully sent: {sucсess_send}\n"
-        "Erros: {error_send}"
+        "Successfully sent: {success_send}\n"
+        "Errors: {error_send}"
     ).format(
         start_time=start_time,
         end_time=end_time,
-        total_chat=total_chat,
-        sucсess_send=success_send,
+        total_chat=len(user_ids),
+        success_send=success_send,
         error_send=error_send,
     )
 
-    await callback.bot.send_message(chat_id=chat_id, text=done_message)
+    await bot.send_message(chat_id=sender_id, text=done_message)
 
 async def send_message_safe(bot: Bot, user_id: int, text: str) -> bool:
     """

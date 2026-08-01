@@ -20,9 +20,9 @@ async def init_redis():
         await client.ping()
         redis_client = client
         logger.info("Connection to redis successful")
-    except Exception:
+    except Exception as e:
         redis_client = None
-        logger.info("Redis not found. Skip...")
+        logger.warning(f"Redis unavailable, running without cache: {e}")
 
 def orm_to_dict(obj):
     result = {}
@@ -80,8 +80,15 @@ async def cache_get(key: str) -> Optional[Dict]:
         return None
     try:
         data = await redis_client.get(key)
-        return json.loads(data) if data else None
-    except Exception:
+        if data is None:
+            return None
+        try:
+            return json.loads(data)
+        except json.JSONDecodeError as e:
+            logger.warning(f"cache_get: failed to decode JSON for key '{key}': {e}")
+            return None
+    except redis.RedisError as e:
+        logger.warning(f"cache_get: Redis error for key '{key}': {e}")
         return None
 
 async def cache_set(key: str, data: Dict, ttl: int = 3600):
@@ -89,16 +96,16 @@ async def cache_set(key: str, data: Dict, ttl: int = 3600):
         return
     try:
         await redis_client.setex(key, ttl, json.dumps(data, default=str))
-    except Exception:
-        pass
+    except redis.RedisError as e:
+        logger.warning(f"cache_set: Redis error for key '{key}': {e}")
 
 async def cache_delete(key: str):
     if not redis_client:
         return
     try:
         await redis_client.delete(key)
-    except Exception:
-        pass
+    except redis.RedisError as e:
+        logger.warning(f"cache_delete: Redis error for key '{key}': {e}")
 
 async def get_or_cache(key: str, fetch_func, ttl: int = 3600):
     cached = await cache_get(key)

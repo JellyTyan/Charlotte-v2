@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
 from aiogram import types, Bot
+from aiogram.types import ReactionTypeEmoji
 from aiogram.utils.media_group import MediaGroupBuilder
 from aiogram.exceptions import TelegramEntityTooLarge, TelegramRetryAfter
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,11 +18,13 @@ from utils import delete_files, truncate_string, translate_text
 from models.media import MediaContent, MediaType
 from models.errors import BotError, ErrorCode
 from storage.db.crud import (
+    get_user,
     get_user_settings,
     get_chat_settings,
     upsert_media_cache,
     get_media_cache,
 )
+from storage.cache import redis_client as _redis_module
 from models.settings import UserSettingsJson, ChatSettingsJson
 from models.media_cache import MediaCacheDTO, CacheMetadata, CacheItemMetadata
 from models.service_list import Services
@@ -29,6 +32,9 @@ from utils.statistics_helper import log_download_event
 from core.config import Config
 
 logger = logging.getLogger(__name__)
+
+_IS_LOCAL_API = bool(os.getenv("TELEGRAM_LOCAL") or os.getenv("TELEGRAM_BOT_API_URL"))
+AD_TEXT = "<a href='https://t.me/CharlotteFox_Bot'>Charlotte 🧡</a>"
 
 REACTION_EMOJIS = [
     "👍",
@@ -119,12 +125,13 @@ def with_retry(max_retries: int = 5):
 
             for attempt in range(max_retries):
                 try:
-                    if redis_client:
+                    client = _redis_module.redis_client
+                    if client:
                         current_time = int(time.time())
                         key = f"global_send_count:{current_time}"
-                        count = await redis_client.incr(key)
+                        count = await client.incr(key)
                         if count == 1:
-                            await redis_client.expire(key, 5)
+                            await client.expire(key, 5)
 
                         if count >= 25:
                             await asyncio.sleep(1)
@@ -150,9 +157,8 @@ def with_retry(max_retries: int = 5):
 
 
 class MediaSender:
-    _dump_lock = asyncio.Lock()
-
     def __init__(self):
+        self._dump_lock = asyncio.Lock()
         self._files_to_cleanup: List[Path] = []
 
     # ==========================================
@@ -208,12 +214,8 @@ class MediaSender:
             1024 * 1024
         )
 
-        # Лимиты зависят от того, запущен ли Local Bot API
-        is_local = bool(
-            os.getenv("TELEGRAM_LOCAL") or os.getenv("TELEGRAM_BOT_API_URL")
-        )
         max_size_mb = (
-            (4000 if is_local else 2000) if is_audio else (2000 if is_local else 50)
+            (4000 if _IS_LOCAL_API else 2000) if is_audio else (2000 if _IS_LOCAL_API else 50)
         )
 
         if size_mb > max_size_mb:
@@ -429,10 +431,9 @@ class MediaSender:
             is_premium = False
             show_ad = True
             if db_session and message.from_user:
-                from storage.db.crud import get_user
                 user = await get_user(db_session, message.from_user.id)
                 is_premium = user.is_premium if user else False
-                
+
                 user_settings = await get_user_settings(db_session, message.from_user.id)
                 if user_settings:
                     show_ad = user_settings.profile.bot_sign
@@ -462,8 +463,6 @@ class MediaSender:
                     else REACTION_EMOJIS
                 )
                 try:
-                    from aiogram.types import ReactionTypeEmoji
-
                     await message.react(
                         [ReactionTypeEmoji(emoji=random.choice(emoji_pool))]
                     )
@@ -533,12 +532,8 @@ class MediaSender:
                     final_caption = truncate_string(caption, 1000)
                 
                 if show_ad:
-                    ad_text = "\n\n<a href='https://t.me/CharlotteFox_Bot'>Charlotte 🧡</a>"
-                    if final_caption:
-                        final_caption += ad_text
-                    else:
-                        final_caption = ad_text
-                
+                    final_caption = (final_caption + "\n\n" if final_caption else "") + AD_TEXT
+
                 if final_caption:
                     media_group.caption = final_caption
 
@@ -615,12 +610,7 @@ class MediaSender:
         self._check_file_size(audio, is_audio=True)
         media_input = self._get_input_media(audio, as_document=False)
 
-        final_caption = ""
-        if show_ad:
-            final_caption = "<a href='https://t.me/CharlotteFox_Bot'>Charlotte 🧡</a>"
-                
-        if not final_caption:
-            final_caption = None
+        final_caption: Optional[str] = AD_TEXT if show_ad else None
 
         try:
             sent_msg = await self._safe_send(
@@ -695,12 +685,8 @@ class MediaSender:
             final_caption = truncate_string(caption, 1000)
 
         if show_ad:
-            ad_text = "\n\n<a href='https://t.me/CharlotteFox_Bot'>Charlotte 🧡</a>"
-            if final_caption:
-                final_caption += ad_text
-            else:
-                final_caption = ad_text
-                
+            final_caption = (final_caption + "\n\n" if final_caption else "") + AD_TEXT
+
         if not final_caption:
             final_caption = None
 

@@ -507,33 +507,24 @@ async def get_list_user_ids(session: AsyncSession) -> list[int]:
     return [row[0] for row in result.fetchall()]
 
 async def get_news_subscribers_ids(session: AsyncSession) -> list[int]:
-    # Get users who are not banned
-    stmt_users = select(Users.user_id, Users.settings_json).where(Users.is_banned == False)
+    stmt_users = (
+        select(Users.user_id)
+        .where(
+            Users.is_banned == False,
+            Users.settings_json["profile"]["news_spam"].astext == "true",
+        )
+    )
     result_users = await session.execute(stmt_users)
-    users = result_users.fetchall()
+    user_ids = [row[0] for row in result_users.fetchall()]
 
-    # Get all chats
-    stmt_chats = select(Chats.chat_id, Chats.settings_json)
+    stmt_chats = (
+        select(Chats.chat_id)
+        .where(Chats.settings_json["profile"]["news_spam"].astext == "true")
+    )
     result_chats = await session.execute(stmt_chats)
-    chats = result_chats.fetchall()
+    chat_ids = [row[0] for row in result_chats.fetchall()]
 
-    subscriber_ids = []
-
-    for user_id, settings_json in users:
-        settings_dict = settings_json if isinstance(settings_json, dict) else {}
-        profile = settings_dict.get('profile', {})
-        news_spam = profile.get('news_spam', False)  # defaults to False
-        if news_spam:
-            subscriber_ids.append(user_id)
-
-    for chat_id, settings_json in chats:
-        settings_dict = settings_json if isinstance(settings_json, dict) else {}
-        profile = settings_dict.get('profile', {})
-        news_spam = profile.get('news_spam', False)  # defaults to False
-        if news_spam:
-            subscriber_ids.append(chat_id)
-
-    return subscriber_ids
+    return user_ids + chat_ids
 
 async def get_all_chat_ids(session: AsyncSession) -> list[int]:
     stmt = select(Chats.chat_id)

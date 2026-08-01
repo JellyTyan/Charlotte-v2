@@ -1,12 +1,15 @@
 """Scheduled tasks for maintenance"""
 import asyncio
-import logging
 import datetime
+import logging
 import os
 import time
 from pathlib import Path
-from sqlalchemy import delete, select, update
+
 from aiogram import Bot
+from sqlalchemy import delete, select, update
+
+from utils.url_cache import cleanup_expired as cleanup_expired_urls
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +59,16 @@ async def cleanup_old_downloads():
                 logger.info(f"Cleaned {deleted_count} old files from storage/temp (>24 hours)")
         except Exception as e:
             logger.error(f"Failed to clean old downloads: {e}")
+
+
+async def cleanup_url_cache():
+    """Clean expired in-memory URL cache entries - runs every hour"""
+    while True:
+        await asyncio.sleep(3600)
+        try:
+            cleanup_expired_urls()
+        except Exception as e:
+            logger.error(f"Failed to clean url cache: {e}")
 
 
 # async def notify_expired_premium(bot: Bot):
@@ -116,5 +129,6 @@ def start_scheduled_tasks(bot: Bot):
     """Start all scheduled background tasks"""
     asyncio.create_task(cleanup_old_statistics())
     asyncio.create_task(cleanup_old_downloads())
+    asyncio.create_task(cleanup_url_cache())
     # asyncio.create_task(notify_expired_premium(bot))
     logger.info("✅ Scheduled tasks started")
