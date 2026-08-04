@@ -50,11 +50,13 @@ services:
     container_name: charlotte_lossless_core
     restart: always
     volumes:
-      - ./storage:/app/storage
+      - ${STORAGE_HOST_PATH:-./storage}:/app/storage
     environment:
-      - APPLE_MUSIC_TOKEN=${APPLEMUSIC_DEV_TOKEN}
+      - APPLEMUSIC_DEV_TOKEN=${APPLEMUSIC_DEV_TOKEN}
+      - STORAGE_PATH=/app/storage
       - PORT=7856
       - BGUTIL_URL=${BGUTIL_URL}
+#      - TURTLE_URL=${TURTLE_URL}
     networks:
       - charlotte-net
     deploy:
@@ -83,6 +85,22 @@ services:
         limits:
           cpus: '2'
     logging: *default-logging
+
+#
+#  turtle-core:
+#    image: ghcr.io/jellytyan/turtle-core:latest
+#    container_name: charlotte_turtle_core
+#    restart: always
+#    environment:
+#      - PORT=${TUTRLE_CORE_PORT}
+#    networks:
+#      - charlotte-net
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: '0.5'
+#    shm_size: '256mb'
+#    logging: *default-logging
 
 
   telegram-bot-api:
