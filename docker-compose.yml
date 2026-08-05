@@ -63,6 +63,8 @@ services:
       resources:
         limits:
           cpus: '2'
+    sysctls:
+      - net.ipv6.ip_nonlocal_bind=1
     logging: *default-logging
 
   media-core:
@@ -85,6 +87,8 @@ services:
       resources:
         limits:
           cpus: '2'
+    sysctls:
+      - net.ipv6.ip_nonlocal_bind=1
     logging: *default-logging
 
 #
