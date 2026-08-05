@@ -56,7 +56,7 @@ services:
       - STORAGE_PATH=/app/storage
       - PORT=7856
       - BGUTIL_URL=${BGUTIL_URL}
-#      - TURTLE_URL=${TURTLE_URL}
+      - YOUTUBE_IPV6_SUBNET=${YOUTUBE_IPV6_SUBNET}
     networks:
       - charlotte-net
     deploy:
@@ -78,6 +78,7 @@ services:
       - TWITTER_CSRF_TOKEN=${CSRF_TOKEN}
       - BGUTIL_URL=${BGUTIL_URL}
       - STORAGE_PATH=/app/storage
+      - YOUTUBE_IPV6_SUBNET=${YOUTUBE_IPV6_SUBNET}
     networks:
       - charlotte-net
     deploy:
