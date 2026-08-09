@@ -30,7 +30,7 @@ async def start_command(
     i18n: TranslatorRunner,
     db_session: AsyncSession,
     _translator_hub: TranslatorHub,
-    dp: Dispatcher,
+    dispatcher: Dispatcher,
 ):
     if not message.from_user:
         return None
@@ -50,7 +50,7 @@ async def start_command(
 
         new_message = message.model_copy(update={"text": url, "entities": None})
 
-        await dp.feed_update(message.bot, Update(update_id=0, message=new_message))
+        await dispatcher.feed_update(message.bot, Update(update_id=0, message=new_message))
         return None
 
     if message.chat.type == "private":

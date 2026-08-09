@@ -60,6 +60,7 @@ async def main():
         http_client=core_client,
         config=settings,
         logger=logger,
+        dp=dp,
     )
 
     logger.info("⚙️ Setting up middlewares...")
