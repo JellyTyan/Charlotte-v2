@@ -3,23 +3,19 @@ from typing import Any, Awaitable, Callable, Dict
 from aiogram import BaseMiddleware
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message, ReactionTypeEmoji, TelegramObject
+from aiogram_dialog import DialogManager
 
 
 class ReactionMiddleware(BaseMiddleware):
-    """
-    Middleware to automatically add a reaction to a message when it's accepted for processing.
-    """
-    async def __call__(
-        self,
-        handler: Callable[[TelegramObject, Dict[str, Any]], Awaitable[Any]],
-        event: TelegramObject,
-        data: Dict[str, Any]
-    ) -> Any:
+    async def __call__(self, handler, event, data):
         if isinstance(event, Message):
-            try:
-                await event.react([ReactionTypeEmoji(emoji="👍")])
-            except TelegramBadRequest:
-                # Silently ignore if reactions are not supported or bot lacks permissions
-                pass
-        
+            dialog_manager: DialogManager | None = data.get("dialog_manager")
+            in_active_dialog = dialog_manager is not None and dialog_manager.has_context()
+
+            if not in_active_dialog:
+                try:
+                    await event.react([ReactionTypeEmoji(emoji="👍")])
+                except TelegramBadRequest:
+                    pass
+
         return await handler(event, data)

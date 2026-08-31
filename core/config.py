@@ -11,6 +11,7 @@ class Config(BaseSettings):
     TELEGRAM_LOCAL: bool
     TELEGRAM_SERVER_URL: str
     LOSSLESS_CORE_URL: str
+    MEDIA_CORE_URL: str
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

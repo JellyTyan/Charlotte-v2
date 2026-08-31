@@ -52,7 +52,7 @@ services:
     cap_add:
       - NET_ADMIN
     environment:
-      - WARP_INSTANCES=5
+      - WARP_INSTANCES=1
     volumes:
       - warp-data:/var/lib/cloudflare-warp
     networks:
@@ -94,6 +94,7 @@ services:
       - BGUTIL_URL=${BGUTIL_URL}
       - STORAGE_PATH=/app/storage
       - YOUTUBE_PROXY=socks5://warp:1080
+      - REDIS_ADDR=${REDIS_ADDR}
     networks:
       - charlotte-net
     deploy:

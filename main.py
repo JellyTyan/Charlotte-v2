@@ -83,7 +83,8 @@ async def main():
     dp.include_router(service_router)
 
     setup_dialogs(dp)
-    dp.update.outer_middleware(ForceEditShowModeMiddleware())
+    dp.message.middleware(ForceEditShowModeMiddleware())
+    dp.callback_query.middleware(ForceEditShowModeMiddleware())
     logger.info("✅ All handlers registered")
 
     register_error_handler(dp, bot)

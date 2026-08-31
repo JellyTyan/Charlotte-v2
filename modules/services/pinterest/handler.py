@@ -61,88 +61,18 @@ async def pinterest_handler(message: Message, db_session: AsyncSession, http_cli
 
     async with ChatActionSender.record_video_note(bot=message.bot, chat_id=message.chat.id):
         payload = {
+            "user_id": user_id,
             "url": resolved_url,
+            "sponsor": False,
+            "nsfw": False,
         }
-        res = await task_manager.run_download(
+        metadata = await task_manager.run_media_download(
             user_id=user_id,
             url=url,
-            coro=http_client.post(
-                "http://media-core:9546/download/pinterest", json=payload,
-            ),
+            service=Services.PINTEREST,
+            payload=payload,
+            http_client=http_client,
         )
-
-        err_msg = res.text.lower() if res.text else ""
-        is_error = res.status_code >= 400
-        if res.status_code == 451 or (is_error and ("geo" in err_msg or "country" in err_msg or "region" in err_msg)):
-            raise BotError(
-                code=ErrorCode.REGION_RESTRICTED,
-                url=url,
-                service=Services.PINTEREST,
-                message=f"Download Error:\n {res.text}",
-                is_logged=False,
-                critical=False,
-            )
-
-        if res.status_code == 400:
-            raise BotError(
-                code=ErrorCode.INVALID_URL,
-                url=url,
-                service=Services.PINTEREST,
-                message=f"Download Error:\n {res.text}",
-                is_logged=True,
-                critical=False,
-            )
-
-        if res.status_code == 403:
-            if "nsfw" in err_msg:
-                raise BotError(
-                    code=ErrorCode.AGE_RESTRICTED,
-                    url=url,
-                    service=Services.PINTEREST,
-                    message=f"Download Error:\n {res.text}",
-                    is_logged=False,
-                    critical=False,
-                )
-            raise BotError(
-                code=ErrorCode.NOT_ALLOWED,
-                url=url,
-                service=Services.PINTEREST,
-                message=f"Download Error:\n {res.text}",
-                is_logged=True,
-                critical=False,
-            )
-
-        if res.status_code == 413:
-            raise BotError(
-                code=ErrorCode.LARGE_FILE,
-                url=url,
-                service=Services.PINTEREST,
-                message=f"Download Error:\n {res.text}",
-                is_logged=True,
-                critical=False,
-            )
-
-        if res.status_code == 404:
-            raise BotError(
-                code=ErrorCode.NOT_FOUND,
-                url=url,
-                service=Services.PINTEREST,
-                message=f"Download Error:\n {res.text}",
-                is_logged=True,
-                critical=False,
-            )
-
-        if res.status_code != 200:
-            raise BotError(
-                code=ErrorCode.INTERNAL_ERROR,
-                url=url,
-                service=Services.PINTEREST,
-                message=f"Download Error:\n {res.text}",
-                is_logged=True,
-                critical=True,
-            )
-
-        metadata = res.json()["data"]
 
         if metadata.get("type") == "multi":
             for i, sub_pin in enumerate(metadata.get('items', [])):

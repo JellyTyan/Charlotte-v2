@@ -173,51 +173,36 @@ async def download_youtube_full(
     target_height: int,
     is_audio_only: bool,
     sponsor: bool,
+    user_id: int,
     is_topich: bool = False
 ) -> list[MediaContent]:
-    payload: dict[str, Any] = {
-        "url": url,
-        "sponsor": sponsor
-    }
+    yt_opts: dict[str, Any] = {}
     if is_topich:
-        payload["topich"] = True
+        yt_opts["topich"] = True
     else:
         if target_height > 0:
-            payload["target_height"] = target_height
+            yt_opts["target_height"] = target_height
         if is_audio_only:
-            payload["is_audio_only"] = True
+            yt_opts["is_audio_only"] = True
 
-    try:
-        res = await http_client.post(
-            "http://media-core:9546/download/youtube",
-            json=payload,
-            timeout=600.0
-        )
-    except Exception as e:
-        logger.error(f"Failed to download full YouTube media: {e}")
-        raise BotError(
-            code=ErrorCode.INTERNAL_ERROR,
-            url=url,
-            service=Services.YOUTUBE,
-            message=f"Failed to connect to media-core: {e}",
-            is_logged=True,
-            critical=True
-        )
+    payload: dict[str, Any] = {
+        "user_id": user_id,
+        "url": url,
+        "sponsor": sponsor,
+        "nsfw": False,
+    }
+    if yt_opts:
+        payload["yt_opts"] = yt_opts
 
-    handle_youtube_api_errors(res, url)
+    data = await task_manager.run_media_download(
+        user_id=user_id,
+        url=url,
+        service=Services.YOUTUBE,
+        payload=payload,
+        http_client=http_client,
+    )
 
-    res_json = res.json()
-    if res_json.get("status") != "success" or "data" not in res_json:
-        raise BotError(
-            code=ErrorCode.INTERNAL_ERROR,
-            url=url,
-            service=Services.YOUTUBE,
-            message=f"Invalid download response: {res.text}",
-            is_logged=True,
-            critical=True
-        )
-
-    items = map_items_to_media(res_json["data"])
+    items = map_items_to_media(data)
     if is_topich:
         for item in items:
             item.as_document = True
@@ -231,52 +216,36 @@ async def download_youtube_clip(
     is_audio_only: bool,
     start_time: str,
     end_time: str,
-    sponsor: bool
+    sponsor: bool,
+    user_id: int
 ) -> list[MediaContent]:
-    payload: dict[str, Any] = {
-        "url": url,
-        "sponsor": sponsor
-    }
+    yt_opts: dict[str, Any] = {}
     if target_height > 0:
-        payload["target_height"] = target_height
+        yt_opts["target_height"] = target_height
     if is_audio_only:
-        payload["is_audio_only"] = True
+        yt_opts["is_audio_only"] = True
     if start_time:
-        payload["start_time"] = start_time
+        yt_opts["start_time"] = start_time
     if end_time:
-        payload["end_time"] = end_time
+        yt_opts["end_time"] = end_time
 
-    try:
-        res = await http_client.post(
-            "http://media-core:9546/download/youtube",
-            json=payload,
-            timeout=600.0
-        )
-    except Exception as e:
-        logger.error(f"Failed to download YouTube clip: {e}")
-        raise BotError(
-            code=ErrorCode.INTERNAL_ERROR,
-            url=url,
-            service=Services.YOUTUBE,
-            message=f"Failed to connect to media-core: {e}",
-            is_logged=True,
-            critical=True
-        )
+    payload: dict[str, Any] = {
+        "user_id": user_id,
+        "url": url,
+        "sponsor": sponsor,
+        "nsfw": False,
+        "yt_opts": yt_opts
+    }
 
-    handle_youtube_api_errors(res, url)
+    data = await task_manager.run_media_download(
+        user_id=user_id,
+        url=url,
+        service=Services.YOUTUBE,
+        payload=payload,
+        http_client=http_client,
+    )
 
-    res_json = res.json()
-    if res_json.get("status") != "success" or "data" not in res_json:
-        raise BotError(
-            code=ErrorCode.INTERNAL_ERROR,
-            url=url,
-            service=Services.YOUTUBE,
-            message=f"Invalid download response: {res.text}",
-            is_logged=True,
-            critical=True
-        )
-
-    return map_items_to_media(res_json["data"])
+    return map_items_to_media(data)
 
 
 @youtube_router.message(F.text.regexp(YOUTUBE_REGEX), StateFilter("*"))
@@ -705,17 +674,14 @@ async def process_youtube_download(
             client = http_client or httpx.AsyncClient()
             try:
                 async with ChatActionSender.record_video_note(bot=message.bot, chat_id=message.chat.id):
-                    media_content = await task_manager.run_download(
-                        user_id=user_id,
+                    media_content = await download_youtube_full(
+                        http_client=client,
                         url=url,
-                        coro=download_youtube_full(
-                            http_client=client,
-                            url=url,
-                            target_height=target_height,
-                            is_audio_only=is_audio_only,
-                            sponsor=is_premium,
-                            is_topich=is_topich
-                        )
+                        target_height=target_height,
+                        is_audio_only=is_audio_only,
+                        sponsor=is_premium,
+                        user_id=user_id,
+                        is_topich=is_topich
                     )
 
                 if media_content:
@@ -815,18 +781,15 @@ async def process_clip_download(
             client = http_client or httpx.AsyncClient()
             try:
                 async with ChatActionSender.record_video_note(bot=message.bot, chat_id=message.chat.id):
-                    media_content = await task_manager.run_download(
-                        user_id=user_id,
+                    media_content = await download_youtube_clip(
+                        http_client=client,
                         url=url,
-                        coro=download_youtube_clip(
-                            http_client=client,
-                            url=url,
-                            target_height=target_height,
-                            is_audio_only=is_audio_only,
-                            start_time=start_time,
-                            end_time=end_time,
-                            sponsor=is_premium
-                        )
+                        target_height=target_height,
+                        is_audio_only=is_audio_only,
+                        start_time=start_time,
+                        end_time=end_time,
+                        sponsor=is_premium,
+                        user_id=user_id
                     )
 
                 try:
