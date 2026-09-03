@@ -15,12 +15,14 @@ logger = logging.getLogger(__name__)
 MEDIA_CORE_ERROR_MAP: dict[str, ErrorCode] = {
     "not_found": ErrorCode.NOT_FOUND,
     "login_required": ErrorCode.PRIVATE_CONTENT,
+    "private_media": ErrorCode.PRIVATE_CONTENT,
     "nsfw_not_allowed": ErrorCode.AGE_RESTRICTED,
     "media_too_large": ErrorCode.LARGE_FILE,
     "country_blocked": ErrorCode.REGION_RESTRICTED,
     "members_only": ErrorCode.PRIVATE_CONTENT,
     "invalid_url": ErrorCode.INVALID_URL,
     "not_supported": ErrorCode.NOT_ALLOWED,
+    "rate_limited": ErrorCode.INTERNAL_ERROR,
     "internal_error": ErrorCode.INTERNAL_ERROR,
 }
 
@@ -30,8 +32,8 @@ def raise_media_core_error(err_data: dict, url: str, service: Services) -> None:
     err_code_str = err_data.get("error", "internal_error")
     code = MEDIA_CORE_ERROR_MAP.get(err_code_str, ErrorCode.INTERNAL_ERROR)
     msg = err_data.get("message") or f"Download error: {err_code_str}"
-    is_critical = code == ErrorCode.INTERNAL_ERROR
-    is_logged = code in (ErrorCode.INTERNAL_ERROR, ErrorCode.NOT_FOUND, ErrorCode.LARGE_FILE)
+    is_critical = (err_code_str == "internal_error")
+    is_logged = err_code_str in ("internal_error", "not_found", "media_too_large")
 
     raise BotError(
         code=code,
@@ -85,13 +87,15 @@ async def wait_for_media_task(
     Every `status_timeout` (20s), checks `GET /status/{task_id}` on media-core to verify liveness.
     Keeps waiting if status is pending, active, or retry.
     """
-    from storage.cache.redis_client import redis_client
+    from storage.cache.redis_client import media_redis_client, redis_client
 
+    # media-core writes results to DB 1 (media_redis_client)
+    client_to_use = media_redis_client or redis_client
     media_core_url = settings.MEDIA_CORE_URL.rstrip("/")
     elapsed_since_status = 0.0
 
     # Polling frequency
-    check_interval = 0.5 if redis_client else 1.5
+    check_interval = 0.5 if client_to_use else 1.5
 
     while True:
         # Check if cancelled by /cancel command
@@ -105,10 +109,10 @@ async def wait_for_media_task(
                 critical=False,
             )
 
-        # 1. Try reading result from Redis
-        if redis_client:
+        # 1. Try reading result from Redis (DB 1)
+        if client_to_use:
             try:
-                raw_res = await redis_client.get(f"media:result:{task_id}")
+                raw_res = await client_to_use.get(f"media:result:{task_id}")
                 if raw_res:
                     data = json.loads(raw_res) if isinstance(raw_res, str) else raw_res
                     return handle_task_result(data, url, service)
@@ -119,7 +123,7 @@ async def wait_for_media_task(
         elapsed_since_status += check_interval
 
         # 2. Check /status/{id} on media-core if status_timeout passed or no redis
-        if elapsed_since_status >= status_timeout or not redis_client:
+        if elapsed_since_status >= status_timeout or not client_to_use:
             elapsed_since_status = 0.0
             try:
                 res = await http_client.get(

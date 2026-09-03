@@ -7,14 +7,23 @@ from typing import Optional, Any, Dict
 
 from redis.asyncio import Redis
 
+import urllib.parse
+
 logger = logging.getLogger(__name__)
 
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
 
 redis_client: Redis | None = None
+media_redis_client: Redis | None = None
+
+
+def get_media_redis_url(base_url: str) -> str:
+    parsed = urllib.parse.urlparse(base_url)
+    return urllib.parse.urlunparse(parsed._replace(path="/1"))
+
 
 async def init_redis():
-    global redis_client
+    global redis_client, media_redis_client
     try:
         client = redis.from_url(REDIS_URL, decode_responses=True)
         await client.ping()
@@ -23,6 +32,16 @@ async def init_redis():
     except Exception as e:
         redis_client = None
         logger.warning(f"Redis unavailable, running without cache: {e}")
+
+    try:
+        media_url = get_media_redis_url(REDIS_URL)
+        m_client = redis.from_url(media_url, decode_responses=True)
+        await m_client.ping()
+        media_redis_client = m_client
+        logger.info("Connection to media redis (db 1) successful")
+    except Exception as e:
+        media_redis_client = None
+        logger.warning(f"Media Redis (db 1) unavailable: {e}")
 
 def orm_to_dict(obj):
     result = {}

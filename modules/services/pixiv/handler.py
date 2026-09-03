@@ -3,13 +3,13 @@ import logging
 import re
 from pathlib import Path
 
-
 import httpx
 from aiogram import F, Router
 from aiogram.types import Message
 from aiogram.utils.chat_action import ChatActionSender
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config import Config
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.service_list import Services
@@ -23,7 +23,7 @@ pixiv_router = Router(name="pixiv")
 
 logger = logging.getLogger(__name__)
 
-PIXIV_REGEX = r"https://www\.pixiv\.net/(?:[a-z]{2}/)?artworks/\d+"
+PIXIV_REGEX = r"https?://(?:www\.)?pixiv\.net/(?:[a-z]{2}/)?artworks/\d+"
 
 
 @pixiv_router.message(F.text.regexp(PIXIV_REGEX))
@@ -31,6 +31,7 @@ async def pixiv_handler(
     message: Message,
     db_session: AsyncSession,
     http_client: httpx.AsyncClient,
+    config: Config,
 ):
     if not message.text or not message.from_user:
         return
@@ -75,99 +76,89 @@ async def pixiv_handler(
             await send_manager.send(message, cached, service="pixiv", db_session=db_session)
             return
 
-    try:
-        async with ChatActionSender.record_video_note(bot=message.bot, chat_id=chat_id):
-            payload = {
-                "user_id": user_id,
-                "url": url,
-                "sponsor": sponsor,
-                "nsfw": allow_nsfw,
-            }
-            metadata = await task_manager.run_media_download(
-                user_id=user_id,
-                url=url,
-                service=Services.PIXIV,
-                payload=payload,
-                http_client=http_client,
-            )
-
-            # Check NSFW status from response
-            is_nsfw = (
-                metadata.get('nsfw') or
-                metadata.get('possibly_sensitive') or
-                metadata.get('is_blurred') or
-                any(
-                    item.get('nsfw') or
-                    item.get('possibly_sensitive') or
-                    item.get('is_blurred')
-                    for item in metadata.get('items', [])
-                )
-            )
-
-            # If content is NSFW
-            if is_nsfw:
-                if not sponsor:
-                    raise BotError(
-                        code=ErrorCode.INVALID_URL,
-                        url=url,
-                        service=Services.PIXIV,
-                        message="NSFW content is not allowed",
-                        is_logged=False,
-                        critical=False
-                    )
-                if not allow_nsfw:
-                    raise BotError(
-                        code=ErrorCode.NOT_ALLOWED,
-                        url=url,
-                        service=Services.PIXIV,
-                        message="NSFW content is not allowed",
-                        is_logged=False,
-                        critical=False
-                    )
-
-            author_username = metadata.get('author_username')
-            description = escape_html((metadata.get('caption') or "").strip())
-            author_link = f"<a href='https://www.pixiv.net/en/users/{metadata.get('author_id', '')}'>{author_username}</a>" if author_username else ""
-            parts = [p for p in [author_link, description] if p]
-            caption = " - ".join(parts)
-
-            media_content = []
-            for media in metadata.get('items', []):
-                m_type = media.get('type')
-                if m_type == 'photo':
-                    type_val = MediaType.PHOTO
-                elif m_type in ('gif', 'animated_gif'):
-                    type_val = MediaType.GIF
-                else:
-                    type_val = MediaType.VIDEO
-
-                media_content.append(
-                    MediaContent(
-                        type=type_val,
-                        path=Path(media.get('path')) if media.get('path') else None,
-                        optimized_path=Path(media.get('optimized_path')) if media.get('optimized_path') else None,
-                        title=truncate_string(caption, 1024),
-                        width=media.get('width', None),
-                        height=media.get('height', None),
-                        duration=media.get('duration', None),
-                        cover=Path(media.get('cover')) if media.get('cover') and Path(media.get('cover')).exists() else None,
-                        is_blurred=is_nsfw,
-                        is_nsfw=is_nsfw,
-                    )
-                )
-
-    except Exception as e:
-        if isinstance(e, BotError):
-            raise e
-        logger.error(f"Error processing Pixiv URL: {e}")
-        raise BotError(
-            code=ErrorCode.INTERNAL_ERROR,
-            message=str(e),
+    async with ChatActionSender.record_video_note(bot=message.bot, chat_id=chat_id):
+        payload = {
+            "user_id": user_id,
+            "url": url,
+            "sponsor": sponsor,
+            "nsfw": allow_nsfw,
+        }
+        metadata = await task_manager.run_media_download(
+            user_id=user_id,
             url=url,
             service=Services.PIXIV,
-            is_logged=True,
-            critical=True,
+            payload=payload,
+            http_client=http_client,
         )
+
+        # Check NSFW status from response
+        is_nsfw = (
+            metadata.get('nsfw') or
+            metadata.get('is_nsfw') or
+            metadata.get('possibly_sensitive') or
+            metadata.get('is_blurred') or
+            metadata.get('r18') or
+            any(
+                item.get('nsfw') or
+                item.get('is_nsfw') or
+                item.get('possibly_sensitive') or
+                item.get('is_blurred') or
+                item.get('r18')
+                for item in metadata.get('items', [])
+            )
+        )
+
+        # If content is NSFW
+        if is_nsfw:
+            if not sponsor:
+                raise BotError(
+                    code=ErrorCode.INVALID_URL,
+                    url=url,
+                    service=Services.PIXIV,
+                    message="NSFW content is not allowed",
+                    is_logged=False,
+                    critical=False
+                )
+            if not allow_nsfw:
+                raise BotError(
+                    code=ErrorCode.NOT_ALLOWED,
+                    url=url,
+                    service=Services.PIXIV,
+                    message="NSFW content is not allowed",
+                    is_logged=False,
+                    critical=False
+                )
+
+        author_username = metadata.get('author_username')
+        description = escape_html((metadata.get('caption') or "").strip())
+        author_link = f"<a href='https://www.pixiv.net/en/users/{metadata.get('author_id', '')}'>{author_username}</a>" if author_username else ""
+        parts = [p for p in [author_link, description] if p]
+        caption = " - ".join(parts)
+
+        media_content = []
+        for media in metadata.get('items', []):
+            m_type = media.get('type')
+            if m_type == 'photo':
+                type_val = MediaType.PHOTO
+            elif m_type in ('gif', 'animated_gif'):
+                type_val = MediaType.GIF
+            else:
+                type_val = MediaType.VIDEO
+
+            media_content.append(
+                MediaContent(
+                    type=type_val,
+                    path=Path(media.get('path')) if media.get('path') else None,
+                    optimized_path=Path(media.get('optimized_path')) if media.get('optimized_path') else None,
+                    title=truncate_string(caption, 1024),
+                    width=media.get('width', None),
+                    height=media.get('height', None),
+                    duration=media.get('duration', None),
+                    cover=Path(media.get('cover')) if media.get('cover') and Path(media.get('cover')).exists() else None,
+                    is_blurred=is_nsfw,
+                    is_nsfw=is_nsfw,
+                )
+            )
 
     if media_content:
         await send_manager.send(message, media_content, service="pixiv", cache_key=cache_key, db_session=db_session)
