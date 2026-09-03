@@ -35,6 +35,8 @@ services:
       - redis-data:/data
     networks:
       - charlotte-net
+    ports:
+      - "6379:6379"
     logging: *default-logging
 
   bgutil:
@@ -88,13 +90,13 @@ services:
       - ${STORAGE_HOST_PATH}:/app/storage
     environment:
       - PORT=${MEDIA_CORE_PORT}
-      - INSTAGRAM_IPV6_SUBNET=${INSTAGRAM_IPV6_SUBNET}
       - TWITTER_AUTH_TOKEN=${AUTH_TOKEN}
       - TWITTER_CSRF_TOKEN=${CSRF_TOKEN}
       - BGUTIL_URL=${BGUTIL_URL}
       - STORAGE_PATH=/app/storage
       - YOUTUBE_PROXY=socks5://warp:1080
       - REDIS_ADDR=${REDIS_ADDR}
+      - PIXIV_REFRESH_TOKEN=${PIXIV_REFRESH_TOKEN}
     networks:
       - charlotte-net
     deploy:
