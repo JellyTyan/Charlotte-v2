@@ -16,7 +16,8 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements and install (bot-only deps)
 RUN pip install uv
 COPY --chown=charlotte:charlotte pyproject.toml .
-RUN uv pip install --system -e .[bot]
+RUN uv pip install --system -e .[bot] && \
+    uv pip install --system --force-reinstall urllib3.future
 
 # Copy project files (workers excluded — they have their own image)
 COPY --chown=charlotte:charlotte core/ core/

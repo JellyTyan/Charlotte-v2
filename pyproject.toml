@@ -17,7 +17,6 @@ dependencies = [
     "curl_cffi==0.15.0"
 ]
 
-# Specific
 [project.optional-dependencies]
 bot = [
     "aiogram[i18n]==3.29.1",
@@ -27,7 +26,6 @@ bot = [
     "asyncpg==0.31.0",
     "greenlet==3.5.3",
     "redis~=8.0.1",
-    "fluentogram==1.2.1",
     "alembic==1.18.5",
     "translators~=6.0.1",
     "aiogram-dialog~=2.6.0",
