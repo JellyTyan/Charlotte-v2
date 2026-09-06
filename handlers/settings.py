@@ -98,11 +98,13 @@ async def save_settings_obj(db_session: AsyncSession, chat_id: int, user_id: int
 
 def build_main_keyboard(settings, i18n: TranslatorRunner, is_group: bool = False) -> InlineKeyboardMarkup:
     current_flag = get_language_flag(settings.profile.language)
+    lang_code = settings.profile.language.upper()
     title_flag = get_language_flag(settings.profile.title_language)
+    title_code = settings.profile.title_language.upper()
     keyboards = [
         [
-            InlineKeyboardButton(text=f"{i18n.btn.language()} {current_flag} →", callback_data="settings_lang"),
-            InlineKeyboardButton(text=f"{i18n.btn.title.language()} {title_flag} →", callback_data="settings_title_language"),
+            InlineKeyboardButton(text=f"🌐 {i18n.btn.language()}: {current_flag} {lang_code}", callback_data="settings_lang"),
+            InlineKeyboardButton(text=f"📝 {i18n.btn.title.language()}: {title_flag} {title_code}", callback_data="settings_title_language"),
         ],
         [
             InlineKeyboardButton(
@@ -177,7 +179,7 @@ def build_service_settings_keyboard(settings, service: str, i18n: TranslatorRunn
         current_mode_name = i18n.get(f"yt-ui-mode-{svc_settings.ui_mode}")
         keyboards.append([
             InlineKeyboardButton(
-                text=f"{i18n.get('btn-youtube-ui-mode')}: {current_mode_name}",
+                text=f"{i18n.get('btn-youtube-ui-mode')}: {current_mode_name} 🟢",
                 callback_data=f"menu_service_{service}_ui_mode"
             )
         ])
@@ -325,10 +327,11 @@ async def menu_profile_setting(callback: CallbackQuery, i18n: TranslatorRunner, 
     current_value = getattr(settings.profile, key)
 
     new_value = not current_value
+    toggle_text = f"⚪ {i18n.get('disable')}" if current_value else f"🟢 {i18n.get('enable')}"
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
-                text=f"✅ {i18n.get('enable')}" if not current_value else f"❌ {i18n.get('disable')}",
+                text=toggle_text,
                 callback_data=f"toggle_profile_{key}_{new_value}"
             ),
         ],
@@ -336,8 +339,9 @@ async def menu_profile_setting(callback: CallbackQuery, i18n: TranslatorRunner, 
     ])
 
     description = get_desc(key, i18n)
+    status_icon = "🟢" if current_value else "⚪"
     status_word = i18n.get('enabled') if current_value else i18n.get('disabled')
-    status_text = i18n.get('current-status', status=status_word)
+    status_text = f"{i18n.get('current-status', status=status_word)} {status_icon}"
     text = f"{description}\n\n{status_text}"
 
     await safe_edit_text(callback, text, kb)
@@ -364,7 +368,7 @@ async def menu_service_setting(callback: CallbackQuery, i18n: TranslatorRunner, 
         modes = ["simple", "balance", "advanced"]
         buttons = []
         for m in modes:
-            prefix = "✅ " if getattr(svc_settings, "ui_mode", "simple") == m else ""
+            prefix = "🟢 " if getattr(svc_settings, "ui_mode", "simple") == m else "⚪ "
             buttons.append([
                 InlineKeyboardButton(
                     text=f"{prefix}{i18n.get(f'yt-ui-mode-{m}')}",
@@ -383,11 +387,12 @@ async def menu_service_setting(callback: CallbackQuery, i18n: TranslatorRunner, 
 
     current_value = getattr(svc_settings, key)
     new_value = not current_value
+    toggle_text = f"⚪ {i18n.get('disable')}" if current_value else f"🟢 {i18n.get('enable')}"
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
-                text=f"✅ {i18n.get('enable')}" if not current_value else f"❌ {i18n.get('disable')}",
+                text=toggle_text,
                 callback_data=f"toggle_service_{target_service}_{key}_{new_value}"
             ),
         ],
@@ -395,8 +400,9 @@ async def menu_service_setting(callback: CallbackQuery, i18n: TranslatorRunner, 
     ])
 
     description = get_desc(key, i18n)
+    status_icon = "🟢" if current_value else "⚪"
     status_word = i18n.get('enabled') if current_value else i18n.get('disabled')
-    status_text = i18n.get('current-status', status=status_word)
+    status_text = f"{i18n.get('current-status', status=status_word)} {status_icon}"
     title = i18n.settings.service.title(name=target_service.replace('_', ' ').title())
     text = f"{title}\n\n{description}\n\n{status_text}"
 
@@ -436,19 +442,13 @@ async def apply_profile_setting(callback: CallbackQuery, i18n: TranslatorRunner,
     new_value = data[last_uscores+1:] == "True"
 
     chat_id = callback.message.chat.id
-    
-    # if key == "bot_sign" and new_value == False:
-    #     from storage.db.crud import get_user
-    #     user = await get_user(db_session, callback.from_user.id)
-    #     if not user or not user.is_premium:
-    #         await callback.answer("🌟 Disabling the Bot Ad requires an active Sponsorship (100 Stars)!", show_alert=True)
-    #         return
 
     settings, is_group = await get_settings_obj(db_session, chat_id, callback.from_user.id)
     setattr(settings.profile, key, new_value)
     await save_settings_obj(db_session, chat_id, callback.from_user.id, settings)
 
-    status_text = i18n.get('enabled') if new_value else i18n.get('disabled')
+    status_icon = "🟢" if new_value else "⚪"
+    status_text = f"{i18n.get('enabled') if new_value else i18n.get('disabled')} {status_icon}"
     text = i18n.get('setting-changed', setting=key.replace('_', ' '), status=status_text)
     await safe_edit_text(callback, text, build_back_keyboard(i18n, "settings_main"))
     await callback.answer(i18n.get('setting-updated'))
@@ -476,7 +476,8 @@ async def apply_service_setting(callback: CallbackQuery, i18n: TranslatorRunner,
     setattr(svc_settings, key, new_value)
     await save_settings_obj(db_session, chat_id, callback.from_user.id, settings)
 
-    status_text = i18n.get('enabled') if new_value else i18n.get('disabled')
+    status_icon = "🟢" if new_value else "⚪"
+    status_text = f"{i18n.get('enabled') if new_value else i18n.get('disabled')} {status_icon}"
     text = i18n.get('setting-changed', setting=key.replace('_', ' '), status=status_text)
     await safe_edit_text(callback, text, build_back_keyboard(i18n, f"settings_svc_{target_service}"))
     await callback.answer(i18n.get('setting-updated'))
@@ -498,7 +499,7 @@ async def apply_service_uimode(callback: CallbackQuery, i18n: TranslatorRunner, 
         setattr(svc_settings, "simple", new_mode == "simple")
     await save_settings_obj(db_session, chat_id, callback.from_user.id, settings)
 
-    mode_title = i18n.get(f"yt-ui-mode-{new_mode}")
+    mode_title = f"{i18n.get(f'yt-ui-mode-{new_mode}')} 🟢"
     setting_name = i18n.get('btn-youtube-ui-mode')
     text = i18n.get('setting-changed', setting=setting_name, status=mode_title)
     await safe_edit_text(callback, text, build_back_keyboard(i18n, f"settings_svc_{target_service}"))
@@ -521,7 +522,7 @@ async def settings_lang_menu(callback: CallbackQuery, i18n: TranslatorRunner, db
 
     buttons = []
     for code, label in lang_buttons:
-        text = f"✅ {label}" if code == current_lang else label
+        text = f"🟢 {label}" if code == current_lang else label
         buttons.append(InlineKeyboardButton(text=text, callback_data=f"settings_lang_set_{code}"))
 
     rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
@@ -555,7 +556,7 @@ async def settings_title_language_menu(callback: CallbackQuery, i18n: Translator
     buttons = []
     for lang in LANGUAGES:
         label = f"{lang['name']} {lang['flag']}"
-        text = f"✅ {label}" if lang['code'] == current_title_lang else label
+        text = f"🟢 {label}" if lang['code'] == current_title_lang else label
         buttons.append(
             InlineKeyboardButton(
                 text=text,

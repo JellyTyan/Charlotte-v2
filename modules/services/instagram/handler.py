@@ -16,7 +16,7 @@ from models.service_list import Services
 from senders.media_sender import MediaSender
 from storage.db.crud import get_media_cache, check_if_user_premium
 from tasks.task_manager import task_manager
-from utils import truncate_string, escape_html
+from utils import truncate_string, escape_html, build_caption, format_author_link
 from utils.statistics_helper import log_download_event
 
 insta_router = Router(name="instagram")
@@ -56,24 +56,35 @@ async def instagram_handler(message: Message, db_session: AsyncSession, http_cli
             http_client=http_client,
         )
 
-        author_username = metadata.get('author_username')
-        description = escape_html((metadata.get('caption') or "").strip())
-        author_link = f"<a href='https://www.instagram.com/{author_username}/'>{author_username}</a>" if author_username else ""
-        parts = [p for p in [author_link, description] if p]
-        caption = " - ".join(parts)
+        author_data = metadata.get('author') if isinstance(metadata.get('author'), dict) else {}
+        author_username = author_data.get('username') or metadata.get('author_username')
+        author_name = author_data.get('name')
+        author_url = author_data.get('url') or (f"https://www.instagram.com/{author_username}/" if author_username else "")
+        author_display = author_username or author_name
+        author_link = format_author_link(author_display, author_url, icon="👤")
+
+        description = escape_html((metadata.get('caption') or metadata.get('title') or "").strip())
+        caption = build_caption(header=author_link, description=description)
+
+        is_nsfw = bool(metadata.get('is_nsfw') or metadata.get('is_sensitive'))
+        is_blurred = bool(metadata.get('is_blurred') or is_nsfw)
 
         media_content = []
         for media in metadata.get('items', []):
+            cover_str = media.get('cover_path') or media.get('cover') or media.get('thumbnail')
+            cover_path = Path(cover_str) if cover_str and Path(cover_str).exists() else None
             media_content.append(
                 MediaContent(
                     type=MediaType.PHOTO if media.get('type') == 'photo' else MediaType.VIDEO,
                     path=Path(media.get('path')) if media.get('path') else None,
                     optimized_path=Path(media.get('optimized_path')) if media.get('optimized_path') else None,
-                    title=truncate_string(caption, 1024),
+                    title=caption,
                     width=media.get('width', None),
                     height=media.get('height', None),
                     duration=media.get('duration', None),
-                    cover=Path(media.get('cover')) if media.get('cover') and Path(media.get('cover')).exists() else None,
+                    cover=cover_path,
+                    is_blurred=is_blurred,
+                    is_nsfw=is_nsfw,
                 )
             )
 

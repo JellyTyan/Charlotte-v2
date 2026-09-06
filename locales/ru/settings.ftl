@@ -7,44 +7,44 @@ settings-no-allowed-groups = Эта настройка недоступна дл
 settings-no-allowed-dm = Эту настройку нельзя менять в личке!
 
 btn-language = Язык
-btn-title-language = Язык описаний
+btn-title-language = Описания
 btn-blocked-services = Блокировка сервисов
 
 btn-send-raw = { $is_enabled ->
-    [true] ✅ Отправить файлом
-    *[false] ❌ Отправить файлом
+    [true] 🟢 Файлом
+    *[false] ⚪ Файлом
 }
 btn-send-music-covers = { $is_enabled ->
-    [true] ✅ Обложки музыки
-    *[false] ❌ Обложки музыки
+    [true] 🟢 Обложки
+    *[false] ⚪ Обложки
 }
 btn-send-reactions = { $is_enabled ->
-    [true] ✅ Реакции
-    *[false] ❌ Реакции
+    [true] 🟢 Реакции
+    *[false] ⚪ Реакции
 }
 btn-negativity = { $is_enabled ->
-    [true] ✅ Негативчик
-    *[false] ❌ Негативчик
+    [true] 🟢 Негативчик
+    *[false] ⚪ Негативчик
 }
 btn-auto-translate = { $is_enabled ->
-    [true] ✅ Автоперевод описаний
-    *[false] ❌ Автоперевод описаний
+    [true] 🟢 Автоперевод
+    *[false] ⚪ Автоперевод
 }
 btn-auto-caption = { $is_enabled ->
-    [true] ✅ Описание
-    *[false] ❌ Описание
+    [true] 🟢 Описание
+    *[false] ⚪ Описание
 }
 btn-notifications = { $is_enabled ->
-    [true] ✅ Уведомления
-    *[false] ❌ Уведомления
+    [true] 🟢 Уведомления
+    *[false] ⚪ Уведомления
 }
 btn-allow-playlists = { $is_enabled ->
-    [true] ✅ Плейлисты
-    *[false] ❌ Плейлисты
+    [true] 🟢 Плейлисты
+    *[false] ⚪ Плейлисты
 }
 btn-allow-nsfw = { $is_enabled ->
-    [true] ✅ NSFW
-    *[false] ❌ NSFW
+    [true] 🟢 NSFW
+    *[false] ⚪ NSFW
 }
 
 desc-send-raw = Буду кидать медиа файлами для достижения высокого качества! 🎨
@@ -90,29 +90,29 @@ btn-configure-services = ⚙️ Настройка сервисов
 settings-select-service = Выберите сервис для настройки:
 settings-service-title = ⚙️ **Настройки { $name }**
 btn-lossless = { $is_enabled ->
-    [true] ✅ LOSSLESS
-    *[false] ❌ LOSSLESS
+    [true] 🟢 LOSSLESS
+    *[false] ⚪ LOSSLESS
 }
 btn-service-enabled = { $is_enabled ->
-    [true] ✅ Включен
-    *[false] ❌ Включен
+    [true] 🟢 Сервис
+    *[false] ⚪ Сервис
 }
 
 btn-news-spam = { $is_enabled ->
-    [true] ✅ Рассылка
-    *[false] ❌ Рассылка
+    [true] 🟢 Рассылка
+    *[false] ⚪ Рассылка
 }
 desc-news-spam = Позволить боту отправлять вам новости и обновления! 📰
 
 btn-bot-sign = { $is_enabled ->
-    [true] 🧡 Bot Ad [ON]
-   *[false] 🧡 Bot Ad [OFF]
+    [true] 🟢 Bot Ad 🧡
+    *[false] ⚪ Bot Ad 🧡
 }
-desc-bot-sign = Append a promotional signature "Charlotte 🧡" to downloaded media. Disabling this requires Sponsorship 🌟.
+desc-bot-sign = Добавлять рекламную подпись «Charlotte 🧡» к медиа. Отключение абсолютно бесплатное! ✨
 
 btn-simple-mode = { $is_enabled ->
-    [true] ✅ Простой интерфейс
-   *[false] ❌ Простой интерфейс
+    [true] 🟢 Простой режим
+    *[false] ⚪ Простой режим
 }
 desc-simple =
     Простой интерфейс YouTube:

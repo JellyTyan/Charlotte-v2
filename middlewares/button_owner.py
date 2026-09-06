@@ -90,12 +90,27 @@ class ButtonOwnerMiddleware(BaseMiddleware):
         if owner_data and "user_id" in owner_data:
             owner_user_id = owner_data["user_id"]
             if owner_user_id != clicker_id:
+                # Allow chat administrators to close error messages
+                if event.data and event.data.startswith("close_error"):
+                    try:
+                        bot = data.get("bot") or event.bot
+                        if bot:
+                            member = await bot.get_chat_member(chat_id=chat_id, user_id=clicker_id)
+                            if member.status in ("creator", "administrator"):
+                                return await handler(event, data)
+                    except Exception as e:
+                        logger.warning(f"Failed to check admin status for {clicker_id} in {chat_id}: {e}")
+
                 logger.warning(
                     f"User {clicker_id} tried to click button owned by {owner_user_id} "
                     f"in chat {chat_id} message {message_id}"
                 )
                 i18n = data.get("i18n")
-                alert_text = i18n.get("menu-not-yours") if i18n else "⚠️ You cannot interact with this menu."
+                alert_text = i18n.get("not-your-request") if (event.data and event.data.startswith("close_error")) else (
+                    i18n.get("menu-not-yours") if i18n else "⚠️ You cannot interact with this menu."
+                )
+                if not alert_text:
+                    alert_text = "❌ Это не ваш запрос"
                 await event.answer(alert_text, show_alert=True)
                 return  # Drop the update
 

@@ -41,6 +41,7 @@ from storage.db.crud import (
 )
 from states import NewsSpamGroup
 from utils import escape_markdown
+from utils.effects import send_message_with_effect, EFFECT_FIREWORKS
 
 from aiogram import Router
 from middlewares.admin_check import AdminMiddleware
@@ -333,10 +334,14 @@ async def process_user_id(message: types.Message, state: FSMContext, db_session:
     # Send notification to user if premium was granted
     if premium_status and message.bot:
         try:
-            await message.bot.send_message(user_id, i18n.get("premium-granted"))
+            await send_message_with_effect(
+                message.bot,
+                user_id,
+                i18n.get("premium-granted"),
+                effect_id=EFFECT_FIREWORKS
+            )
         except Exception as e:
-            import logging
-            logging.error(f"Failed to send premium notification to user {user_id}: {e}")
+            logger.error(f"Failed to send premium notification to user {user_id}: {e}")
 
     await state.clear()
 
@@ -379,7 +384,12 @@ async def process_grant_month_premium(message: types.Message, state: FSMContext,
     # Send notification to user
     if message.bot:
         try:
-            await message.bot.send_message(user_id, i18n.get("premium-granted"))
+            await send_message_with_effect(
+                message.bot,
+                user_id,
+                i18n.get("premium-granted"),
+                effect_id=EFFECT_FIREWORKS
+            )
         except Exception as e:
             logger.error(f"Failed to send premium notification to user {user_id}: {e}")
 

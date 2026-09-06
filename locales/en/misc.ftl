@@ -6,34 +6,31 @@ msg-hello =
 
 msg-help =
     Here's what I can help you with:
-      /start - Say hello!
-      /help - Get help anytime
-      /settings - Customize your experience
-      /support - Support the project
+      /start — Main menu
+      /help — Help and commands
+      /settings — Customize your preferences
+      /sponsor — Sponsorship & perks
+      /support — Support the project
+      /cancel — Cancel active download
 
-    ✨ I love helping you save media from all these platforms:
+    ✨ <b>Supported Platforms</b> <i>(tap to expand)</i>:
+    <blockquote expandable>
+    <b>Music Platforms:</b>
+      • Spotify, Apple Music, Deezer, SoundCloud, YouTube Music
+    <i>I'll grab the track with artwork and all the metadata!</i>
 
-    <b>Music Platforms</b>
-      - Spotify
-      - Apple Music
-      - Deezer
-      - SoundCloud
-      - YouTube Music
-    I'll grab the track with artwork and all the tags!
+    <b>Video Platforms:</b>
+      • YouTube (Videos, Shorts, Audio up to 100 MB / 1 GB for Sponsors)
+      • TikTok (Videos and photos)
+      • Instagram (Reels and posts)
+      • Twitter / X (Videos and images)
+      • Reddit (Post media)
+      • BlueSky, Twitch, NicoVideo
 
-    <b>Video Platforms</b>
-      - YouTube - Videos, Shorts, or audio (up to 100 MB, ⭐ 1GB with Stars!)
-      - TikTok - Videos and images
-      - Instagram - Reels and posts
-      - Twitter (X) - Videos and images
-      - BlueSky - Videos and images
-      - Reddit - All media from posts
-      - Twitch - Clips
-      - NicoVideo - Videos and audio
-
-    <b>Art Platforms</b>
-      - Pixiv - Beautiful illustrations
-      - Pinterest - All the pins you love
+    <b>Art Platforms:</b>
+      • Pixiv (Illustrations)
+      • Pinterest (All pins)
+    </blockquote>
 
     Just drop me a link and I'll take care of the rest! 🧡
 
@@ -71,11 +68,12 @@ banned-chat = 🚫 You are banned in this chat.
 too-many-requests = ⏳ Too many requests. Please wait.
 menu-not-yours = ⚠️ You cannot interact with this menu.
 general-error = ❌ An error occurred. Please try again later.
+btn-close = ✕ Close
 
 # YouTube Trim Feature
-yt-trim-sponsor-only = ✂️ Video Trim is available for Sponsors only!
-yt-trim-ask-range = ✂️ Enter the time range for trimming (e.g. `01:20-02:45` or `90-165`):
-yt-trim-invalid-range = ❌ Invalid range format. Use START-END (e.g. `1:30-2:45`). Try again:
+yt-trim-sponsor-only = 🌟 Trimming video is only available to Sponsors!
+yt-trim-ask-range = ✂️ Enter the time range for trimming (e.g. <code>01:20-02:45</code> or <code>90-165</code>):
+yt-trim-invalid-range = ❌ Invalid range format. Use START-END (e.g. <code>1:30-2:45</code>). Try again:
 yt-trim-end-before-start = ❌ End time must be after start time. Try again:
 yt-trim-processing = ✂️ Trimming your clip, please wait...
 yt-trim-out-of-bounds = ❌ Range exceeds video duration ({  }). Try again:

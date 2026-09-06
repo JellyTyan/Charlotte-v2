@@ -16,7 +16,7 @@ from fluentogram import TranslatorRunner
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from states.youtube import YouTubeDialogStates
-from utils import format_duration
+from utils import format_duration, escape_html
 from .utils import parse_time_range
 
 logger = logging.getLogger(__name__)
@@ -39,8 +39,8 @@ def get_reliable_thumbnail(url: str, thumbnail: str | None) -> str | None:
 
 async def get_common_metadata(dialog_manager: DialogManager, **kwargs) -> dict[str, Any]:
     start_data = dialog_manager.start_data or {}
-    title = start_data.get("title") or "YouTube Media"
-    uploader = start_data.get("uploader") or ""
+    title = escape_html(str(start_data.get("title") or "YouTube Media"))
+    uploader = escape_html(str(start_data.get("uploader") or ""))
     duration = start_data.get("duration") or 0
     dur_str = format_duration(duration) if duration else ""
 

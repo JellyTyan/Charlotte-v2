@@ -20,7 +20,7 @@ from senders.media_sender import MediaSender
 from states.youtube import YouTubeStates, YouTubeDialogStates
 from storage.db.crud import get_user
 from tasks.task_manager import task_manager
-from utils import format_duration, truncate_string
+from utils import format_duration, truncate_string, escape_html, build_caption, format_author_link, safe_truncate_html
 from utils.statistics_helper import log_download_event
 from aiogram_dialog import DialogManager
 from .dialogs import youtube_dialog
@@ -141,15 +141,27 @@ async def get_youtube_metadata(http_client: httpx.AsyncClient, url: str) -> dict
 
 def map_items_to_media(data: dict) -> list[MediaContent]:
     media_content = []
-    caption = data.get("caption") or ""
-    author = data.get("author_username") or data.get("uploader")
+    caption = data.get("caption") or data.get("title") or ""
+    author_obj = data.get("author") if isinstance(data.get("author"), dict) else {}
+    author = author_obj.get("username") or author_obj.get("name") or data.get("author_username") or data.get("uploader")
+    author_url = author_obj.get("url") or data.get("uploader_url")
+
+    if not data.get("caption"):
+        title_esc = escape_html(str(data.get("title") or "").strip())
+        author_link = format_author_link(author, author_url, icon="👤")
+        desc_esc = escape_html(str(data.get("description") or "").strip())
+        header = f"<b>{title_esc}</b>" if title_esc else ""
+        if author_link:
+            header = f"{header}\n{author_link}" if header else author_link
+        caption = build_caption(header=header, description=desc_esc)
+
     for item in data.get("items", []):
         item_type = item.get("type", "video")
         path_str = item.get("path")
         if not path_str:
             continue
 
-        cover_str = item.get("cover") or item.get("thumbnail") or data.get("thumbnail")
+        cover_str = item.get("cover_path") or item.get("cover") or item.get("thumbnail") or data.get("thumbnail") or data.get("cover_path")
         cover_path = Path(cover_str) if cover_str and Path(cover_str).exists() else None
 
         media_content.append(
@@ -301,15 +313,20 @@ async def youtube_handler(
 
     await process_message.delete()
 
+    author_data = metadata.get("author") if isinstance(metadata.get("author"), dict) else {}
+    uploader = author_data.get("username") or author_data.get("name") or metadata.get("uploader") or metadata.get("author_username")
+    uploader_url = author_data.get("url") or metadata.get("uploader_url") or metadata.get("channel_url")
+    thumbnail = metadata.get("cover_path") or metadata.get("thumbnail") or metadata.get("cover")
+
     await dialog_manager.start(
         target_state,
         data={
             "url": url,
             "url_hash": h,
-            "title": metadata.get("title"),
-            "thumbnail": metadata.get("thumbnail"),
-            "uploader": metadata.get("uploader"),
-            "uploader_url": metadata.get("uploader_url") or metadata.get("channel_url"),
+            "title": metadata.get("title") or metadata.get("caption"),
+            "thumbnail": thumbnail,
+            "uploader": uploader,
+            "uploader_url": uploader_url,
             "duration": metadata.get("duration"),
             "options": metadata.get("options", []),
             "audio_only": metadata.get("audio_only"),
@@ -418,18 +435,26 @@ async def send_mode_selection_menu(
             )
         )
 
-    caption = f"<b>{data.get('title')}</b>\n\n"
+    title_esc = escape_html(str(data.get('title') or ''))
+    header = f"<b>{title_esc}</b>\n\n" if title_esc else ""
     if data.get("uploader"):
-        if data.get("uploader_url"):
-            caption += f"<b>Channel:</b> <a href='{data.get('uploader_url')}'>{data.get('uploader')}</a>\n"
+        uploader_esc = escape_html(str(data.get('uploader') or ''))
+        uploader_url = data.get('uploader_url')
+        if uploader_url:
+            uploader_url_esc = escape_html(str(uploader_url))
+            header += f"<b>Channel:</b> <a href='{uploader_url_esc}'>{uploader_esc}</a>\n"
         else:
-            caption += f"<b>Channel:</b> {data.get('uploader')}\n"
+            header += f"<b>Channel:</b> {uploader_esc}\n"
 
     duration = data.get("duration")
     if duration:
-        caption += f"<b>Duration:</b> {format_duration(duration)}\n"
+        header += f"<b>Duration:</b> {format_duration(duration)}\n"
 
-    caption += f"\n{data.get('description') or ''}"
+    desc = data.get('description')
+    desc_escaped = escape_html(desc.strip()) if desc and desc.strip() else ""
+
+    caption = build_caption(header=header.strip(), description=desc_escaped, max_total_length=1024)
+    caption = safe_truncate_html(caption, 1024)
 
     reply_markup = markup.as_markup()
     thumbnail = data.get("thumbnail")
@@ -439,12 +464,12 @@ async def send_mode_selection_menu(
         if thumbnail and os.path.exists(thumbnail):
             await message_or_query.reply_photo(
                 photo=FSInputFile(thumbnail),
-                caption=truncate_string(caption, 1024),
+                caption=caption,
                 reply_markup=reply_markup
             )
         else:
             await message_or_query.reply(
-                truncate_string(caption, 1024),
+                caption,
                 reply_markup=reply_markup
             )
     else:
@@ -706,17 +731,24 @@ async def process_youtube_download(
                         from storage.db.crud import update_payment_status
                         await update_payment_status(db_session, payment_charge_id, "refunded")
                         refund_msg = i18n.get("download-failed-refund") if i18n else "❌ Download failed. Your payment has been refunded."
-                        await message.answer(refund_msg)
+                        from utils.error_messages import get_error_keyboard
+                        from middlewares.button_owner import register_message_owner
+                        sent = await message.answer(refund_msg, reply_markup=get_error_keyboard(i18n, owner_id=user_id))
+                        if sent:
+                            await register_message_owner(sent, user_id)
                     except Exception as refund_error:
                         logger.error(f"Failed to refund payment: {refund_error}")
                 else:
                     if bot_err.send_user_message and message.bot:
-                        from utils.error_messages import get_i18n_error_message
+                        from utils.error_messages import get_i18n_error_message, get_error_keyboard
+                        from middlewares.button_owner import register_message_owner
                         msg_text = get_i18n_error_message(bot_err.code, i18n) if i18n else None
                         if not msg_text:
                             msg_text = i18n.get("error-internal") if i18n else "❌ An error occurred during download."
                         try:
-                            await message.answer(msg_text)
+                            sent = await message.answer(msg_text, reply_markup=get_error_keyboard(i18n, owner_id=user_id))
+                            if sent:
+                                await register_message_owner(sent, user_id)
                         except Exception as msg_err:
                             logger.error(f"Failed to send error message: {msg_err}")
 
@@ -819,12 +851,15 @@ async def process_clip_download(
                 await log_download_event(db_session, user_id, Services.YOUTUBE, 'failed_download', error_code=bot_err.code)
 
                 if bot_err.send_user_message and message.bot:
-                    from utils.error_messages import get_i18n_error_message
+                    from utils.error_messages import get_i18n_error_message, get_error_keyboard
+                    from middlewares.button_owner import register_message_owner
                     msg_text = get_i18n_error_message(bot_err.code, i18n) if i18n else None
                     if not msg_text:
                         msg_text = i18n.get("error-internal") if i18n else "❌ An error occurred during download."
                     try:
-                        await message.answer(msg_text)
+                        sent = await message.answer(msg_text, reply_markup=get_error_keyboard(i18n, owner_id=user_id))
+                        if sent:
+                            await register_message_owner(sent, user_id)
                     except Exception as msg_err:
                         logger.error(f"Failed to send error message: {msg_err}")
 

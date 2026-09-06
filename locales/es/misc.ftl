@@ -6,34 +6,31 @@ msg-hello =
 
 msg-help =
     Aquí están mis comandos:
-      /start - ¡Di hola!
-      /help - Obtener ayuda
-      /settings - Personaliza todo a tu gusto
-      /support - Apoyar el proyecto
+      /start — Menú principal
+      /help — Ayuda y comandos
+      /settings — Personaliza tus ajustes
+      /sponsor — Patrocinio y ventajas
+      /support — Apoyar el proyecto
+      /cancel — Cancelar descarga activa
 
-    ✨ Me encanta ayudarte a guardar medios de estas plataformas:
+    ✨ <b>Plataformas compatibles</b> <i>(toca para expandir)</i>:
+    <blockquote expandable>
+    <b>Plataformas de música:</b>
+      • Spotify, Apple Music, Deezer, SoundCloud, YouTube Music
+    <i>¡Obtendré la pista con carátula y todas las etiquetas!</i>
 
-    <b>Plataformas de música</b>
-      - Spotify
-      - Apple Music
-      - Deezer
-      - SoundCloud
-      - YouTube Music
-    ¡Obtendré la canción con la portada y todas las etiquetas!
+    <b>Plataformas de video:</b>
+      • YouTube (Videos, Shorts, audio hasta 100 MB / 1 GB para Patrocinadores)
+      • TikTok (Videos e imágenes)
+      • Instagram (Reels y publicaciones)
+      • Twitter / X (Videos e imágenes)
+      • Reddit (Medios de publicaciones)
+      • BlueSky, Twitch, NicoVideo
 
-    <b>Plataformas de video</b>
-      - YouTube - Videos, Shorts o audio (hasta 100 MB, ⭐ 1GB con Stars!)
-      - TikTok - Videos e imágenes
-      - Instagram - Reels y publicaciones
-      - Twitter (X) - Videos e imágenes
-      - BlueSky - Videos e imágenes
-      - Reddit - Todos los medios de las publicaciones
-      - Twitch - Clips
-      - NicoVideo - Videos y audio
-
-    <b>Plataformas de arte</b>
-      - Pixiv - Hermosas ilustraciones
-      - Pinterest - Todos los pines que amas
+    <b>Plataformas de arte:</b>
+      • Pixiv (Ilustraciones)
+      • Pinterest (Todos los pines)
+    </blockquote>
 
     ¡Solo envíame un enlace y me encargaré del resto! 🧡
 
@@ -71,11 +68,12 @@ banned-chat = 🚫 Estás baneado en este chat.
 too-many-requests = ⏳ Demasiadas solicitudes. Por favor espera.
 menu-not-yours = ⚠️ No puedes interactuar con este menú.
 general-error = ❌ Ocurrió un error. Por favor, inténtalo de nuevo más tarde.
+btn-close = ✕ Cerrar
 
 # YouTube Trim Feature
 yt-trim-sponsor-only = ✂️ ¡El recorte de video solo está disponible para Patrocinadores!
-yt-trim-ask-range = ✂️ Ingresa el rango de tiempo para recortar (ej. `01:20-02:45` o `90-165`):
-yt-trim-invalid-range = ❌ Formato inválido. Usa INICIO-FIN (ej. `1:30-2:45`). Intenta de nuevo:
+yt-trim-ask-range = ✂️ Ingresa el rango de tiempo para recortar (ej. <code>01:20-02:45</code> o <code>90-165</code>):
+yt-trim-invalid-range = ❌ Formato inválido. Usa INICIO-FIN (ej. <code>1:30-2:45</code>). Intenta de nuevo:
 yt-trim-end-before-start = ❌ El tiempo de fin debe ser después del tiempo de inicio. Intenta de nuevo:
 yt-trim-processing = ✂️ Recortando tu clip, por favor espera...
 yt-trim-out-of-bounds = ❌ El rango excede la duración del video ({  }). Intenta de nuevo:

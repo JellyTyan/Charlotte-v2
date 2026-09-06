@@ -7,44 +7,44 @@ settings-no-allowed-groups = ¡Este ajuste no está disponible para grupos, lo s
 settings-no-allowed-dm = ¡Este ajuste no es para chats privados, lo siento!
 
 btn-language = Idioma
-btn-title-language = Idioma de descripciones
+btn-title-language = Descripciones
 btn-blocked-services = Servicios bloqueados
 
 btn-send-raw = { $is_enabled ->
-    [true] ✅ Enviar como archivo
-    *[false] ❌ Enviar como archivo
+    [true] 🟢 Como archivo
+    *[false] ⚪ Como archivo
 }
 btn-send-music-covers = { $is_enabled ->
-    [true] ✅ Portadas de música
-    *[false] ❌ Portadas de música
+    [true] 🟢 Portadas
+    *[false] ⚪ Portadas
 }
 btn-send-reactions = { $is_enabled ->
-    [true] ✅ Reacciones
-    *[false] ❌ Reacciones
+    [true] 🟢 Reacciones
+    *[false] ⚪ Reacciones
 }
 btn-negativity = { $is_enabled ->
-    [true] ✅ Negatividad
-    *[false] ❌ Negatividad
+    [true] 🟢 Negatividad
+    *[false] ⚪ Negatividad
 }
 btn-auto-translate = { $is_enabled ->
-    [true] ✅ Traducir descripciones
-    *[false] ❌ Traducir descripciones
+    [true] 🟢 Traducción
+    *[false] ⚪ Traducción
 }
 btn-auto-caption = { $is_enabled ->
-    [true] ✅ Descripciones
-    *[false] ❌ Descripciones
+    [true] 🟢 Descripciones
+    *[false] ⚪ Descripciones
 }
 btn-notifications = { $is_enabled ->
-    [true] ✅ Notificaciones
-    *[false] ❌ Notificaciones
+    [true] 🟢 Notificaciones
+    *[false] ⚪ Notificaciones
 }
 btn-allow-playlists = { $is_enabled ->
-    [true] ✅ Playlists
-    *[false] ❌ Playlists
+    [true] 🟢 Playlists
+    *[false] ⚪ Playlists
 }
 btn-allow-nsfw = { $is_enabled ->
-    [true] ✅ NSFW
-    *[false] ❌ NSFW
+    [true] 🟢 NSFW
+    *[false] ⚪ NSFW
 }
 
 desc-send-raw = ¡Enviaré los medios como archivos para obtener la mejor calidad! 🎨
@@ -90,29 +90,29 @@ btn-configure-services = ⚙️ Configure Services
 settings-select-service = Select a service to configure:
 settings-service-title = ⚙️ **{ $name } Settings**
 btn-lossless = { $is_enabled ->
-    [true] ✅ LOSSLESS
-    *[false] ❌ LOSSLESS
+    [true] 🟢 LOSSLESS
+    *[false] ⚪ LOSSLESS
 }
 btn-service-enabled = { $is_enabled ->
-    [true] ✅ Enabled
-    *[false] ❌ Enabled
+    [true] 🟢 Servicio
+    *[false] ⚪ Servicio
 }
 
 btn-news-spam = { $is_enabled ->
-    [true] ✅ Boletines
-    *[false] ❌ Boletines
+    [true] 🟢 Noticias
+    *[false] ⚪ Noticias
 }
 desc-news-spam = ¡Permite que el bot te envíe noticias y actualizaciones! 📰
 
 btn-bot-sign = { $is_enabled ->
-    [true] 🧡 Bot Ad [ON]
-   *[false] 🧡 Bot Ad [OFF]
+    [true] 🟢 Bot Ad 🧡
+    *[false] ⚪ Bot Ad 🧡
 }
-desc-bot-sign = Append a promotional signature "Charlotte 🧡" to downloaded media. Disabling this requires Sponsorship 🌟.
+desc-bot-sign = Añadir la firma promocional «Charlotte 🧡» a los medios descargados. ¡Desactivarlo es totalmente gratis! ✨
 
 btn-simple-mode = { $is_enabled ->
-    [true] ✅ Interfaz simple
-   *[false] ❌ Interfaz simple
+    [true] 🟢 Modo simple
+    *[false] ⚪ Modo simple
 }
 desc-simple =
     Interfaz simple de YouTube:

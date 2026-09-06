@@ -72,7 +72,7 @@ async def _handle_bot_error(
         await _log_download_failure(exception, user, chat)
 
     if exception.send_user_message:
-        await _notify_user(message, exception, i18n)
+        await _notify_user(message, exception, i18n, user=user)
 
     if exception.critical:
         await _notify_admin(bot, exception)
@@ -94,14 +94,24 @@ async def _log_download_failure(exception: BotError, user: User | None, chat: Ch
         await session.commit()
 
 
-async def _notify_user(message: Message, exception: BotError, i18n: TranslatorRunner) -> None:
-    from utils.error_messages import get_i18n_error_message
+async def _notify_user(
+    message: Message,
+    exception: BotError,
+    i18n: TranslatorRunner,
+    user: User | None = None,
+) -> None:
+    from utils.error_messages import get_i18n_error_message, get_error_keyboard
+    from middlewares.button_owner import register_message_owner
     error_message = get_i18n_error_message(exception.code, i18n)
     if not error_message:
         logger.warning(f"No error message defined for code: {exception.code}")
         return
     try:
-        await message.answer(error_message)
+        owner_id = user.id if user else (message.from_user.id if message.from_user else None)
+        reply_markup = get_error_keyboard(i18n, owner_id=owner_id)
+        sent = await message.answer(error_message, reply_markup=reply_markup)
+        if owner_id and sent:
+            await register_message_owner(sent, owner_id)
     except TelegramAPIError as e:
         logger.warning(f"Failed to notify user: {e}")
 
@@ -139,7 +149,14 @@ def register_error_handler(dp: Dispatcher, bot: Bot) -> None:
         if not hub:
             logger.error("TranslatorHub not found in workflow_data")
             try:
-                await message.answer("❌ An error occurred. Please try again later.")
+                from utils.error_messages import get_error_keyboard
+                from middlewares.button_owner import register_message_owner
+                user, chat = _extract_user_and_chat(event.update)
+                owner_id = user.id if user else (message.from_user.id if message.from_user else None)
+                reply_markup = get_error_keyboard(None, owner_id=owner_id)
+                sent = await message.answer("❌ An error occurred. Please try again later.", reply_markup=reply_markup)
+                if owner_id and sent:
+                    await register_message_owner(sent, owner_id)
             except TelegramAPIError:
                 pass
             return
@@ -153,7 +170,13 @@ def register_error_handler(dp: Dispatcher, bot: Bot) -> None:
             await _handle_bot_error(exception, message, user, chat, i18n, bot)
         else:
             try:
-                await message.answer(i18n.error.generic())
+                from utils.error_messages import get_error_keyboard
+                from middlewares.button_owner import register_message_owner
+                owner_id = user.id if user else (message.from_user.id if message.from_user else None)
+                reply_markup = get_error_keyboard(i18n, owner_id=owner_id)
+                sent = await message.answer(i18n.error.generic(), reply_markup=reply_markup)
+                if owner_id and sent:
+                    await register_message_owner(sent, owner_id)
             except TelegramAPIError:
                 pass
             logger.error(f"Unhandled error: {exception}", exc_info=True)

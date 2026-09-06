@@ -14,7 +14,7 @@ from aiogram.exceptions import TelegramEntityTooLarge, TelegramRetryAfter
 from sqlalchemy.ext.asyncio import AsyncSession
 from aiogram.utils.chat_action import ChatActionSender
 
-from utils import delete_files, truncate_string, translate_text
+from utils import delete_files, truncate_string, translate_text, safe_truncate_html
 from models.media import MediaContent, MediaType
 from models.errors import BotError, ErrorCode
 from storage.db.crud import (
@@ -529,13 +529,13 @@ class MediaSender:
                         caption = await translate_text(
                             caption, str(settings.profile.title_language)
                         )
-                    final_caption = truncate_string(caption, 1000)
+                    final_caption = caption
                 
                 if show_ad:
                     final_caption = (final_caption + "\n\n" if final_caption else "") + AD_TEXT
 
                 if final_caption:
-                    media_group.caption = final_caption
+                    media_group.caption = safe_truncate_html(final_caption, 1024)
 
             # Сборка альбома
             for item in group_items:
@@ -682,13 +682,15 @@ class MediaSender:
                 caption = await translate_text(
                     caption, str(settings.profile.title_language)
                 )
-            final_caption = truncate_string(caption, 1000)
+            final_caption = caption
 
         if show_ad:
             final_caption = (final_caption + "\n\n" if final_caption else "") + AD_TEXT
 
         if not final_caption:
             final_caption = None
+        else:
+            final_caption = safe_truncate_html(final_caption, 1024)
 
         kwargs = {
             "disable_notification": skip_notification or not settings.profile.notifications,

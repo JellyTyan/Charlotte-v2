@@ -16,7 +16,7 @@ from models.service_list import Services
 from senders.media_sender import MediaSender
 from storage.db.crud import get_media_cache
 from tasks.task_manager import task_manager
-from utils import escape_html, truncate_string
+from utils import escape_html, truncate_string, build_caption, format_author_link
 from utils.statistics_helper import log_download_event
 
 pinterest_router = Router(name="pinterest")
@@ -76,24 +76,32 @@ async def pinterest_handler(message: Message, db_session: AsyncSession, http_cli
 
         if metadata.get("type") == "multi":
             for i, sub_pin in enumerate(metadata.get('items', [])):
-                sub_author = sub_pin.get('author_username')
-                sub_caption = escape_html((sub_pin.get('caption') or "").strip())
-                sub_author_link = f"<a href='https://www.pinterest.com/{sub_author}/'>{sub_author}</a>" if sub_author else ""
-                parts = [p for p in [sub_author_link, sub_caption] if p]
-                caption = " - ".join(parts)
+                sub_author_data = sub_pin.get('author') if isinstance(sub_pin.get('author'), dict) else {}
+                sub_author = sub_author_data.get('username') or sub_author_data.get('name') or sub_pin.get('author_username')
+                sub_author_url = sub_author_data.get('url') or (f"https://www.pinterest.com/{sub_author}/" if sub_author else "")
+                sub_author_link = format_author_link(sub_author, sub_author_url, icon="📌")
+                sub_caption = escape_html((sub_pin.get('caption') or sub_pin.get('title') or "").strip())
+                caption = build_caption(header=sub_author_link, description=sub_caption)
+
+                sub_is_nsfw = bool(sub_pin.get('is_nsfw') or sub_pin.get('is_sensitive'))
+                sub_is_blurred = bool(sub_pin.get('is_blurred') or sub_is_nsfw)
 
                 sub_media_content = []
                 for media in sub_pin.get('items', []):
+                    cover_str = media.get('cover_path') or media.get('cover') or media.get('thumbnail')
+                    cover_path = Path(cover_str) if cover_str and Path(cover_str).exists() else None
                     sub_media_content.append(
                         MediaContent(
                             type=MediaType.PHOTO if media.get('type') == 'photo' else MediaType.VIDEO,
                             path=Path(media.get('path')) if media.get('path') else None,
                             optimized_path=Path(media.get('optimized_path')) if media.get('optimized_path') else None,
-                            title=truncate_string(caption, 1024),
+                            title=caption,
                             width=media.get('width', None),
                             height=media.get('height', None),
                             duration=media.get('duration', None),
-                            cover=Path(media.get('cover')) if media.get('cover') and Path(media.get('cover')).exists() else None,
+                            cover=cover_path,
+                            is_blurred=sub_is_blurred,
+                            is_nsfw=sub_is_nsfw,
                         )
                     )
 
@@ -111,24 +119,32 @@ async def pinterest_handler(message: Message, db_session: AsyncSession, http_cli
                         skip_notification=(i > 0),
                     )
         else:
-            author = metadata.get('author_username')
-            caption_text = escape_html((metadata.get('caption') or "").strip())
-            author_link = f"<a href='https://www.pinterest.com/{author}/'>{author}</a>" if author else ""
-            parts = [p for p in [author_link, caption_text] if p]
-            caption = " - ".join(parts)
+            author_data = metadata.get('author') if isinstance(metadata.get('author'), dict) else {}
+            author = author_data.get('username') or author_data.get('name') or metadata.get('author_username')
+            author_url = author_data.get('url') or (f"https://www.pinterest.com/{author}/" if author else "")
+            author_link = format_author_link(author, author_url, icon="📌")
+            caption_text = escape_html((metadata.get('caption') or metadata.get('title') or "").strip())
+            caption = build_caption(header=author_link, description=caption_text)
+
+            is_nsfw = bool(metadata.get('is_nsfw') or metadata.get('is_sensitive'))
+            is_blurred = bool(metadata.get('is_blurred') or is_nsfw)
 
             media_content = []
             for media in metadata.get('items', []):
+                cover_str = media.get('cover_path') or media.get('cover') or media.get('thumbnail')
+                cover_path = Path(cover_str) if cover_str and Path(cover_str).exists() else None
                 media_content.append(
                     MediaContent(
                         type=MediaType.PHOTO if media.get('type') == 'photo' else MediaType.VIDEO,
                         path=Path(media.get('path')) if media.get('path') else None,
                         optimized_path=Path(media.get('optimized_path')) if media.get('optimized_path') else None,
-                        title=truncate_string(caption, 1024),
+                        title=caption,
                         width=media.get('width', None),
                         height=media.get('height', None),
                         duration=media.get('duration', None),
-                        cover=Path(media.get('cover')) if media.get('cover') and Path(media.get('cover')).exists() else None,
+                        cover=cover_path,
+                        is_blurred=is_blurred,
+                        is_nsfw=is_nsfw,
                     )
                 )
 

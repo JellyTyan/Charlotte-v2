@@ -6,34 +6,31 @@ msg-hello =
 
 msg-help =
     Tady jsou mé příkazy:
-      /start - Pozdravit!
-      /help - Získat nápovědu
-      /settings - Přizpůsobit si vše podle sebe
-      /support - Podpořit projekt
+      /start — Hlavní menu
+      /help — Nápověda a příkazy
+      /settings — Přizpůsobit nastavení
+      /sponsor — Sponzorství a výhody
+      /support — Podpořit projekt
+      /cancel — Zrušit aktivní stahování
 
-    ✨ Ráda ti pomůžu uložit média z těchto platforem:
+    ✨ <b>Podporované platformy</b> <i>(klepni pro rozbalení)</i>:
+    <blockquote expandable>
+    <b>Hudební platformy:</b>
+      • Spotify, Apple Music, Deezer, SoundCloud, YouTube Music
+    <i>Stáhnu skladbu i s obalem a všemi tagy!</i>
 
-    <b>Hudební platformy</b>
-      - Spotify
-      - Apple Music
-      - Deezer
-      - SoundCloud
-      - YouTube Music
-    Stáhnu skladbu i s obalem a všemi tagy!
+    <b>Video platformy:</b>
+      • YouTube (Videa, Shorts, audio do 100 MB / 1 GB pro Sponzory)
+      • TikTok (Videa a fotky)
+      • Instagram (Reels a příspěvky)
+      • Twitter / X (Videa a obrázky)
+      • Reddit (Média z příspěvků)
+      • BlueSky, Twitch, NicoVideo
 
-    <b>Video platformy</b>
-      - YouTube - Videa, Shorts nebo audio (do 100 MB, ⭐ 1GB s Hvězdami!)
-      - TikTok - Videa a obrázky
-      - Instagram - Reels a příspěvky
-      - Twitter (X) - Videa a obrázky
-      - BlueSky - Videa a obrázky
-      - Reddit - Všechna média z příspěvků
-      - Twitch - Klipy
-      - NicoVideo - Videa a audio
-
-    <b>Umělecké platformy</b>
-      - Pixiv - Krásné ilustrace
-      - Pinterest - Všechny piny, které miluješ
+    <b>Umělecké platformy:</b>
+      • Pixiv (Krásné ilustrace)
+      • Pinterest (Všechny piny)
+    </blockquote>
 
     Prostě mi pošli odkaz a já se postarám o zbytek! 🧡
 
@@ -71,11 +68,12 @@ banned-chat = 🚫 V tomto chatu jste zabanováni.
 too-many-requests = ⏳ Příliš mnoho požadavků. Prosím čekejte.
 menu-not-yours = ⚠️ S tímto menu nemůžete interagovat.
 general-error = ❌ Došlo k chybě. Zkuste to prosím později.
+btn-close = ✕ Zavřít
 
 # YouTube Trim Feature
 yt-trim-sponsor-only = ✂️ Ořez videa je dostupný pouze pro Sponzory!
-yt-trim-ask-range = ✂️ Zadejte časový rozsah pro ořez (např. `01:20-02:45` nebo `90-165`):
-yt-trim-invalid-range = ❌ Neplatný formát rozsahu. Použijte ZAČÁTEK-KONEC (např. `1:30-2:45`). Zkuste to znovu:
+yt-trim-ask-range = ✂️ Zadejte časový rozsah pro ořez (např. <code>01:20-02:45</code> nebo <code>90-165</code>):
+yt-trim-invalid-range = ❌ Neplatný formát rozsahu. Použijte ZAČÁTEK-KONEC (např. <code>1:30-2:45</code>). Zkuste to znovu:
 yt-trim-end-before-start = ❌ Čas konce musí být větší než čas začátku. Zkuste to znovu:
 yt-trim-processing = ✂️ Ořezáváme klip, prosím čekejte...
 yt-trim-out-of-bounds = ❌ Rozsah překračuje délku videa ({  }). Zkuste to znovu:

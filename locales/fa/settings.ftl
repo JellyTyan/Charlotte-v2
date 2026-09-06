@@ -7,44 +7,44 @@ settings-no-allowed-groups = این تنظیم برای گروه‌ها در د�
 settings-no-allowed-dm = این تنظیم برای چت خصوصی نیست، ببخشید!
 
 btn-language = زبان
-btn-title-language = زبان توضیحات
+btn-title-language = توضیحات
 btn-blocked-services = سرویس‌های مسدود
 
 btn-send-raw = { $is_enabled ->
-    [true] ✅ ارسال به صورت فایل
-    *[false] ❌ ارسال به صورت فایل
+    [true] 🟢 به صورت فایل
+    *[false] ⚪ به صورت فایل
 }
 btn-send-music-covers = { $is_enabled ->
-    [true] ✅ کاور موزیک
-    *[false] ❌ کاور موزیک
+    [true] 🟢 کاور موزیک
+    *[false] ⚪ کاور موزیک
 }
 btn-send-reactions = { $is_enabled ->
-    [true] ✅ واکنش‌ها
-    *[false] ❌ واکنش‌ها
+    [true] 🟢 واکنش‌ها
+    *[false] ⚪ واکنش‌ها
 }
 btn-negativity = { $is_enabled ->
-    [true] ✅ منفی‌نگری
-    *[false] ❌ منفی‌نگری
+    [true] 🟢 منفی‌نگری
+    *[false] ⚪ منفی‌نگری
 }
 btn-auto-translate = { $is_enabled ->
-    [true] ✅ ترجمه توضیحات
-    *[false] ❌ ترجمه توضیحات
+    [true] 🟢 ترجمه
+    *[false] ⚪ ترجمه
 }
 btn-auto-caption = { $is_enabled ->
-    [true] ✅ توضیحات
-    *[false] ❌ توضیحات
+    [true] 🟢 توضیحات
+    *[false] ⚪ توضیحات
 }
 btn-notifications = { $is_enabled ->
-    [true] ✅ تبلیغات
-    *[false] ❌ تبلیغات
+    [true] 🟢 اعلان‌ها
+    *[false] ⚪ اعلان‌ها
 }
 btn-allow-playlists = { $is_enabled ->
-    [true] ✅ پلی‌لیست
-    *[false] ❌ پلی‌لیست
+    [true] 🟢 پلی‌لیست
+    *[false] ⚪ پلی‌لیست
 }
 btn-allow-nsfw = { $is_enabled ->
-    [true] ✅ NSFW
-    *[false] ❌ NSFW
+    [true] 🟢 NSFW
+    *[false] ⚪ NSFW
 }
 
 desc-send-raw = رسانه ها را به عنوان فایل برای بهترین کیفیت ارسال می کنم! 🎨
@@ -90,29 +90,29 @@ btn-configure-services = ⚙️ Configure Services
 settings-select-service = Select a service to configure:
 settings-service-title = ⚙️ **{ $name } Settings**
 btn-lossless = { $is_enabled ->
-    [true] ✅ LOSSLESS
-    *[false] ❌ LOSSLESS
+    [true] 🟢 LOSSLESS
+    *[false] ⚪ LOSSLESS
 }
 btn-service-enabled = { $is_enabled ->
-    [true] ✅ Enabled
-    *[false] ❌ Enabled
+    [true] 🟢 سرویس
+    *[false] ⚪ سرویس
 }
 
 btn-news-spam = { $is_enabled ->
-    [true] ✅ خبرنامه
-    *[false] ❌ خبرنامه
+    [true] 🟢 خبرنامه
+    *[false] ⚪ خبرنامه
 }
 desc-news-spam = به ربات اجازه دهید برای شما اخبار و بروزرسانی‌ها را ارسال کند! 📰
 
 btn-bot-sign = { $is_enabled ->
-    [true] 🧡 Bot Ad [ON]
-   *[false] 🧡 Bot Ad [OFF]
+    [true] 🟢 Bot Ad 🧡
+    *[false] ⚪ Bot Ad 🧡
 }
-desc-bot-sign = Append a promotional signature "Charlotte 🧡" to downloaded media. Disabling this requires Sponsorship 🌟.
+desc-bot-sign = افزودن امضای تبلیغاتی «Charlotte 🧡» به رسانه‌های دانلودی. غیرفعال کردن آن کاملاً رایگان است! ✨
 
 btn-simple-mode = { $is_enabled ->
-    [true] ✅ رابط کاربری ساده
-   *[false] ❌ رابط کاربری ساده
+    [true] 🟢 حالت ساده
+    *[false] ⚪ حالت ساده
 }
 desc-simple =
     رابط کاربری ساده یوتیوب:

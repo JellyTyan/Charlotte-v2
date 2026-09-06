@@ -1,5 +1,16 @@
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from fluentogram import TranslatorRunner
 from models.errors import ErrorCode
+
+
+def get_error_keyboard(i18n: TranslatorRunner | None = None, owner_id: int | None = None) -> InlineKeyboardMarkup:
+    """Create an inline keyboard with a 'Close' button for error messages."""
+    close_text = i18n.get("btn-close") if i18n else "✕ Close"
+    cb_data = f"close_error:{owner_id}" if owner_id else "close_error"
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=close_text, callback_data=cb_data)]
+    ])
+
 
 def get_i18n_error_message(code: ErrorCode, i18n: TranslatorRunner) -> str | None:
     """Get translated error message for a specific ErrorCode"""

@@ -7,44 +7,44 @@ settings-no-allowed-groups = Toto nastavení není dostupné pro skupiny, promi�
 settings-no-allowed-dm = Toto nastavení není pro soukromé chaty, promiň!
 
 btn-language = Jazyk
-btn-title-language = Jazyk popisů
+btn-title-language = Popisky
 btn-blocked-services = Blokované služby
 
 btn-send-raw = { $is_enabled ->
-    [true] ✅ Odeslat jako soubor
-    *[false] ❌ Odeslat jako soubor
+    [true] 🟢 Soubor
+    *[false] ⚪ Soubor
 }
 btn-send-music-covers = { $is_enabled ->
-    [true] ✅ Hudební obaly
-    *[false] ❌ Hudební obaly
+    [true] 🟢 Obaly alb
+    *[false] ⚪ Obaly alb
 }
 btn-send-reactions = { $is_enabled ->
-    [true] ✅ Reakce
-    *[false] ❌ Reakce
+    [true] 🟢 Reakce
+    *[false] ⚪ Reakce
 }
 btn-negativity = { $is_enabled ->
-    [true] ✅ Negativita
-    *[false] ❌ Negativita
+    [true] 🟢 Negativita
+    *[false] ⚪ Negativita
 }
 btn-auto-translate = { $is_enabled ->
-    [true] ✅ Překládat popisky
-    *[false] ❌ Překládat popisky
+    [true] 🟢 Překlad
+    *[false] ⚪ Překlad
 }
 btn-auto-caption = { $is_enabled ->
-    [true] ✅ Popisky
-    *[false] ❌ Popisky
+    [true] 🟢 Popisky
+    *[false] ⚪ Popisky
 }
 btn-notifications = { $is_enabled ->
-    [true] ✅ Oznámení
-    *[false] ❌ Oznámení
+    [true] 🟢 Oznámení
+    *[false] ⚪ Oznámení
 }
 btn-allow-playlists = { $is_enabled ->
-    [true] ✅ Playlisty
-    *[false] ❌ Playlisty
+    [true] 🟢 Playlisty
+    *[false] ⚪ Playlisty
 }
 btn-allow-nsfw = { $is_enabled ->
-    [true] ✅ NSFW
-    *[false] ❌ NSFW
+    [true] 🟢 NSFW
+    *[false] ⚪ NSFW
 }
 
 desc-send-raw = Budu posílat média jako soubory pro nejlepší kvalitu! 🎨
@@ -90,29 +90,29 @@ btn-configure-services = ⚙️ Configure Services
 settings-select-service = Select a service to configure:
 settings-service-title = ⚙️ **{ $name } Settings**
 btn-lossless = { $is_enabled ->
-    [true] ✅ LOSSLESS
-    *[false] ❌ LOSSLESS
+    [true] 🟢 LOSSLESS
+    *[false] ⚪ LOSSLESS
 }
 btn-service-enabled = { $is_enabled ->
-    [true] ✅ Enabled
-    *[false] ❌ Enabled
+    [true] 🟢 Služba
+    *[false] ⚪ Služba
 }
 
 btn-news-spam = { $is_enabled ->
-    [true] ✅ Novinky
-    *[false] ❌ Novinky
+    [true] 🟢 Novinky
+    *[false] ⚪ Novinky
 }
 desc-news-spam = Povolit botovi posílat vám novinky a aktualizace! 📰
 
 btn-bot-sign = { $is_enabled ->
-    [true] 🧡 Bot Ad [ON]
-   *[false] 🧡 Bot Ad [OFF]
+    [true] 🟢 Bot Ad 🧡
+    *[false] ⚪ Bot Ad 🧡
 }
-desc-bot-sign = Append a promotional signature "Charlotte 🧡" to downloaded media. Disabling this requires Sponsorship 🌟.
+desc-bot-sign = Přidávat reklamní podpis „Charlotte 🧡“ ke staženým médiím. Vypnutí je zcela zdarma! ✨
 
 btn-simple-mode = { $is_enabled ->
-    [true] ✅ Jednoduché rozhraní
-   *[false] ❌ Jednoduché rozhraní
+    [true] 🟢 Jednoduchý režim
+    *[false] ⚪ Jednoduchý režim
 }
 desc-simple =
     Jednoduché rozhraní YouTube:

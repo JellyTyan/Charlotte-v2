@@ -16,7 +16,7 @@ from models.service_list import Services
 from senders.media_sender import MediaSender
 from storage.db.crud import get_media_cache, check_if_user_premium, get_chat_settings
 from tasks.task_manager import task_manager
-from utils import escape_html, truncate_string
+from utils import escape_html, truncate_string, build_caption, format_author_link
 from utils.statistics_helper import log_download_event
 
 reddit_router = Router(name="reddit")
@@ -98,17 +98,8 @@ async def reddit_handler(
         )
 
         # Check NSFW status from response
-        is_nsfw = (
-            metadata.get('nsfw') or
-            metadata.get('possibly_sensitive') or
-            metadata.get('is_blurred') or
-            any(
-                item.get('nsfw') or
-                item.get('possibly_sensitive') or
-                item.get('is_blurred')
-                for item in metadata.get('items', [])
-            )
-        )
+        is_nsfw = bool(metadata.get('is_nsfw') or metadata.get('is_sensitive'))
+        is_blurred = bool(metadata.get('is_blurred') or is_nsfw)
 
         # If content is NSFW
         if is_nsfw:
@@ -131,23 +122,34 @@ async def reddit_handler(
                     critical=False
                 )
 
-        author_username = metadata.get('author_username')
-        subreddit = metadata.get('subreddit')
-        description = escape_html((metadata.get('caption') or "").strip())
-        
-        author_link = f"<a href='https://www.reddit.com/user/{author_username}'>{author_username}</a>" if author_username else ""
-        subreddit_link = f"<a href='https://www.reddit.com/{subreddit}'>{subreddit}</a>" if subreddit else ""
+        author_data = metadata.get('author') if isinstance(metadata.get('author'), dict) else {}
+        author_username = author_data.get('username') or metadata.get('author_username')
+        author_name = author_data.get('name')
+        author_url = author_data.get('url') or (f"https://www.reddit.com/user/{author_username}" if author_username else "")
+        author_display = author_username or author_name
+        author_link = format_author_link(author_display, author_url, icon="")
+
+        extra_data = metadata.get('extra') if isinstance(metadata.get('extra'), dict) else {}
+        subreddit = extra_data.get('subreddit') or metadata.get('subreddit')
+        if subreddit:
+            sub_str = str(subreddit).strip('/')
+            sub_url = subreddit if sub_str.startswith("http") else f"https://www.reddit.com/r/{sub_str.removeprefix('r/')}"
+            sub_name = sub_str if sub_str.startswith("r/") else f"r/{sub_str}"
+            subreddit_link = f"<a href='{escape_html(sub_url)}'>{escape_html(sub_name)}</a>"
+        else:
+            subreddit_link = ""
+
+        description = escape_html((metadata.get('caption') or metadata.get('title') or "").strip())
         
         header = ""
         if author_link and subreddit_link:
-            header = f"{author_link} on {subreddit_link}"
+            header = f"👤 {author_link} on {subreddit_link}"
         elif author_link:
-            header = author_link
+            header = f"👤 {author_link}"
         elif subreddit_link:
-            header = subreddit_link
-            
-        parts = [p for p in [header, description] if p]
-        caption = "\n".join(parts)
+            header = f"📌 {subreddit_link}"
+
+        caption = build_caption(header=header, description=description)
 
         media_content = []
         for media in metadata.get('items', []):
@@ -159,17 +161,20 @@ async def reddit_handler(
             else:
                 type_val = MediaType.VIDEO
 
+            cover_str = media.get('cover_path') or media.get('cover') or media.get('thumbnail')
+            cover_path = Path(cover_str) if cover_str and Path(cover_str).exists() else None
+
             media_content.append(
                 MediaContent(
                     type=type_val,
                     path=Path(media.get('path')) if media.get('path') else None,
                     optimized_path=Path(media.get('optimized_path')) if media.get('optimized_path') else None,
-                    title=truncate_string(caption, 1024),
+                    title=caption,
                     width=media.get('width', None),
                     height=media.get('height', None),
                     duration=media.get('duration', None),
-                    cover=Path(media.get('cover')) if media.get('cover') and Path(media.get('cover')).exists() else None,
-                    is_blurred=is_nsfw,
+                    cover=cover_path,
+                    is_blurred=is_blurred,
                     is_nsfw=is_nsfw,
                 )
             )

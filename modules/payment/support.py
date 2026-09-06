@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from states import SupportStates
 from storage.db.crud import get_global_settings, create_payment_log
+from fluentogram import TranslatorRunner
+from utils.effects import answer_with_effect, EFFECT_FIREWORKS
 
 support_router = Router(name="payment_support")
 logger = logging.getLogger(__name__)
@@ -153,7 +155,7 @@ async def support_pre_checkout(pre_checkout_query: PreCheckoutQuery):
     await pre_checkout_query.answer(ok=True)
 
 @support_router.message(F.successful_payment, lambda msg: msg.successful_payment.invoice_payload.startswith("support_"))
-async def support_successful_payment(message: Message, db_session: AsyncSession):
+async def support_successful_payment(message: Message, db_session: AsyncSession, i18n: TranslatorRunner = None):
     payment = message.successful_payment
     payload = payment.invoice_payload
 
@@ -169,9 +171,15 @@ async def support_successful_payment(message: Message, db_session: AsyncSession)
         provider_payment_charge_id=payment.provider_payment_charge_id
     )
 
-    await message.answer(
+    success_text = i18n.get("support-success") if i18n else (
         "🧡🌟 **Thank you so much!**\n\n"
         "Your support means the world and helps keep Charlotte running for everyone!\n\n"
-        "You're awesome! 🚀",
+        "You're awesome! 🚀"
+    )
+
+    await answer_with_effect(
+        message,
+        success_text,
+        effect_id=EFFECT_FIREWORKS,
         parse_mode="Markdown"
     )
