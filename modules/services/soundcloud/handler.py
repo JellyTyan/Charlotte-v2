@@ -1,4 +1,5 @@
 import logging
+import re
 from pathlib import Path
 
 import httpx
@@ -38,7 +39,7 @@ async def cache_check(session: AsyncSession, cache_key: str) -> MediaContent | N
         )
     return None
 
-SOUNDCLOUD_REGEX = r"^https:\/\/(?:on\.soundcloud\.com\/[a-zA-Z0-9]+|soundcloud\.com\/[^\/]+\/(sets\/[^\/]+|[^\/\?\s]+))(?:\?.*)?$"
+SOUNDCLOUD_REGEX = r"https?:\/\/(?:on\.soundcloud\.com\/[a-zA-Z0-9]+|soundcloud\.com\/[^\/\s]+\/(?:sets\/[^\/\s]+|[^\/\?\s]+))(?:\?\S+)?"
 
 
 async def fetch_core_download(
@@ -114,7 +115,8 @@ async def soundcloud_handler(
     if not message.text or not message.from_user:
         return
 
-    url = message.text
+    match = re.search(SOUNDCLOUD_REGEX, message.text)
+    url = match.group(0) if match else message.text
     chat_id = message.chat.id
     user_id = message.from_user.id
 

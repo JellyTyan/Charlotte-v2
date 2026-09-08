@@ -1,4 +1,5 @@
 import logging
+import re
 from pathlib import Path
 
 import httpx
@@ -38,7 +39,7 @@ async def cache_check(session: AsyncSession, cache_key: str) -> MediaContent | N
         )
     return None
 
-YTMUSIC_REGEX = r"https:\/\/music\.youtube\.com\/(watch\?v=[\w-]+(&[\w=-]+)*|playlist\?list=[\w-]+(&[\w=-]+)*)"
+YTMUSIC_REGEX = r"https?:\/\/music\.youtube\.com\/(?:watch\?v=[\w-]+(?:&[\w=-]+)*|playlist\?list=[\w-]+(?:&[\w=-]+)*)"
 
 
 async def fetch_core_download(
@@ -114,7 +115,8 @@ async def ytmusic_handler(
     if not message.text or not message.from_user:
         return
 
-    url = message.text
+    match = re.search(YTMUSIC_REGEX, message.text)
+    url = match.group(0) if match else message.text
     chat_id = message.chat.id
     user_id = message.from_user.id
 

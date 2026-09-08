@@ -41,7 +41,8 @@ async def resolve_pinterest_url(url: str) -> str:
 
 @pinterest_router.message(F.text.regexp(PINTEREST_REGEX))
 async def pinterest_handler(message: Message, db_session: AsyncSession, http_client: httpx.AsyncClient):
-    url = message.text
+    match = re.search(PINTEREST_REGEX, message.text)
+    url = match.group(0) if match else message.text
     user_id = message.from_user.id
 
     async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=message.chat.id):

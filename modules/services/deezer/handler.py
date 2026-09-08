@@ -1,4 +1,5 @@
 import logging
+import re
 from pathlib import Path
 
 import httpx
@@ -38,7 +39,7 @@ async def cache_check(session: AsyncSession, cache_key: str) -> MediaContent | N
         )
     return None
 
-DEEZER_REGEX = r"^https?:\/\/(?:www\.deezer\.com\/[a-z]{2}\/(track|album|playlist)\/\d+|link\.deezer\.com\/s\/[A-Za-z0-9]+)$"
+DEEZER_REGEX = r"https?:\/\/(?:www\.deezer\.com\/[a-z]{2}\/(?:track|album|playlist)\/\d+|link\.deezer\.com\/s\/[A-Za-z0-9]+)"
 
 
 async def fetch_core_download(
@@ -168,7 +169,8 @@ async def deezer_handler(
     if not message.text or not message.from_user:
         return
 
-    url = message.text
+    match = re.search(DEEZER_REGEX, message.text)
+    url = match.group(0) if match else message.text
     chat_id = message.chat.id
     user_id = message.from_user.id
 

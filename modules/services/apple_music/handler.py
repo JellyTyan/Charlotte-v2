@@ -1,4 +1,5 @@
 import logging
+import re
 from pathlib import Path
 
 import httpx
@@ -38,7 +39,7 @@ async def cache_check(session: AsyncSession, cache_key: str) -> MediaContent | N
         )
     return None
 
-APPLE_REGEX = r"^https?:\/\/music\.apple\.com\/[a-z]{2}\/(album|playlist|song)\/[^\s]+$"
+APPLE_REGEX = r"https?:\/\/music\.apple\.com\/[a-z]{2}\/(?:album|playlist|song)\/\S+"
 
 
 async def fetch_core_download(
@@ -153,7 +154,11 @@ async def apple_handler(
     db_session: AsyncSession,
     http_client: httpx.AsyncClient,
 ):
-    url = message.text
+    if not message.text or not message.from_user:
+        return
+
+    match = re.search(APPLE_REGEX, message.text)
+    url = match.group(0) if match else message.text
     chat_id = message.chat.id
     user_id = message.from_user.id
 

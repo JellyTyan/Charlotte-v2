@@ -1,4 +1,5 @@
 import logging
+import re
 import httpx
 import asyncio
 from pathlib import Path
@@ -277,7 +278,8 @@ async def youtube_handler(
         except Exception:
             pass
 
-    url = message.text
+    match = re.search(YOUTUBE_REGEX, message.text)
+    url = match.group(0) if match else message.text
     chat_id = message.chat.id
 
     async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=chat_id):

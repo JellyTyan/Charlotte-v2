@@ -36,7 +36,8 @@ async def pixiv_handler(
     if not message.text or not message.from_user:
         return
 
-    url = message.text.strip()
+    match = re.search(PIXIV_REGEX, message.text)
+    url = match.group(0) if match else message.text.strip()
     chat_id = message.chat.id
     user_id = message.from_user.id
 

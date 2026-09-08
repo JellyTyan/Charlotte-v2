@@ -23,11 +23,12 @@ tiktok_router = Router(name="tiktok")
 
 logger = logging.getLogger(__name__)
 
-TIKTOK_REGEX = r"https?://(?:www\.)?(?:tiktok\.com/.*|(vm|vt)\.tiktok\.com/.+)"
+TIKTOK_REGEX = r"https?://(?:www\.)?(?:tiktok\.com/\S+|(?:vm|vt)\.tiktok\.com/\S+)"
 
 @tiktok_router.message(F.text.regexp(TIKTOK_REGEX))
 async def tiktok_handler(message: Message, db_session: AsyncSession, http_client: httpx.AsyncClient):
-    url = message.text
+    match = re.search(TIKTOK_REGEX, message.text)
+    url = match.group(0) if match else message.text
     user_id = message.from_user.id
 
     async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=message.chat.id):

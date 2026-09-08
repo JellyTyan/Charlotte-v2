@@ -27,7 +27,8 @@ INSTAGRAM_REGEX = r"https?://(?:www\.)?instagram\.com/(?:p|reels?|tv)/[\w-]+/?"
 
 @insta_router.message(F.text.regexp(INSTAGRAM_REGEX))
 async def instagram_handler(message: Message, db_session: AsyncSession, http_client: httpx.AsyncClient,):
-    url = message.text
+    match = re.search(INSTAGRAM_REGEX, message.text)
+    url = match.group(0) if match else message.text
     user_id = message.from_user.id
 
     sponsor = await check_if_user_premium(db_session, user_id)
