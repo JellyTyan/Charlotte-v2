@@ -91,7 +91,17 @@ async def _safe_answer_inline(
     try:
         return await inline_query.answer(results, cache_time=cache_time, is_personal=is_personal)
     except TelegramBadRequest as e:
-        logger.warning(f"Failed to answer inline query with {len(results)} items ({e}). Possible foreign bot token file_ids.")
+        logger.warning(f"Failed to answer inline query with {len(results)} items ({e}). Attempting resilient fallback.")
+        if len(results) > 1:
+            for chunk_size in (15, 10, 5, 2, 1):
+                for i in range(0, len(results), chunk_size):
+                    candidate = results[i : i + chunk_size]
+                    try:
+                        return await inline_query.answer(
+                            candidate, cache_time=cache_time, is_personal=is_personal
+                        )
+                    except TelegramBadRequest:
+                        continue
         try:
             return await inline_query.answer([], cache_time=1, is_personal=True)
         except Exception:

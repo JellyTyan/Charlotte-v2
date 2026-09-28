@@ -268,7 +268,7 @@ class MediaSender:
                             if msg.photo:
                                 item.telegram_file_id = msg.photo[-1].file_id
                             elif msg.document:
-                                item.telegram_file_id = msg.document.file_id
+                                item.telegram_document_file_id = msg.document.file_id
 
                         elif item.type == MediaType.VIDEO:
                             msg = await self._safe_send(
@@ -288,7 +288,7 @@ class MediaSender:
                                 if msg.video.thumbnail:
                                     item.cover_file_id = msg.video.thumbnail.file_id
                             elif msg.document:
-                                item.telegram_file_id = msg.document.file_id
+                                item.telegram_document_file_id = msg.document.file_id
 
                         elif item.type == MediaType.AUDIO:
                             msg = await self._safe_send(
@@ -307,7 +307,7 @@ class MediaSender:
                                 if msg.audio.thumbnail:
                                     item.cover_file_id = msg.audio.thumbnail.file_id
                             elif msg.document:
-                                item.telegram_file_id = msg.document.file_id
+                                item.telegram_document_file_id = msg.document.file_id
 
                         elif item.type == MediaType.GIF:
                             msg = await self._safe_send(
@@ -326,7 +326,7 @@ class MediaSender:
                                 if msg.animation.thumbnail:
                                     item.cover_file_id = msg.animation.thumbnail.file_id
                             elif msg.document:
-                                item.telegram_file_id = msg.document.file_id
+                                item.telegram_document_file_id = msg.document.file_id
 
                         await asyncio.sleep(0.5)  # Пауза для стабильности дампа
 
