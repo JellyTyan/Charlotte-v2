@@ -3,7 +3,7 @@ import datetime
 import json
 from datetime import date
 
-from sqlalchemy import select, update, func, desc, or_, and_, delete, cast
+from sqlalchemy import select, update, func, desc, or_, and_, delete, cast, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert
 
@@ -1031,10 +1031,11 @@ async def search_cached_music(
         .where(
             MediaCache.media_type == "audio",
             MediaCache.telegram_file_id.isnot(None),
+            func.lower(MediaCache.platform) != "tiktok",
         )
     )
     if platforms:
-        lower_platforms = [p.lower() for p in platforms]
+        lower_platforms = [p.lower() for p in platforms if p.lower() != "tiktok"]
         stmt = stmt.where(func.lower(MediaCache.platform).in_(lower_platforms))
 
     clean_query = query.strip()
@@ -1049,6 +1050,13 @@ async def search_cached_music(
     found_rows: list[MediaCache] = []
     seen_ids: set[int] = set()
 
+    relevance_rank = case(
+        (MediaCache.data["title"].as_string().ilike(clean_query), 1),
+        (MediaCache.data["title"].as_string().ilike(f"{clean_query}%"), 2),
+        (MediaCache.data["title"].as_string().ilike(f"%{clean_query}%"), 3),
+        else_=4,
+    )
+
     # 1. Поиск: ВСЕ слова присутствуют (в названии или авторе)
     word_filters = [
         or_(
@@ -1057,7 +1065,11 @@ async def search_cached_music(
         )
         for w in words
     ]
-    and_stmt = stmt.where(and_(*word_filters)).order_by(MediaCache.created_at.desc()).limit(limit)
+    and_stmt = (
+        stmt.where(and_(*word_filters))
+        .order_by(relevance_rank, MediaCache.created_at.desc())
+        .limit(limit)
+    )
     res = await session.execute(and_stmt)
     for row in res.scalars().all():
         if row.media_id not in seen_ids:
@@ -1069,7 +1081,7 @@ async def search_cached_music(
         or_stmt = stmt.where(or_(*word_filters))
         if seen_ids:
             or_stmt = or_stmt.where(~MediaCache.media_id.in_(seen_ids))
-        or_stmt = or_stmt.order_by(MediaCache.created_at.desc()).limit(limit - len(found_rows))
+        or_stmt = or_stmt.order_by(relevance_rank, MediaCache.created_at.desc()).limit(limit - len(found_rows))
         res = await session.execute(or_stmt)
         for row in res.scalars().all():
             if row.media_id not in seen_ids:
