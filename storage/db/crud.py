@@ -1032,6 +1032,11 @@ async def search_cached_music(
             MediaCache.media_type == "audio",
             MediaCache.telegram_file_id.isnot(None),
             func.lower(MediaCache.platform) != "tiktok",
+            ~MediaCache.cache_key.like("%:lossless%"),
+            or_(
+                MediaCache.telegram_document_file_id.is_(None),
+                MediaCache.telegram_file_id != MediaCache.telegram_document_file_id,
+            ),
         )
     )
     if platforms:

@@ -87,21 +87,11 @@ async def _safe_answer_inline(
     cache_time: int = 3,
     is_personal: bool = True,
 ):
-    """Безопасная отправка ответа инлайна с перехватом TelegramBadRequest (DOCUMENT_INVALID и др.)"""
+    """Безопасная отправка ответа инлайна с перехватом TelegramBadRequest."""
     try:
         return await inline_query.answer(results, cache_time=cache_time, is_personal=is_personal)
     except TelegramBadRequest as e:
-        logger.warning(f"Failed to answer inline query with {len(results)} items ({e}). Attempting resilient fallback.")
-        if len(results) > 1:
-            for chunk_size in (15, 10, 5, 2, 1):
-                for i in range(0, len(results), chunk_size):
-                    candidate = results[i : i + chunk_size]
-                    try:
-                        return await inline_query.answer(
-                            candidate, cache_time=cache_time, is_personal=is_personal
-                        )
-                    except TelegramBadRequest:
-                        continue
+        logger.warning(f"Failed to answer inline query with {len(results)} items: {e}")
         try:
             return await inline_query.answer([], cache_time=1, is_personal=True)
         except Exception:
@@ -169,6 +159,8 @@ async def inline_main_handler(
         results = []
         tracks = await search_cached_music(db_session, music_query, limit=INLINE_SEARCH_LIMIT)
         for idx, track in enumerate(tracks):
+            if not track.telegram_file_id or ":lossless" in track.cache_key:
+                continue
             key_hash = hashlib.md5(track.cache_key.encode()).hexdigest()[:8]
             results.append(
                 InlineQueryResultCachedAudio(
