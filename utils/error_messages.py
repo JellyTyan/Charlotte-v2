@@ -34,8 +34,10 @@ def get_i18n_error_message(code: ErrorCode, i18n: TranslatorRunner) -> str | Non
         case ErrorCode.DOWNLOAD_CANCELLED:
             return i18n.get("error-download-canceled")
         case ErrorCode.PREVIEW_ONLY:
-            return i18n.get("error-preview-only")
+            msg = i18n.get("error-preview-only")
+            return msg if msg and not msg.startswith("error-") else "⚠️ Only a preview is available for this track."
         case ErrorCode.SEND_ERROR:
-            return None
+            msg = i18n.get("error-send-failed")
+            return msg if msg and not msg.startswith("error-") else (i18n.get("error-internal") or "❌ Failed to send media to Telegram.")
         case _:
-            return None
+            return i18n.get("error-internal") or "❌ An error occurred."

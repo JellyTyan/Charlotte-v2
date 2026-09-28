@@ -1,7 +1,7 @@
 import datetime
 from datetime import timezone
 from typing import Any
-from sqlalchemy import BigInteger, Boolean, Date, Integer, String, DateTime, JSON, Text
+from sqlalchemy import BigInteger, Boolean, Date, Integer, String, DateTime, JSON, Text, Index
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -56,7 +56,7 @@ class Statistics(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     event_type: Mapped[str] = mapped_column(String(32), nullable=False)
     event_time: Mapped[datetime.datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.datetime.now, nullable=False
+        DateTime(timezone=True), default=lambda: datetime.datetime.now(timezone.utc), nullable=False
     )
     status: Mapped[str] = mapped_column(String(32), nullable=True)
 
@@ -80,7 +80,7 @@ class Payment(Base):
     provider_payment_charge_id: Mapped[str] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="completed")
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.datetime.now, nullable=False
+        DateTime(timezone=True), default=lambda: datetime.datetime.now(timezone.utc), nullable=False
     )
 
 
@@ -108,3 +108,39 @@ class MediaCache(Base):
         default=lambda: datetime.datetime.now(timezone.utc),
         nullable=False
     )
+
+
+class UserSaves(Base):
+    __tablename__ = "user_saves"
+    __table_args__ = (
+        Index("ix_user_saves_user_label", "user_id", "label"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    label: Mapped[str] = mapped_column(String(128), nullable=False)
+    telegram_file_id: Mapped[str] = mapped_column(String, nullable=False)
+    media_type: Mapped[str] = mapped_column(String(16), nullable=False)  # 'video', 'photo', 'audio', 'gif'
+    title: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    caption: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_public: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    is_approved: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    uses_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(timezone.utc),
+        nullable=False
+    )
+
+
+class PublicSavesBan(Base):
+    __tablename__ = "public_saves_bans"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False, index=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(timezone.utc),
+        nullable=False
+    )
+

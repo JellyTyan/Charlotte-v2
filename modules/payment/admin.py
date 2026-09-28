@@ -6,7 +6,14 @@ from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
-from storage.db.crud import get_global_settings, update_global_settings, get_payment_by_charge_id, update_payment_status
+from storage.db.crud import (
+    get_global_settings,
+    update_global_settings,
+    get_payment_by_charge_id,
+    update_payment_status,
+    refund_donation_stars,
+    sync_historical_donations,
+)
 
 admin_router = Router(name="payment_admin")
 logger = logging.getLogger(__name__)
@@ -139,7 +146,30 @@ async def refund_command(message: Message, bot: Bot, db_session: AsyncSession):
 
         await update_payment_status(db_session, charge_id, "refunded")
 
-        await message.answer(f"✅ Refunded {payment.amount} {payment.currency} to user {payment.user_id}")
+        if payment.payload.startswith("support_") or payment.payload.startswith("sponsor_"):
+            new_stars, new_end = await refund_donation_stars(db_session, payment.user_id, payment.amount)
+            end_str = new_end.strftime("%d.%m.%Y") if new_end else "None"
+            await message.answer(
+                f"✅ Refunded {payment.amount} {payment.currency} to user <code>{payment.user_id}</code>.\n"
+                f"⭐ Remaining stars: <b>{new_stars}</b> | Premium ends: <b>{end_str}</b>",
+                parse_mode=ParseMode.HTML
+            )
+        else:
+            await message.answer(f"✅ Refunded {payment.amount} {payment.currency} to user {payment.user_id}")
     except Exception as e:
         logger.error(f"Refund failed: {e}")
         await message.answer(f"❌ Refund failed: {e}")
+
+
+@admin_router.message(Command("sync_donations"))
+async def sync_donations_command(message: Message, db_session: AsyncSession):
+    if message.from_user.id != settings.ADMIN_ID:
+        return
+
+    msg = await message.answer("🔄 Syncing historical donations...")
+    try:
+        synced_count = await sync_historical_donations(db_session)
+        await msg.edit_text(f"✅ Historical donations synced successfully!\nUpdated <b>{synced_count}</b> users.", parse_mode=ParseMode.HTML)
+    except Exception as e:
+        logger.error(f"Sync donations failed: {e}")
+        await msg.edit_text(f"❌ Sync failed: {e}")

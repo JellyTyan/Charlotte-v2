@@ -37,10 +37,18 @@ from storage.db.crud import (
     get_db_overview_stats,
     get_cache_counts_by_service,
     clear_all_media_cache,
-    grant_sponsorship
+    delete_media_cache,
+    grant_sponsorship,
+    get_pending_public_save,
+    moderate_public_save,
+    get_save_by_id,
+    get_user_settings,
+    ban_user_from_public_saves,
+    unban_user_from_public_saves,
+    list_public_saves_banned_users,
 )
 from states import NewsSpamGroup
-from utils import escape_markdown
+from utils import escape_markdown, escape_html
 from utils.effects import send_message_with_effect, EFFECT_FIREWORKS
 
 from aiogram import Router
@@ -57,6 +65,8 @@ class AdminStates(StatesGroup):
     waiting_for_user_id_ban = State()
     waiting_for_user_id_pardon = State()
     waiting_for_user_id_grant_month = State()
+    waiting_for_user_id_saves_ban = State()
+    waiting_for_user_id_saves_unban = State()
 
 # === Keyboards ===
 statistic_kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -89,8 +99,118 @@ panel_kb = InlineKeyboardMarkup(inline_keyboard=[
     ],
     [
         InlineKeyboardButton(text="🗑 Сбросить кеш БД", callback_data="admin_panel_clear_db_cache"),
+        InlineKeyboardButton(text="🧹 Модерация мемов", callback_data="admin_saves_next"),
+    ],
+    [
+        InlineKeyboardButton(text="🛑 Бан предложки мемов", callback_data="admin_panel_saves_bans"),
     ],
 ])
+
+
+async def show_pending_save(message: types.Message, db_session: AsyncSession) -> None:
+    save = await get_pending_public_save(db_session)
+    if not save:
+        await message.answer("🧹 Очередь публичных мемов пуста.")
+        return
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Одобрить", callback_data=f"admin_save:approve:{save.id}"),
+            InlineKeyboardButton(text="↩️ Оставить личным", callback_data=f"admin_save:reject:{save.id}"),
+        ],
+        [
+            InlineKeyboardButton(text="🚫 Заблокировать автора", callback_data=f"admin_save:ban_author:{save.id}"),
+        ],
+    ])
+    caption = f"<b>{escape_html(save.label)}</b>\n👤 Автор: <code>{save.user_id}</code>"
+    send = {
+        "photo": message.bot.send_photo,
+        "video": message.bot.send_video,
+        "audio": message.bot.send_audio,
+        "gif": message.bot.send_animation,
+    }.get(save.media_type, message.bot.send_document)
+    await send(message.chat.id, save.telegram_file_id, caption=caption, parse_mode=ParseMode.HTML, reply_markup=keyboard)
+
+
+@admin_router.message(Command("moderate_saves"))
+async def moderate_saves(message: types.Message, db_session: AsyncSession) -> None:
+    await show_pending_save(message, db_session)
+
+
+@admin_router.callback_query(lambda c: c.data == "admin_saves_next")
+async def moderate_saves_from_panel(callback: CallbackQuery, db_session: AsyncSession) -> None:
+    if callback.message:
+        await show_pending_save(callback.message, db_session)
+    await callback.answer()
+
+
+@admin_router.callback_query(lambda c: c.data and c.data.startswith("admin_save:"))
+async def moderate_save_callback(
+    callback: CallbackQuery,
+    db_session: AsyncSession,
+    _translator_hub: TranslatorHub,
+) -> None:
+    _, action, raw_id = callback.data.split(":")
+    save_id = int(raw_id)
+    save = await get_save_by_id(db_session, save_id)
+    if not save:
+        await callback.answer("Сохранёнка не найдена", show_alert=True)
+        return
+
+    owner_id = save.user_id
+    label = save.label or "Без названия"
+
+    # Действие: заблокировать автора от предложки мемов
+    if action == "ban_author":
+        await ban_user_from_public_saves(db_session, owner_id)
+        await moderate_public_save(db_session, save_id, approve=False)
+
+        if callback.bot and owner_id:
+            try:
+                settings = await get_user_settings(db_session, owner_id)
+                lang = settings.profile.language if (settings and settings.profile) else "ru"
+                user_i18n = _translator_hub.get_translator_by_locale(lang)
+                await callback.bot.send_message(
+                    chat_id=owner_id,
+                    text=user_i18n.saves.mod.banned(),
+                    parse_mode=ParseMode.HTML,
+                )
+            except Exception as e:
+                logger.warning(f"Could not notify user {owner_id} about public saves ban: {e}")
+
+        if callback.message:
+            await callback.message.edit_reply_markup(reply_markup=None)
+            await show_pending_save(callback.message, db_session)
+        await callback.answer(f"🚫 Автор {owner_id} заблокирован от предложки", show_alert=True)
+        return
+
+    is_approve = action == "approve"
+    moderated = await moderate_public_save(db_session, save_id, approve=is_approve)
+
+    if moderated and callback.bot and owner_id:
+        try:
+            settings = await get_user_settings(db_session, owner_id)
+            lang = settings.profile.language if (settings and settings.profile) else "ru"
+            user_i18n = _translator_hub.get_translator_by_locale(lang)
+
+            if is_approve:
+                notif_text = user_i18n.saves.mod.approved(label=escape_html(label))
+            else:
+                notif_text = user_i18n.saves.mod.rejected(label=escape_html(label))
+
+            await callback.bot.send_message(
+                chat_id=owner_id,
+                text=notif_text,
+                parse_mode=ParseMode.HTML,
+            )
+        except (TelegramForbiddenError, TelegramBadRequest) as e:
+            logger.warning(f"Could not send moderation notification to user {owner_id}: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error notifying user {owner_id} about moderation: {e}", exc_info=True)
+
+    if callback.message:
+        await callback.message.edit_reply_markup(reply_markup=None)
+        await show_pending_save(callback.message, db_session)
+    await callback.answer("Опубликовано" if moderated and is_approve else "Оставлено личным")
 
 # === Main page ===
 @admin_router.message(Command("admin_panel"))
@@ -522,6 +642,112 @@ async def process_pardon(message: types.Message, state: FSMContext, db_session: 
     )
     await state.clear()
 
+# === Public saves ban panel ===
+@admin_router.callback_query(lambda c: c.data == "admin_panel_saves_bans")
+async def admin_panel_saves_bans(callback: CallbackQuery, state: FSMContext):
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🚫 Заблокировать по ID", callback_data="saves_ban_user"),
+            InlineKeyboardButton(text="✅ Разблокировать по ID", callback_data="saves_unban_user"),
+        ],
+        [
+            InlineKeyboardButton(text="📋 Список заблокированных", callback_data="saves_ban_list"),
+            InlineKeyboardButton(text="🔙 Back", callback_data="admin_panel_back"),
+        ]
+    ])
+    text = "🛑 <b>Управление блокировкой предложки мемов</b>\n\nВыберите действие:"
+
+    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
+        if callback.bot is None:
+            return
+        await callback.bot.send_message(
+            callback.from_user.id,
+            text,
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb,
+        )
+    else:
+        await callback.message.edit_text(
+            text,
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb,
+        )
+    await callback.answer()
+
+
+@admin_router.callback_query(lambda c: c.data == "saves_ban_list")
+async def saves_ban_list(callback: CallbackQuery, db_session: AsyncSession):
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔙 Back", callback_data="admin_panel_saves_bans")]
+    ])
+    banned = await list_public_saves_banned_users(db_session)
+    if not banned:
+        text = "📋 Список заблокированных от предложки пуст."
+    else:
+        text = "🛑 <b>Заблокированные от предложки пользователи:</b>\n\n" + "\n".join(f"• <code>{uid}</code>" for uid in banned)
+
+    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
+        if callback.bot:
+            await callback.bot.send_message(callback.from_user.id, text, parse_mode=ParseMode.HTML, reply_markup=kb)
+    else:
+        await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+    await callback.answer()
+
+
+@admin_router.callback_query(lambda c: c.data == "saves_ban_user")
+async def handle_saves_ban_callback(callback: CallbackQuery, state: FSMContext):
+    text = "🆔 Введите Telegram ID пользователя для блокировки предложки:"
+    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
+        if callback.bot:
+            await callback.bot.send_message(callback.from_user.id, text)
+    else:
+        await callback.message.edit_text(text)
+    await state.set_state(AdminStates.waiting_for_user_id_saves_ban)
+    await callback.answer()
+
+
+@admin_router.message(AdminStates.waiting_for_user_id_saves_ban)
+async def process_saves_ban(message: types.Message, state: FSMContext, db_session: AsyncSession):
+    raw = (message.text or "").strip()
+    if not raw.isdigit():
+        await message.answer("❌ ID должен содержать только цифры. Попробуйте ещё раз:")
+        return
+    user_id = int(raw)
+    await ban_user_from_public_saves(db_session, user_id)
+    await state.clear()
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔙 К управлению предложкой", callback_data="admin_panel_saves_bans")]
+    ])
+    await message.answer(f"🚫 Пользователь <code>{user_id}</code> заблокирован от предложения мемов в публичную библиотеку!", parse_mode=ParseMode.HTML, reply_markup=kb)
+
+
+@admin_router.callback_query(lambda c: c.data == "saves_unban_user")
+async def handle_saves_unban_callback(callback: CallbackQuery, state: FSMContext):
+    text = "🆔 Введите Telegram ID пользователя для разблокировки предложки:"
+    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
+        if callback.bot:
+            await callback.bot.send_message(callback.from_user.id, text)
+    else:
+        await callback.message.edit_text(text)
+    await state.set_state(AdminStates.waiting_for_user_id_saves_unban)
+    await callback.answer()
+
+
+@admin_router.message(AdminStates.waiting_for_user_id_saves_unban)
+async def process_saves_unban(message: types.Message, state: FSMContext, db_session: AsyncSession):
+    raw = (message.text or "").strip()
+    if not raw.isdigit():
+        await message.answer("❌ ID должен содержать только цифры. Попробуйте ещё раз:")
+        return
+    user_id = int(raw)
+    await unban_user_from_public_saves(db_session, user_id)
+    await state.clear()
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔙 К управлению предложкой", callback_data="admin_panel_saves_bans")]
+    ])
+    await message.answer(f"✅ Пользователь <code>{user_id}</code> разблокирован и снова может предлагать мемы!", parse_mode=ParseMode.HTML, reply_markup=kb)
+
+
 # === Get logs button ===
 @admin_router.callback_query(lambda c: c.data == "admin_panel_get_logs")
 async def admin_panel_get_logs(callback: CallbackQuery, state: FSMContext):
@@ -746,31 +972,29 @@ async def toggle_service(callback: CallbackQuery, db_session: AsyncSession):
 
 # === Service Statistics ===
 @admin_router.callback_query(lambda c: c.data == "statistic_service_usage")
-async def admin_panel_service_usage(callback: CallbackQuery, state: FSMContext):
+async def admin_panel_service_usage(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession):
 
-    from storage.db import database_manager
     from sqlalchemy import select, func, case
     from storage.db.models import Statistics
     import datetime
 
-    async with database_manager.async_session() as session:
-        since = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)
+    since = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)
 
-        result = await session.execute(
-            select(
-                Statistics.service_name,
-                func.count(Statistics.event_id).label('total'),
-                func.sum(case((Statistics.status == 'success', 1), else_=0)).label('success'),
-                func.sum(case((Statistics.status == 'failed_download', 1), else_=0)).label('failed'),
-                func.count(func.distinct(Statistics.user_id)).label('unique_users')
-            )
-            .where(Statistics.event_time >= since)
-            .group_by(Statistics.service_name)
-            .order_by(func.count(Statistics.event_id).desc())
+    result = await db_session.execute(
+        select(
+            Statistics.service_name,
+            func.count(Statistics.event_id).label('total'),
+            func.sum(case((Statistics.status == 'success', 1), else_=0)).label('success'),
+            func.sum(case((Statistics.status == 'failed_download', 1), else_=0)).label('failed'),
+            func.count(func.distinct(Statistics.user_id)).label('unique_users')
         )
+        .where(Statistics.event_time >= since)
+        .group_by(Statistics.service_name)
+        .order_by(func.count(Statistics.event_id).desc())
+    )
 
-        stats = result.all()
-        cache_counts = await get_cache_counts_by_service(session)
+    stats = result.all()
+    cache_counts = await get_cache_counts_by_service(db_session)
 
     text = "📊 <b>Service Usage (Last 30 days)</b>\n\n"
     total_all = 0
@@ -836,21 +1060,19 @@ async def admin_panel_clean_stats(callback: CallbackQuery, state: FSMContext):
 
 
 @admin_router.callback_query(lambda c: c.data.startswith("clean_stats_"))
-async def admin_clean_stats_confirm(callback: CallbackQuery, state: FSMContext):
+async def admin_clean_stats_confirm(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession):
     days = int(callback.data.split("_")[-1])
 
-    from storage.db import database_manager
     from sqlalchemy import delete
     from storage.db.models import Statistics
     import datetime
 
-    async with database_manager.async_session() as session:
-        cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days)
-        result = await session.execute(
-            delete(Statistics).where(Statistics.event_time < cutoff)
-        )
-        await session.commit()
-        deleted = result.rowcount
+    cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days)
+    result = await db_session.execute(
+        delete(Statistics).where(Statistics.event_time < cutoff)
+    )
+    await db_session.commit()
+    deleted = result.rowcount
 
     text = f"✅ Cleaned {deleted} records older than {days} days"
 
@@ -875,4 +1097,57 @@ async def admin_panel_clear_db_cache_handler(callback: CallbackQuery, state: FSM
         await callback.bot.send_message(callback.from_user.id, text, parse_mode=ParseMode.HTML, reply_markup=panel_kb)
     else:
         await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=panel_kb)
+    await callback.answer()
+
+
+@admin_router.callback_query(lambda c: c.data.startswith("purge_cache:"))
+async def admin_purge_cache_handler(callback: CallbackQuery, db_session: AsyncSession):
+    token = callback.data.split("purge_cache:", 1)[1]
+    from utils.message_context import resolve_purge_key
+    cache_key = await resolve_purge_key(token)
+    if not cache_key:
+        await callback.answer("Не удалось определить ключ кэша (возможно, устарел).", show_alert=True)
+        return
+
+    # 1. Удаляем из PostgreSQL
+    await delete_media_cache(db_session, cache_key)
+
+    # 2. Удаляем из Redis (оба инстанса)
+    from storage.cache.redis_client import redis_client, media_redis_client, cache_delete
+    await cache_delete(cache_key)
+    await cache_delete(f"mediacache:{cache_key}")
+    if redis_client:
+        try:
+            await redis_client.delete(cache_key)
+            await redis_client.delete(f"mediacache:{cache_key}")
+        except Exception:
+            pass
+    if media_redis_client:
+        try:
+            await media_redis_client.delete(cache_key)
+            await media_redis_client.delete(f"mediacache:{cache_key}")
+        except Exception:
+            pass
+
+    await callback.answer(f"Кэш для {cache_key} удалён!", show_alert=True)
+
+    # 3. Обновляем клавиатуру, помечая кнопку как выполненную
+    if callback.message and isinstance(callback.message, types.Message) and callback.message.reply_markup:
+        new_keyboard = []
+        for row in callback.message.reply_markup.inline_keyboard:
+            new_row = []
+            for btn in row:
+                if btn.callback_data and btn.callback_data.startswith("purge_cache:"):
+                    new_row.append(InlineKeyboardButton(text="✅ Кэш очищен", callback_data="noop"))
+                else:
+                    new_row.append(btn)
+            new_keyboard.append(new_row)
+        try:
+            await callback.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(inline_keyboard=new_keyboard))
+        except Exception:
+            pass
+
+
+@admin_router.callback_query(lambda c: c.data == "noop")
+async def admin_noop_handler(callback: CallbackQuery):
     await callback.answer()

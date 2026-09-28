@@ -1,10 +1,10 @@
-settings-welcome = Прывітанне! 👋 Тут ты можаш наладзіць усё пад сябе. Адчувай сябе як дома!
+settings-welcome = Прывітанне! Тут можна ўсё наладзіць пад сябе, не саромейся.
 settings-back = 🔙 Назад
 settings-title = Налады
-settings-no-permission = Оў, у цябе няма правоў змяняць гэтыя налады!
-settings-saved = Супер! Налады абноўлены! ✨
-settings-no-allowed-groups = Гэта налада недаступная для груп, прабач!
-settings-no-allowed-dm = Гэта налада не для асабістых, прабач!
+settings-no-permission = Ой, у цябе няма правоў змяняць гэтыя налады.
+settings-saved = Налады абнавіла! ✨
+settings-no-allowed-groups = Гэтая налада недаступная ў групах, прабач.
+settings-no-allowed-dm = Гэтую наладу нельга змяняць у асабістых паведамленнях.
 
 btn-language = Мова
 btn-title-language = Апісанні
@@ -23,16 +23,16 @@ btn-send-reactions = { $is_enabled ->
     *[false] ⚪ Рэакцыі
 }
 btn-negativity = { $is_enabled ->
-    [true] 🟢 Негатыўчык
-    *[false] ⚪ Негатыўчык
+    [true] 🟢 Зухаватыя
+    *[false] ⚪ Зухаватыя
 }
 btn-auto-translate = { $is_enabled ->
-    [true] 🟢 Аўтапераклад
-    *[false] ⚪ Аўтапераклад
+    [true] 🟢 Пераклад
+    *[false] ⚪ Пераклад
 }
 btn-auto-caption = { $is_enabled ->
-    [true] 🟢 Апісанне
-    *[false] ⚪ Апісанне
+    [true] 🟢 Апісанні
+    *[false] ⚪ Апісанні
 }
 btn-notifications = { $is_enabled ->
     [true] 🟢 Апавяшчэнні
@@ -47,68 +47,67 @@ btn-allow-nsfw = { $is_enabled ->
     *[false] ⚪ NSFW
 }
 
-desc-send-raw = Буду кідаць медыя файламі для дасягнення высокай якасці! 🎨
-desc-send-music-covers = Прымацую прыгожую вокладку да кожнага трэка. 🎵
-desc-send-reactions = Буду рэагаваць эмодзі, каб ты бачыў(ла) працэс! ⚡
-desc-negativity-mode = Буду выкарыстоўваць таксічныя эмодзі пры рэакцыях! 😈
-desc-send-notifications = Выключы, калі хочаш атрымліваць медыя без гуку апавяшчэння. 🔕
-desc-auto-caption = Я сама праверу і дадам апісанне да медыя. 📝
-desc-auto-translate-titles = Перакладу апісанні відэа на тваю мову! 🌍
-desc-allow-playlists = Спампую цэлыя плэйлісты (асцярожна з гэтым!). 📂
-desc-allow-nsfw = Дазволіць NSFW кантэнт у гэтым чаце. 🔞
-desc-lossless-mode = Я паспрабую знайсці для вас песні ў Hi-Res! Але я не абяцаю, што знайду, і ці будзе гэта правільная. 🎧
+desc-send-raw = Буду адпраўляць медыя файламі — так якасць найвышэйшая.
+desc-send-music-covers = Далучу вокладку да кожнага трэка.
+desc-send-reactions = Буду ставіць эмодзі-рэакцыі, каб ты бачыў(-ла) працэс.
+desc-negativity-mode = Буду выкарыстоўваць крыху больш зухаватыя эмодзі ў рэакцыях.
+desc-send-notifications = Выключы, калі хочаш атрымліваць медыя без гуку.
+desc-auto-caption = Сама праверу і дадам апісанне да медыя.
+desc-auto-translate-titles = Перакладу апісанні відэа на тваю мову.
+desc-allow-playlists = Спампую цэлыя плэйлісты — асцярожна з гэтым.
+desc-allow-nsfw = Дазволіць NSFW-кантэнт у гэтым чаце.
+desc-lossless-mode = Паспрабую знайсці Hi-Res версію песні. Не абяцаю, што атрымаецца.
 
 setting-status-changed = { $is_enabled ->
-    [true] Ура! Налада *{ $setting_name }* уключана!
-    *[false] Зразумела! Налада *{ $setting_name }* выключана!
+    [true] Уключыла *{ $setting_name }*!
+    *[false] Выключыла *{ $setting_name }*.
 }
 
-pick-language = Выбірай мову! 🌍
-pick-title-language = Абяры мову для апісанняў!
-language-changed = Клас! Цяпер я размаўляю на *{ $language }*!
-language-updated = Мова абноўлена!
-title-language-changed = Цяпер апісанні будуць на *{ $language }*!
-title-language-updated = Мова апісанняў абноўлена!
-setting-updated = Гатова! Абнавіла.
-invalid-setting = Ой, нейкая дзіўная налада...
-error-updating = Ох, не атрымалася абнавіць. Паспрабуем яшчэ раз?
-setting-changed = Зроблена! *{ $setting }* цяпер { $status }!
+pick-language = Абяры мову 🌍
+pick-title-language = Абяры мову для апісанняў
+language-changed = Цяпер размаўляю на такой мове: *{ $language }*!
+language-updated = Мову абнавіла.
+title-language-changed = Цяпер апісанні будуць на такой мове: *{ $language }*.
+title-language-updated = Мову апісанняў абнавіла.
+setting-updated = Гатова, абнавіла.
+invalid-setting = Хм, не ведаю такой налады.
+error-updating = Не атрымалася абнавіць, прабач. Паспрабуем яшчэ раз?
 enabled = уключана
 disabled = выключана
 enable = Уключыць
 disable = Выключыць
 back = Назад
-service-status-changed = Сэрвіс { $service } цяпер { $status }!
+service-status-changed = Сэрвіс { $service } цяпер { $status }.
 blocked = заблакаваны
 unblocked = разблакаваны
-settings-not-found = Хм, не магу знайсці налады!
-no-permission-service = Табе нельга чапаць гэтыя налады!
-error-service-status = Не атрымалася абнавіць статус сэрвісу. :(
+settings-not-found = Не магу знайсці гэтыя налады.
+no-permission-service = Табе нельга змяняць гэтыя налады.
+error-service-status = Не атрымалася абнавіць статус сэрвісу, прабач.
 current-status = Бягучы статус: { $status }
 
-btn-configure-services = ⚙️ Configure Services
-settings-select-service = Select a service to configure:
-settings-service-title = ⚙️ **{ $name } Settings**
+btn-configure-services = ⚙️ Налады сэрвісаў
+settings-select-service = Абяры сэрвіс для налады:
+settings-service-title = **Налады { $name }**
 btn-lossless = { $is_enabled ->
     [true] 🟢 LOSSLESS
     *[false] ⚪ LOSSLESS
 }
 btn-service-enabled = { $is_enabled ->
-    [true] 🟢 Сервіс
-    *[false] ⚪ Сервіс
+    [true] 🟢 Сэрвіс
+    *[false] ⚪ Сэрвіс
 }
 
 btn-news-spam = { $is_enabled ->
     [true] 🟢 Рассылка
     *[false] ⚪ Рассылка
 }
-desc-news-spam = Дазволіць боту дасылаць вам навіны і абнаўленні! 📰
+desc-news-spam = Дазволіць дасылаць табе навіны і абнаўленні.
 
 btn-bot-sign = { $is_enabled ->
     [true] 🟢 Bot Ad 🧡
     *[false] ⚪ Bot Ad 🧡
 }
-desc-bot-sign = Дадаваць рэкламны подпіс «Charlotte 🧡» да медыя. Адключэнне цалкам бясплатнае! ✨
+desc-bot-sign = Дадаваць подпіс «Charlotte 🧡» да медыя. Адключыць можна бясплатна.
 
 btn-simple-mode = { $is_enabled ->
     [true] 🟢 Просты рэжым
@@ -116,16 +115,40 @@ btn-simple-mode = { $is_enabled ->
 }
 desc-simple =
     Просты інтэрфейс YouTube:
-    Укл — толькі дзве кнопкі (Відэа ці Аўдыё), спампоўка ў максімальнай якасці да 100 МБ (да 1 ГБ для Спонсараў).
-    Выкл — выбар дазволу, абрэзка відэа (для Спонсараў).
+    Уключана — толькі дзве кнопкі (Відэа ці Аўдыя), спампоўванне ў найлепшай якасці да 100 МБ (да 1 ГБ для Спансараў).
+    Выключана — выбар раздзяляльнасці, абразанне відэа (для Спансараў).
 
 btn-youtube-ui-mode = Інтэрфейс YouTube
 yt-ui-mode-simple = Просты
 yt-ui-mode-balance = Збалансаваны
 yt-ui-mode-advanced = Пашыраны
 desc-youtube-ui-mode =
-    Выберыце стыль інтэрфейсу для спампоўвання з YouTube:
-    
-    • Просты — 2 кнопкі (Відэа / Аўдыё) для спампоўвання ў 1 клік.
-    • Збалансаваны — кнопкі лепшых якасцей у 1 клік + доступ да пашыраных налад.
-    • Пашыраны — выбар якасці чэкбоксамі, аўдыёдарожкі і абрэзкі відэа (Trim).
+    Абяры стыль інтэрфейсу для спампоўвання з YouTube:
+
+    • Просты — 2 кнопкі (Відэа / Аўдыя), спампоўванне ў адзін клік.
+    • Збалансаваны — кнопкі найлепшых якасцяў у адзін клік + доступ да пашыраных налад.
+    • Пашыраны — выбар любой якасці, аўдыядарожкі і абразання відэа (Trim).
+
+btn-experimental = 🧪 Новыя функцыі
+desc-experimental-features =
+    Эксперыментальныя функцыі працуюць толькі ў новых афіцыйных кліентах Telegram і могуць паводзіць сябе нестабільна ў старых або старонніх.
+
+btn-ephemeral-messages = { $is_enabled ->
+    [true] 🟢 Эфемерныя паведамленні
+    *[false] ⚪ Эфемерныя паведамленні
+}
+desc-ephemeral-messages = Адпраўляць службовыя паведамленні ў групах як эфемерныя, бачныя толькі табе. Калі выключана — дасылаю звычайныя паведамленні з аўтавыдаленнем.
+btn-chat-banned-users = 🚫 Бан-ліст чата
+desc-chat-banned-users = Кіраванне карыстальнікамі, заблакаванымі ў гэтым чаце.
+cban-usage = Пазнач ID карыстальніка або адкажы на яго паведамленне: <code>/cban &lt;user_id&gt;</code>
+cban-cannot-ban-self = Нельга заблакаваць самога сябе.
+cban-cannot-ban-admin = Нельга заблакаваць адміністратара чата.
+cban-cannot-ban-bot = Нельга заблакаваць бота.
+cban-success = Карыстальнік <code>{ $user_id }</code> заблакаваны ў гэтым чаце.
+cban-already-banned = Карыстальнік <code>{ $user_id }</code> ужо заблакаваны ў гэтым чаце.
+cunban-usage = Пазнач ID карыстальніка або адкажы на яго паведамленне: <code>/cunban &lt;user_id&gt;</code>
+cunban-not-banned = Карыстальнік <code>{ $user_id }</code> не заблакаваны ў гэтым чаце.
+cunban-success = Карыстальнік <code>{ $user_id }</code> разблакаваны ў гэтым чаце.
+cbanlist-empty = У гэтым чаце няма заблакаваных карыстальнікаў.
+cbanlist-title = <b>Бан-ліст чата:</b>
+btn-unban-user = ❌ Разблакаваць { $user_id }

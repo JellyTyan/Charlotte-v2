@@ -41,9 +41,7 @@ async def handle_close_error(callback: CallbackQuery, i18n: TranslatorRunner | N
                 return
 
     if callback.message:
-        try:
-            await callback.message.delete()
-        except TelegramBadRequest as e:
-            logger.debug(f"Could not delete error message: {e}")
+        from utils.ephemeral import delete_smart_message
+        await delete_smart_message(callback.message)
 
     await callback.answer()

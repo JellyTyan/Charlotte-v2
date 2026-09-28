@@ -18,7 +18,7 @@ from models.media_cache import MediaCacheDTO, CacheMetadata
 from senders.media_sender import MediaSender
 from storage.db.crud import get_chat_settings, get_user_settings, get_media_cache, upsert_media_cache
 from tasks.task_manager import task_manager
-from utils import delete_files, handle_lossless_response
+from utils import delete_files, handle_lossless_response, extract_url
 from utils.statistics_helper import log_download_event
 
 deezer_router = Router(name="deezer")
@@ -58,7 +58,7 @@ async def process_track(
     http_client: httpx.AsyncClient,
     lossless_mode: bool,
     original_url: str,
-    chat_id: int,
+    user_id: int,
 ):
     isrc = track_meta["isrc"]
     cache_key_lossless = f"{isrc}:lossless"
@@ -98,9 +98,9 @@ async def process_track(
     if current_lossless:
         try:
             payload = {"isrc": isrc, "search_query": search_query, "lossless": True}
-            async with ChatActionSender.record_voice(bot=message.bot, chat_id=chat_id):
+            async with ChatActionSender.record_voice(bot=message.bot, chat_id=message.chat.id):
                 track_data = await task_manager.run_download(
-                    user_id=chat_id,
+                    user_id=user_id,
                     url=original_url,
                     coro=fetch_core_download(http_client, payload, original_url),
                 )
@@ -125,9 +125,9 @@ async def process_track(
             return True
 
         payload = {"isrc": isrc, "search_query": search_query, "lossless": False}
-        async with ChatActionSender.record_voice(bot=message.bot, chat_id=chat_id):
+        async with ChatActionSender.record_voice(bot=message.bot, chat_id=message.chat.id):
             track_data = await task_manager.run_download(
-                user_id=chat_id,
+                user_id=user_id,
                 url=original_url,
                 coro=fetch_core_download(http_client, payload, original_url),
             )
@@ -169,8 +169,9 @@ async def deezer_handler(
     if not message.text or not message.from_user:
         return
 
-    match = re.search(DEEZER_REGEX, message.text)
-    url = match.group(0) if match else message.text
+    url = extract_url(DEEZER_REGEX, message.text)
+    if not url:
+        return
     chat_id = message.chat.id
     user_id = message.from_user.id
 
@@ -189,11 +190,11 @@ async def deezer_handler(
 
     if metadata["type"] == "song":
         await process_track(
-            metadata, message, db_session, http_client, lossless_mode, url, chat_id
+            metadata, message, db_session, http_client, lossless_mode, url, user_id
         )
 
     elif metadata["type"] in ["album", "playlist"]:
-        if chat_id < 0 and not settings.profile.allow_playlists:
+        if chat_id < 0 and settings and not settings.profile.allow_playlists:
             raise BotError(
                 code=ErrorCode.NOT_ALLOWED,
                 message="Playlists are not allowed in this chat",
@@ -251,7 +252,7 @@ async def deezer_handler(
                     http_client,
                     lossless_mode,
                     track_meta.get("url", url),
-                    chat_id,
+                    user_id,
                 )
                 success_count += 1
             except BotError as e:

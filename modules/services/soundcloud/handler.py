@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import re
 from pathlib import Path
@@ -10,7 +11,7 @@ from aiogram.utils.chat_action import ChatActionSender
 from fluentogram import TranslatorRunner
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.config import Config
+from core.config import Config, settings
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.service_list import Services
@@ -18,7 +19,7 @@ from models.media_cache import MediaCacheDTO, CacheMetadata
 from senders.media_sender import MediaSender
 from storage.db.crud import get_chat_settings, get_user_settings, get_media_cache, upsert_media_cache
 from tasks.task_manager import task_manager
-from utils import delete_files, handle_lossless_response
+from utils import delete_files, handle_lossless_response, extract_url
 from utils.statistics_helper import log_download_event
 
 soundcloud_router = Router(name="soundcloud")
@@ -39,7 +40,7 @@ async def cache_check(session: AsyncSession, cache_key: str) -> MediaContent | N
         )
     return None
 
-SOUNDCLOUD_REGEX = r"https?:\/\/(?:on\.soundcloud\.com\/[a-zA-Z0-9]+|soundcloud\.com\/[^\/\s]+\/(?:sets\/[^\/\s]+|[^\/\?\s]+))(?:\?\S+)?"
+SOUNDCLOUD_REGEX = r"https?:\/\/(?:on\.soundcloud\.com\/[a-zA-Z0-9]+|soundcloud\.app\.goo\.gl\/[a-zA-Z0-9]+|(?:m\.|www\.)?soundcloud\.com\/[^\/\s]+\/(?:sets\/[^\/\s]+|[^\/\?\s]+))(?:\?\S+)?"
 
 
 async def fetch_core_download(
@@ -57,7 +58,7 @@ async def process_track(
     db_session: AsyncSession,
     http_client: httpx.AsyncClient,
     original_url: str,
-    chat_id: int,
+    user_id: int,
 ):
     isrc = track_meta["isrc"]
     cache_key = f"{isrc}:default"
@@ -75,12 +76,21 @@ async def process_track(
         )
         return True
 
-    payload = {"isrc": isrc, "search_query": f"{track_meta['artist']} - {track_meta['title']}", "lossless": False}
-    async with ChatActionSender.record_voice(bot=message.bot, chat_id=chat_id):
-        track_data = await task_manager.run_download(
-            user_id=chat_id,
+    payload = {
+        "isrc": isrc,
+        "search_query": f"{track_meta['artist']} - {track_meta['title']}",
+        "lossless": False,
+        "user_id": user_id,
+        "url": original_url,
+    }
+    async with ChatActionSender.record_voice(bot=message.bot, chat_id=message.chat.id):
+        track_data = await task_manager.run_media_download(
+            user_id=user_id,
             url=original_url,
-            coro=fetch_core_download(http_client, payload, original_url),
+            service=Services.SOUNDCLOUD,
+            payload=payload,
+            http_client=http_client,
+            base_url=settings.LOSSLESS_CORE_URL,
         )
 
     media_content = MediaContent(
@@ -115,8 +125,9 @@ async def soundcloud_handler(
     if not message.text or not message.from_user:
         return
 
-    match = re.search(SOUNDCLOUD_REGEX, message.text)
-    url = match.group(0) if match else message.text
+    url = extract_url(SOUNDCLOUD_REGEX, message.text)
+    if not url:
+        return
     chat_id = message.chat.id
     user_id = message.from_user.id
 
@@ -134,11 +145,11 @@ async def soundcloud_handler(
 
     if metadata["type"] == "song":
         await process_track(
-            metadata, message, db_session, http_client, url, chat_id
+            metadata, message, db_session, http_client, url, user_id
         )
 
     elif metadata["type"] in ["album", "playlist"]:
-        if chat_id < 0 and not settings.profile.allow_playlists:
+        if chat_id < 0 and settings and not settings.profile.allow_playlists:
             raise BotError(
                 code=ErrorCode.NOT_ALLOWED,
                 message="Playlists are not allowed in this chat",
@@ -195,7 +206,7 @@ async def soundcloud_handler(
                     db_session,
                     http_client,
                     track_meta.get("url", url),
-                    chat_id,
+                    user_id,
                 )
                 success_count += 1
             except BotError as e:

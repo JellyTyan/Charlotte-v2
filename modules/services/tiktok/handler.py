@@ -3,21 +3,18 @@ import logging
 import re
 from pathlib import Path
 
-
 import httpx
 from aiogram import F, Router
 from aiogram.types import Message
 from aiogram.utils.chat_action import ChatActionSender
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.service_list import Services
 from senders.media_sender import MediaSender
 from storage.db.crud import get_media_cache
 from tasks.task_manager import task_manager
-from utils import escape_html, truncate_string, build_caption, format_author_link
-from utils.statistics_helper import log_download_event
+from utils import build_caption, escape_html, format_author_link, extract_url
 
 tiktok_router = Router(name="tiktok")
 
@@ -27,9 +24,21 @@ TIKTOK_REGEX = r"https?://(?:www\.)?(?:tiktok\.com/\S+|(?:vm|vt)\.tiktok\.com/\S
 
 @tiktok_router.message(F.text.regexp(TIKTOK_REGEX))
 async def tiktok_handler(message: Message, db_session: AsyncSession, http_client: httpx.AsyncClient):
-    match = re.search(TIKTOK_REGEX, message.text)
-    url = match.group(0) if match else message.text
+    if not message.text or not message.from_user:
+        return
+
+    url = extract_url(TIKTOK_REGEX, message.text)
+    if not url:
+        return
+    url = url.split("#")[0]
     user_id = message.from_user.id
+
+    if task_manager.is_user_busy(user_id):
+        from utils.ephemeral import notify_already_downloading_if_ephemeral
+        await notify_already_downloading_if_ephemeral(message, user_id)
+
+    from utils.effects import react_safe
+    await react_safe(message, "👀")
 
     async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=message.chat.id):
         send_manager = MediaSender()

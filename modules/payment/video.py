@@ -32,7 +32,7 @@ async def video_pre_checkout(pre_checkout_query: PreCheckoutQuery):
     parts = payload.split("_")
     if len(parts) >= 4:
         url_hash = parts[1]
-        url = get_url(url_hash)
+        url = await get_url(url_hash)
         if not url:
             await pre_checkout_query.answer(ok=False, error_message="Link expired. Please request the download again.")
             return
@@ -82,7 +82,7 @@ async def video_successful_payment(message: Message, bot: Bot, db_session: Async
             await update_payment_status(db_session, payment.telegram_payment_charge_id, "refunded")
             return
 
-        url = get_url(url_hash)
+        url = await get_url(url_hash)
         if not url:
             logger.error(f"URL expired for hash: {url_hash}")
             await message.answer("⚠️ Error: Link expired. Please try again.")

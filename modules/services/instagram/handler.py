@@ -16,7 +16,7 @@ from models.service_list import Services
 from senders.media_sender import MediaSender
 from storage.db.crud import get_media_cache, check_if_user_premium
 from tasks.task_manager import task_manager
-from utils import truncate_string, escape_html, build_caption, format_author_link
+from utils import truncate_string, escape_html, build_caption, format_author_link, extract_url
 from utils.statistics_helper import log_download_event
 
 insta_router = Router(name="instagram")
@@ -26,10 +26,22 @@ logger = logging.getLogger(__name__)
 INSTAGRAM_REGEX = r"https?://(?:www\.)?instagram\.com/(?:p|reels?|tv)/[\w-]+/?"
 
 @insta_router.message(F.text.regexp(INSTAGRAM_REGEX))
-async def instagram_handler(message: Message, db_session: AsyncSession, http_client: httpx.AsyncClient,):
-    match = re.search(INSTAGRAM_REGEX, message.text)
-    url = match.group(0) if match else message.text
+async def instagram_handler(message: Message, db_session: AsyncSession, http_client: httpx.AsyncClient):
+    if not message.text or not message.from_user:
+        return
+
+    url = extract_url(INSTAGRAM_REGEX, message.text)
+    if not url:
+        return
     user_id = message.from_user.id
+
+    from tasks.task_manager import task_manager
+    if task_manager.is_user_busy(user_id):
+        from utils.ephemeral import notify_already_downloading_if_ephemeral
+        await notify_already_downloading_if_ephemeral(message, user_id)
+
+    from utils.effects import react_safe
+    await react_safe(message, "👀")
 
     sponsor = await check_if_user_premium(db_session, user_id)
 

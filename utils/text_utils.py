@@ -224,3 +224,23 @@ async def translate_text(text: str, target_language: str = "en") -> str:
     except Exception as e:
         logger.error(f"Failed to translate text: {e}")
         return text
+
+
+TRAILING_URL_PUNCTUATION = ".,!?:;)\"']}>"
+
+
+def extract_url(pattern: str | re.Pattern[str], text: str | None) -> str | None:
+    """
+    Safely extracts a clean URL matching the pattern from the given text.
+    Strips trailing sentence punctuation, quotes, parentheses, and whitespace.
+    Returns None if text is empty or no match is found.
+    """
+    if not text:
+        return None
+    match = re.search(pattern, text)
+    if not match:
+        return None
+    url = match.group(0).strip()
+    url = url.rstrip(TRAILING_URL_PUNCTUATION)
+    return url or None
+

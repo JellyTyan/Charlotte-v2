@@ -127,6 +127,12 @@ def build_main_keyboard(settings, i18n: TranslatorRunner, is_group: bool = False
             ),
         ],
         [
+            InlineKeyboardButton(
+                text=i18n.btn.bot.sign(is_enabled='true' if settings.profile.bot_sign else 'false'),
+                callback_data="menu_profile_bot_sign"
+            )
+        ],
+        [
             InlineKeyboardButton(text=i18n.btn.configure.services(), callback_data="settings_services")
         ]
     ]
@@ -142,13 +148,35 @@ def build_main_keyboard(settings, i18n: TranslatorRunner, is_group: bool = False
                 callback_data="menu_profile_allow_nsfw"
             )
         ])
-    else:
-        keyboards.insert(-1, [
-            InlineKeyboardButton(
-                text=i18n.btn.bot.sign(is_enabled='true' if settings.profile.bot_sign else 'false'),
-                callback_data="menu_profile_bot_sign"
-            )
+        ban_btn_text = i18n.get("btn-chat-banned-users") or "🚫 Ban list"
+        keyboards.append([
+            InlineKeyboardButton(text=ban_btn_text, callback_data="chat_banned_users_menu")
         ])
+        close_text = i18n.get("btn-close") or "✕ Close"
+        keyboards.append([
+            InlineKeyboardButton(text=close_text, callback_data="close_settings")
+        ])
+    else:
+        keyboards.append([
+            InlineKeyboardButton(text=f"{i18n.get('btn-experimental')}", callback_data="settings_experimental")
+        ])
+    return InlineKeyboardMarkup(inline_keyboard=keyboards)
+
+def build_experimental_keyboard(settings: UserSettingsJson, i18n: TranslatorRunner) -> InlineKeyboardMarkup:
+    exp = getattr(settings, "experimental", None)
+    ephemeral_enabled = exp.ephemeral_messages if exp else False
+    btn_text = i18n.get("btn-ephemeral-messages", is_enabled="true" if ephemeral_enabled else "false")
+    keyboards = [
+        [
+            InlineKeyboardButton(
+                text=btn_text,
+                callback_data="menu_experimental_ephemeral_messages"
+            )
+        ],
+        [
+            InlineKeyboardButton(text=f"{i18n.settings.back()}", callback_data="settings_main")
+        ]
+    ]
     return InlineKeyboardMarkup(inline_keyboard=keyboards)
 
 def build_services_keyboard(i18n: TranslatorRunner) -> InlineKeyboardMarkup:
@@ -246,11 +274,18 @@ async def safe_edit_text(callback: CallbackQuery, text: str, reply_markup: Inlin
                 reply_markup=reply_markup
             )
         else:
-            await callback.message.edit_text(
-                text,
-                parse_mode=parse_mode,
-                reply_markup=reply_markup
-            )
+            if getattr(callback.message, "ephemeral_message_id", None) is not None:
+                await callback.message.edit_ephemeral_text(
+                    text,
+                    parse_mode=parse_mode,
+                    reply_markup=reply_markup
+                )
+            else:
+                await callback.message.edit_text(
+                    text,
+                    parse_mode=parse_mode,
+                    reply_markup=reply_markup
+                )
     except TelegramRetryAfter as e:
         logger.warning(f"Flood control exceeded for user {callback.from_user.id}: retry after {e.retry_after}")
         try:
@@ -274,7 +309,8 @@ async def settings_command(message: Message, i18n: TranslatorRunner, db_session:
     if chat.type in ("group", "supergroup"):
         is_admin = await check_if_admin_or_owner(message.bot, chat.id, message.from_user.id)
         if not is_admin:
-            await message.answer(i18n.settings.no.permission())
+            from utils.ephemeral import send_smart_message
+            await send_smart_message(message, i18n.settings.no.permission(), for_user_id=message.from_user.id)
             return
         admins = await message.bot.get_chat_administrators(chat.id)
         owner_id = next((admin.user.id for admin in admins if admin.status == "creator"), message.from_user.id)
@@ -283,12 +319,23 @@ async def settings_command(message: Message, i18n: TranslatorRunner, db_session:
         await create_user(db_session, message.from_user.id)
 
     settings, is_group = await get_settings_obj(db_session, chat.id, message.from_user.id)
-    sent = await message.answer(
+    from utils.ephemeral import send_smart_message
+    sent = await send_smart_message(
+        message,
         i18n.settings.welcome(),
+        for_user_id=message.from_user.id,
+        timeout=None,
         reply_markup=build_main_keyboard(settings, i18n, is_group)
     )
-    if is_group and sent:
+    if is_group and sent and getattr(sent, "ephemeral_message_id", None) is None:
         await register_message_owner(sent, message.from_user.id)
+
+@router.callback_query(lambda c: c.data == "close_settings")
+async def close_settings_callback(callback: CallbackQuery):
+    if callback.message:
+        from utils.ephemeral import delete_smart_message
+        await delete_smart_message(callback.message)
+    await callback.answer()
 
 # Comeback
 @router.callback_query(lambda c: c.data == "settings_main")
@@ -305,6 +352,75 @@ async def settings_services_menu(callback: CallbackQuery, i18n: TranslatorRunner
     text = i18n.settings.select.service()
     await safe_edit_text(callback, text, build_services_keyboard(i18n))
     await callback.answer()
+
+# Experimental settings: choosing one
+@router.callback_query(lambda c: c.data == "settings_experimental")
+async def settings_experimental_menu(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
+    if callback.message is None: return
+    settings, is_group = await get_settings_obj(db_session, callback.message.chat.id, callback.from_user.id)
+    if is_group or not isinstance(settings, UserSettingsJson):
+        await callback.answer(i18n.get("settings-no-allowed-groups"), show_alert=True)
+        return
+    text = i18n.get("desc-experimental-features")
+    await safe_edit_text(callback, text, build_experimental_keyboard(settings, i18n), ParseMode.HTML)
+    await callback.answer()
+
+@router.callback_query(lambda c: c.data == "menu_experimental_ephemeral_messages")
+async def menu_experimental_ephemeral_messages(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
+    if callback.message is None: return
+    settings, is_group = await get_settings_obj(db_session, callback.message.chat.id, callback.from_user.id)
+    if is_group or not isinstance(settings, UserSettingsJson):
+        await callback.answer(i18n.get("settings-no-allowed-groups"), show_alert=True)
+        return
+
+    exp = getattr(settings, "experimental", None)
+    current_value = exp.ephemeral_messages if exp else False
+    new_value = not current_value
+
+    toggle_text = f"⚪ {i18n.get('disable')}" if current_value else f"🟢 {i18n.get('enable')}"
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text=toggle_text,
+                callback_data=f"toggle_experimental_ephemeral_messages_{new_value}"
+            ),
+        ],
+        [InlineKeyboardButton(text=f"{i18n.get('back')}", callback_data="settings_experimental")]
+    ])
+
+    description = i18n.get("desc-ephemeral-messages")
+    status_icon = "🟢" if current_value else "⚪"
+    status_word = i18n.get('enabled') if current_value else i18n.get('disabled')
+    status_text = f"{i18n.get('current-status', status=status_word)} {status_icon}"
+    text = f"{description}\n\n{status_text}"
+
+    await safe_edit_text(callback, text, kb)
+    await callback.answer()
+
+@router.callback_query(lambda c: c.data.startswith("toggle_experimental_ephemeral_messages_"))
+async def apply_experimental_ephemeral(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
+    if callback.message is None or callback.data is None: return
+    val_str = callback.data.replace("toggle_experimental_ephemeral_messages_", "")
+    val = val_str == "True"
+    settings, is_group = await get_settings_obj(db_session, callback.message.chat.id, callback.from_user.id)
+    if is_group or not isinstance(settings, UserSettingsJson):
+        await callback.answer(i18n.get("settings-no-allowed-groups"), show_alert=True)
+        return
+
+    if not hasattr(settings, "experimental") or settings.experimental is None:
+        from models.settings import ExperimentalSettings
+        settings.experimental = ExperimentalSettings()
+
+    settings.experimental.ephemeral_messages = val
+    await save_settings_obj(db_session, callback.message.chat.id, callback.from_user.id, settings)
+
+    setting_name = i18n.get("btn-ephemeral-messages", is_enabled="true" if val else "false").replace("🟢 ", "").replace("⚪ ", "")
+    status_icon = "🟢" if val else "⚪"
+    status_word = i18n.get('enabled') if val else i18n.get('disabled')
+    status_text = f"{status_word} {status_icon}"
+    text = i18n.get("setting-changed", setting=setting_name, status=status_text)
+    await safe_edit_text(callback, text, build_back_keyboard(i18n, "settings_experimental"))
+    await callback.answer(i18n.get('setting-updated'))
 
 # Service settings
 @router.callback_query(lambda c: c.data.startswith("settings_svc_"))
@@ -587,3 +703,65 @@ async def settings_title_language_set(callback: CallbackQuery, i18n: TranslatorR
     text = i18n.get('title-language-changed', language=lang.upper())
     await safe_edit_text(callback, text, build_back_keyboard(i18n, "settings_main"))
     await callback.answer(i18n.get('title-language-updated'))
+
+
+def build_chat_banlist_keyboard(banned_users: set[int], i18n: TranslatorRunner) -> InlineKeyboardMarkup:
+    buttons = []
+    for uid in sorted(banned_users):
+        unban_text = i18n.get("btn-unban-user", user_id=uid) or f"❌ Unban {uid}"
+        buttons.append([InlineKeyboardButton(text=unban_text, callback_data=f"cunban_user_{uid}")])
+    buttons.append([InlineKeyboardButton(text=f"{i18n.settings.back()}", callback_data="settings_main")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+@router.callback_query(lambda c: c.data == "chat_banned_users_menu")
+async def chat_banned_users_menu(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
+    if callback.message is None:
+        return
+    settings, is_group = await get_settings_obj(db_session, callback.message.chat.id, callback.from_user.id)
+    if not is_group or not isinstance(settings, ChatSettingsJson):
+        await callback.answer(i18n.get("settings-no-allowed-dm"), show_alert=True)
+        return
+
+    banned_users = settings.profile.banned_users
+    if not banned_users:
+        text = f"{i18n.get('cbanlist-title')}\n\n{i18n.get('cbanlist-empty')}"
+    else:
+        user_list = "\n".join(f"• <code>{uid}</code>" for uid in sorted(banned_users))
+        text = f"{i18n.get('cbanlist-title')}\n\n{user_list}"
+
+    kb = build_chat_banlist_keyboard(banned_users, i18n)
+    await safe_edit_text(callback, text, kb, parse_mode=ParseMode.HTML)
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data is not None and c.data.startswith("cunban_user_"))
+async def cunban_user_callback(callback: CallbackQuery, i18n: TranslatorRunner, db_session: AsyncSession):
+    if callback.message is None or callback.data is None:
+        return
+    target_id_str = callback.data.replace("cunban_user_", "")
+    try:
+        target_id = int(target_id_str)
+    except ValueError:
+        return
+
+    chat_id = callback.message.chat.id
+    settings, is_group = await get_settings_obj(db_session, chat_id, callback.from_user.id)
+    if not is_group or not isinstance(settings, ChatSettingsJson):
+        await callback.answer(i18n.get("settings-no-allowed-dm"), show_alert=True)
+        return
+
+    if target_id in settings.profile.banned_users:
+        settings.profile.banned_users.remove(target_id)
+        await save_settings_obj(db_session, chat_id, callback.from_user.id, settings)
+
+    banned_users = settings.profile.banned_users
+    if not banned_users:
+        text = f"{i18n.get('cbanlist-title')}\n\n{i18n.get('cbanlist-empty')}"
+    else:
+        user_list = "\n".join(f"• <code>{uid}</code>" for uid in sorted(banned_users))
+        text = f"{i18n.get('cbanlist-title')}\n\n{user_list}"
+
+    kb = build_chat_banlist_keyboard(banned_users, i18n)
+    await safe_edit_text(callback, text, kb, parse_mode=ParseMode.HTML)
+    await callback.answer(i18n.get("cunban-success", user_id=target_id))

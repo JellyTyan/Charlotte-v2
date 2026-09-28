@@ -1,6 +1,6 @@
 from typing import List
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 class ProfileSettings(BaseModel):
     language: str = "en"
@@ -48,10 +48,16 @@ class ServicesSettings(BaseModel):
     soundcloud: MusicSettings = MusicSettings()
 
 
+class ExperimentalSettings(BaseModel):
+    ephemeral_messages: bool = False
+
+
 class UserSettingsJson(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     version: int = 1
     profile: ProfileSettings = ProfileSettings()
     services: ServicesSettings = ServicesSettings()
+    experimental: ExperimentalSettings = ExperimentalSettings()
 
 
 class ChatProfileSettings(BaseModel):
@@ -63,9 +69,9 @@ class ChatProfileSettings(BaseModel):
     allow_playlists: bool = True
     allow_nsfw: bool = False
     blocked_services: set[str] = Field(default_factory=set)
-    banned_users: set[int] = Field(default_factory=set) # todo implement
+    banned_users: set[int] = Field(default_factory=set)
     news_spam: bool = False
-    bot_sign : bool = True # todo implement
+    bot_sign: bool = True
 
 
 class ChatServicesSettings(BaseModel):
@@ -88,6 +94,7 @@ class ChatServicesSettings(BaseModel):
 
 
 class ChatSettingsJson(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     version: int = 1
     profile: ChatProfileSettings = ChatProfileSettings()
     services: ChatServicesSettings = ChatServicesSettings()

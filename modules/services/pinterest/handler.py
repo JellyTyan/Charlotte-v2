@@ -16,7 +16,7 @@ from models.service_list import Services
 from senders.media_sender import MediaSender
 from storage.db.crud import get_media_cache
 from tasks.task_manager import task_manager
-from utils import escape_html, truncate_string, build_caption, format_author_link
+from utils import escape_html, truncate_string, build_caption, format_author_link, extract_url
 from utils.statistics_helper import log_download_event
 
 pinterest_router = Router(name="pinterest")
@@ -41,9 +41,16 @@ async def resolve_pinterest_url(url: str) -> str:
 
 @pinterest_router.message(F.text.regexp(PINTEREST_REGEX))
 async def pinterest_handler(message: Message, db_session: AsyncSession, http_client: httpx.AsyncClient):
-    match = re.search(PINTEREST_REGEX, message.text)
-    url = match.group(0) if match else message.text
+    if not message.text or not message.from_user:
+        return
+
+    url = extract_url(PINTEREST_REGEX, message.text)
+    if not url:
+        return
     user_id = message.from_user.id
+
+    from utils.effects import react_safe
+    await react_safe(message, "👀")
 
     async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=message.chat.id):
         send_manager = MediaSender()
@@ -69,14 +76,26 @@ async def pinterest_handler(message: Message, db_session: AsyncSession, http_cli
         }
         metadata = await task_manager.run_media_download(
             user_id=user_id,
-            url=url,
+            url=resolved_url,
             service=Services.PINTEREST,
             payload=payload,
             http_client=http_client,
         )
 
-        if metadata.get("type") == "multi":
-            for i, sub_pin in enumerate(metadata.get('items', [])):
+        is_multi = (
+            metadata.get("type") == "multi"
+            or bool(metadata.get("children"))
+            or (isinstance(metadata.get("extra"), dict) and metadata.get("extra", {}).get("type") == "multi")
+        )
+
+        sub_pins = metadata.get("children")
+        if not sub_pins and is_multi:
+            raw_items = metadata.get("items", [])
+            if raw_items and isinstance(raw_items[0], dict) and ("items" in raw_items[0] or "author" in raw_items[0]):
+                sub_pins = raw_items
+
+        if is_multi and sub_pins:
+            for i, sub_pin in enumerate(sub_pins):
                 sub_author_data = sub_pin.get('author') if isinstance(sub_pin.get('author'), dict) else {}
                 sub_author = sub_author_data.get('username') or sub_author_data.get('name') or sub_pin.get('author_username')
                 sub_author_url = sub_author_data.get('url') or (f"https://www.pinterest.com/{sub_author}/" if sub_author else "")
@@ -87,8 +106,12 @@ async def pinterest_handler(message: Message, db_session: AsyncSession, http_cli
                 sub_is_nsfw = bool(sub_pin.get('is_nsfw') or sub_pin.get('is_sensitive'))
                 sub_is_blurred = bool(sub_pin.get('is_blurred') or sub_is_nsfw)
 
+                raw_media_items = sub_pin.get('items', [])
+                if not raw_media_items and sub_pin.get('path'):
+                    raw_media_items = [sub_pin]
+
                 sub_media_content = []
-                for media in sub_pin.get('items', []):
+                for media in raw_media_items:
                     cover_str = media.get('cover_path') or media.get('cover') or media.get('thumbnail')
                     cover_path = Path(cover_str) if cover_str and Path(cover_str).exists() else None
                     sub_media_content.append(

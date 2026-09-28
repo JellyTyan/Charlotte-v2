@@ -3,19 +3,14 @@ import datetime
 import json
 from datetime import date
 
-from sqlalchemy import select, update, func, desc, or_, delete
+from sqlalchemy import select, update, func, desc, or_, delete, cast
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert
 
-from .models import Users, Chats, Statistics, BotSetting, MediaCache
+from .models import Users, Chats, Statistics, BotSetting, MediaCache, UserSaves, PublicSavesBan
 from storage.cache.redis_client import cache_get, cache_set, cache_delete, orm_to_dict, dict_to_orm
 from models.settings import UserSettingsJson, ChatSettingsJson
 from models.media_cache import MediaCacheDTO
-
-
-def _get_db():
-    from . import database_manager
-    return database_manager
 
 
 async def get_user(session: AsyncSession, user_id: int) -> Users | None:
@@ -121,6 +116,205 @@ async def grant_sponsorship(session: AsyncSession, user_id: int, days: int, star
         )
     )
     await cache_delete(f"user:{user_id}")
+
+
+async def add_donation_stars(
+    session: AsyncSession,
+    user_id: int,
+    stars: int,
+) -> tuple[int, int, datetime.datetime | None]:
+    """
+    Adds donated stars to the user and calculates earned sponsorship months.
+    Uses row-level locking (with_for_update) to prevent race conditions on concurrent payments.
+    Returns: (earned_months, progress_to_next_100, new_premium_ends)
+    """
+    stmt = select(Users).where(Users.user_id == user_id).with_for_update()
+    result = await session.execute(stmt)
+    user = result.scalar_one_or_none()
+    if not user:
+        user, _ = await create_user(session, user_id)
+        result = await session.execute(stmt)
+        user = result.scalar_one_or_none()
+
+    old_stars = user.stars_donated or 0
+    new_stars = old_stars + stars
+
+    old_milestones = old_stars // 100
+    new_milestones = new_stars // 100
+    earned_months = new_milestones - old_milestones
+    progress = new_stars % 100
+
+    now_naive = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    current_end = user.premium_ends
+
+    new_end = current_end
+    if earned_months > 0 and not user.is_lifetime_premium:
+        days_to_add = earned_months * 30
+        if current_end:
+            if isinstance(current_end, datetime.date) and not isinstance(current_end, datetime.datetime):
+                current_end = datetime.datetime.combine(current_end, datetime.time.min)
+            if getattr(current_end, "tzinfo", None) is not None:
+                current_end = current_end.replace(tzinfo=None)
+            if current_end < now_naive:
+                current_end = now_naive
+        else:
+            current_end = now_naive
+
+        new_end = current_end + datetime.timedelta(days=days_to_add)
+
+    settings = dict(user.settings_json or {})
+    settings["premium_expired_notified"] = False
+
+    update_vals = {
+        "stars_donated": new_stars,
+        "settings_json": settings,
+    }
+    if earned_months > 0 and not user.is_lifetime_premium:
+        update_vals["premium_ends"] = new_end
+
+    await session.execute(
+        update(Users)
+        .where(Users.user_id == user_id)
+        .values(**update_vals)
+    )
+    await cache_delete(f"user:{user_id}")
+    return earned_months, progress, new_end
+
+
+async def refund_donation_stars(
+    session: AsyncSession,
+    user_id: int,
+    stars: int,
+) -> tuple[int, datetime.datetime | None]:
+    """
+    Deducts refunded stars from user and adjusts sponsorship if milestones were lost.
+    Returns: (new_stars, new_premium_ends)
+    """
+    stmt = select(Users).where(Users.user_id == user_id).with_for_update()
+    result = await session.execute(stmt)
+    user = result.scalar_one_or_none()
+    if not user:
+        return 0, None
+
+    old_stars = user.stars_donated or 0
+    new_stars = max(0, old_stars - stars)
+
+    old_milestones = old_stars // 100
+    new_milestones = new_stars // 100
+    lost_months = max(0, old_milestones - new_milestones)
+
+    now_naive = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    current_end = user.premium_ends
+    new_end = current_end
+
+    if lost_months > 0 and current_end and not user.is_lifetime_premium:
+        if isinstance(current_end, datetime.date) and not isinstance(current_end, datetime.datetime):
+            current_end = datetime.datetime.combine(current_end, datetime.time.min)
+        if getattr(current_end, "tzinfo", None) is not None:
+            current_end = current_end.replace(tzinfo=None)
+
+        days_to_sub = lost_months * 30
+        new_end = current_end - datetime.timedelta(days=days_to_sub)
+        if new_end < now_naive:
+            new_end = None
+
+    update_vals = {
+        "stars_donated": new_stars,
+    }
+    if lost_months > 0 and not user.is_lifetime_premium:
+        update_vals["premium_ends"] = new_end
+
+    await session.execute(
+        update(Users)
+        .where(Users.user_id == user_id)
+        .values(**update_vals)
+    )
+    await cache_delete(f"user:{user_id}")
+    return new_stars, new_end
+
+
+async def sync_historical_donations(session: AsyncSession) -> int:
+    """
+    Synchronizes historical completed support donations from the 'payments' table into 'users.stars_donated'.
+    Variant B: For users who donated >= 100 stars and don't have active premium, grants earned sponsorship.
+    Returns: count of updated users.
+    """
+    from .models import Payment
+
+    stmt = (
+        select(Payment.user_id, func.sum(Payment.amount).label("total_stars"))
+        .where(
+            Payment.status == "completed",
+            Payment.currency == "XTR",
+            or_(
+                Payment.payload.like("support_%"),
+                Payment.payload.like("sponsor_%"),
+            ),
+        )
+        .group_by(Payment.user_id)
+    )
+    result = await session.execute(stmt)
+    records = result.all()
+
+    updated_count = 0
+    now_naive = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+
+    for user_id, total_stars in records:
+        if not total_stars or total_stars <= 0:
+            continue
+
+        user_stmt = select(Users).where(Users.user_id == user_id).with_for_update()
+        user_res = await session.execute(user_stmt)
+        user = user_res.scalar_one_or_none()
+
+        if not user:
+            user, _ = await create_user(session, user_id)
+            user_res = await session.execute(user_stmt)
+            user = user_res.scalar_one_or_none()
+
+        current_stars = user.stars_donated or 0
+        if current_stars >= total_stars:
+            continue
+
+        new_stars = total_stars
+        old_milestones = current_stars // 100
+        new_milestones = new_stars // 100
+        earned_months = max(0, new_milestones - old_milestones)
+
+        update_vals = {
+            "stars_donated": new_stars,
+        }
+
+        if earned_months > 0 and not user.is_lifetime_premium:
+            current_end = user.premium_ends
+            if current_end:
+                if isinstance(current_end, datetime.date) and not isinstance(current_end, datetime.datetime):
+                    current_end = datetime.datetime.combine(current_end, datetime.time.min)
+                if getattr(current_end, "tzinfo", None) is not None:
+                    current_end = current_end.replace(tzinfo=None)
+                if current_end < now_naive:
+                    current_end = now_naive
+            else:
+                current_end = now_naive
+
+            days_to_add = earned_months * 30
+            new_end = current_end + datetime.timedelta(days=days_to_add)
+            update_vals["premium_ends"] = new_end
+
+            settings = dict(user.settings_json or {})
+            settings["premium_expired_notified"] = False
+            update_vals["settings_json"] = settings
+
+        await session.execute(
+            update(Users)
+            .where(Users.user_id == user_id)
+            .values(**update_vals)
+        )
+        await cache_delete(f"user:{user_id}")
+        updated_count += 1
+
+    return updated_count
+
 
 async def update_user_settings(session: AsyncSession, user_id: int, settings: UserSettingsJson):
     await session.execute(
@@ -396,29 +590,21 @@ async def toggle_lifetime_premium(session: AsyncSession, user_id: int) -> bool |
     return None
 
 async def ban_user(session: AsyncSession, user_id: int) -> None:
-    user = await get_user(session=session, user_id=user_id)
-    if user is None:
-        await create_user(session=session, user_id=user_id)  # noqa: F841
-        user = await get_user(session=session, user_id=user_id)
-
-    if not user:
-        return
-
-    user.is_banned = True
-    session.add(user)
+    res = await session.execute(
+        update(Users).where(Users.user_id == user_id).values(is_banned=True)
+    )
+    if res.rowcount == 0:
+        session.add(Users(user_id=user_id, is_banned=True))
+        await session.flush()
     await cache_delete(f"user:{user_id}")
 
 async def unban_user(session: AsyncSession, user_id: int) -> None:
-    user = await get_user(session=session, user_id=user_id)
-    if user is None:
-        await create_user(session=session, user_id=user_id)  # noqa: F841
-        user = await get_user(session=session, user_id=user_id)
-
-    if not user:
-        return
-
-    user.is_banned = False
-    session.add(user)
+    res = await session.execute(
+        update(Users).where(Users.user_id == user_id).values(is_banned=False)
+    )
+    if res.rowcount == 0:
+        session.add(Users(user_id=user_id, is_banned=False))
+        await session.flush()
     await cache_delete(f"user:{user_id}")
 
 async def list_of_banned_users(session: AsyncSession) -> list[Users]:
@@ -443,7 +629,7 @@ async def get_global_settings(session: AsyncSession) -> dict:
         except (json.JSONDecodeError, TypeError):
             data[s.key] = s.value
 
-    await cache_set("global_settings", data, ttl=24000)
+    await cache_set("global_settings", data, ttl=86400)
     return data
 
 
@@ -551,6 +737,35 @@ async def get_media_cache(session: AsyncSession, cache_key: str) -> MediaCacheDT
     return MediaCacheDTO.model_validate(db_obj, from_attributes=True)
 
 
+async def get_media_cache_entry_by_file_id(
+    session: AsyncSession, file_id: str
+) -> tuple[int, MediaCacheDTO] | None:
+    """Finds media cache entry and its media_id by telegram file_id."""
+    stmt = select(MediaCache).where(
+        or_(
+            MediaCache.telegram_file_id == file_id,
+            MediaCache.telegram_document_file_id == file_id,
+        )
+    )
+    result = await session.execute(stmt)
+    db_obj = result.scalar_one_or_none()
+    if db_obj:
+        return db_obj.media_id, MediaCacheDTO.model_validate(db_obj, from_attributes=True)
+
+    try:
+        stmt_json = select(MediaCache).where(
+            cast(MediaCache.data, String).contains(file_id)
+        ).limit(1)
+        res_json = await session.execute(stmt_json)
+        db_obj = res_json.scalar_one_or_none()
+        if db_obj:
+            return db_obj.media_id, MediaCacheDTO.model_validate(db_obj, from_attributes=True)
+    except Exception:
+        pass
+
+    return None
+
+
 async def upsert_media_cache(session: AsyncSession, dto: MediaCacheDTO) -> MediaCacheDTO:
     """Создает новую запись или обновляет существующую за 1 SQL-запрос"""
 
@@ -564,6 +779,7 @@ async def upsert_media_cache(session: AsyncSession, dto: MediaCacheDTO) -> Media
     ).returning(MediaCache)
 
     result = await session.execute(do_update_stmt)
+    await session.commit()
 
     updated_obj = result.scalar_one()
     return MediaCacheDTO.model_validate(updated_obj, from_attributes=True)
@@ -574,6 +790,7 @@ async def delete_media_cache(session: AsyncSession, cache_key: str) -> bool:
 
     stmt = delete(MediaCache).where(MediaCache.cache_key == cache_key).returning(MediaCache.media_id)
     result = await session.execute(stmt)
+    await session.commit()
 
     deleted_id = result.scalar_one_or_none()
     return deleted_id is not None
@@ -583,4 +800,251 @@ async def clear_all_media_cache(session: AsyncSession) -> int:
     """Удаляет все записи из кэша. Возвращает количество удаленных записей."""
     stmt = delete(MediaCache)
     result = await session.execute(stmt)
+    await session.commit()
     return result.rowcount
+
+
+# ==========================================
+# USER SAVES (МЕДИАТЕКА) & CACHED MUSIC SEARCH
+# ==========================================
+
+async def save_user_media(
+    session: AsyncSession,
+    user_id: int,
+    label: str,
+    telegram_file_id: str,
+    media_type: str,
+    title: str | None = None,
+    caption: str | None = None,
+    is_public: bool = False,
+) -> UserSaves:
+    """Сохранить медиа в медиатеку пользователя"""
+    save = UserSaves(
+        user_id=user_id,
+        label=label.strip(),
+        telegram_file_id=telegram_file_id,
+        media_type=media_type,
+        title=title,
+        caption=caption,
+        is_public=is_public,
+        is_approved=False,
+    )
+    session.add(save)
+    await session.commit()
+    return save
+
+
+async def get_save_by_id(session: AsyncSession, save_id: int) -> UserSaves | None:
+    """Получить сохранёнку по ID"""
+    stmt = select(UserSaves).where(UserSaves.id == save_id)
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def toggle_save_public(session: AsyncSession, user_id: int, save_id: int) -> UserSaves | None:
+    """Отправить в публичную библиотеку или вернуть в личную."""
+    save = await get_save_by_id(session, save_id)
+    if not save or save.user_id != user_id:
+        return None
+
+    save.is_public = not save.is_public
+    save.is_approved = False
+    await session.commit()
+    return save
+
+
+async def increment_save_uses(session: AsyncSession, save_id: int, user_id: int | None = None) -> bool:
+    """Увеличить счётчик использований сохранёнки (только если использует другой пользователь)"""
+    stmt = update(UserSaves).where(UserSaves.id == save_id)
+    if user_id is not None:
+        stmt = stmt.where(UserSaves.user_id != user_id)
+    stmt = stmt.values(uses_count=UserSaves.uses_count + 1)
+    result = await session.execute(stmt)
+    await session.commit()
+    return bool(result.rowcount and result.rowcount > 0)
+
+
+async def search_user_saves(
+    session: AsyncSession,
+    user_id: int,
+    query: str = "",
+    limit: int = 20,
+    media_types: tuple[str, ...] | None = None,
+) -> list[UserSaves]:
+    """Поиск по сохранёнкам пользователя (или последние, если query пустой)"""
+    stmt = select(UserSaves).where(UserSaves.user_id == user_id)
+    if media_types:
+        stmt = stmt.where(UserSaves.media_type.in_(media_types))
+    if query:
+        pattern = f"%{query}%"
+        stmt = stmt.where(or_(
+            UserSaves.label.ilike(pattern),
+            UserSaves.title.ilike(pattern),
+            UserSaves.caption.ilike(pattern),
+        ))
+    stmt = stmt.order_by(UserSaves.created_at.desc()).limit(limit)
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def search_public_saves(
+    session: AsyncSession,
+    query: str = "",
+    exclude_user_id: int | None = None,
+    limit: int = 20,
+    media_types: tuple[str, ...] | None = None,
+) -> list[UserSaves]:
+    """Поиск по публичной библиотеке мемов сообщества"""
+    stmt = select(UserSaves).where(UserSaves.is_public.is_(True), UserSaves.is_approved.is_(True))
+    if exclude_user_id:
+        stmt = stmt.where(UserSaves.user_id != exclude_user_id)
+    if media_types:
+        stmt = stmt.where(UserSaves.media_type.in_(media_types))
+    if query:
+        pattern = f"%{query}%"
+        stmt = stmt.where(or_(
+            UserSaves.label.ilike(pattern),
+            UserSaves.title.ilike(pattern),
+            UserSaves.caption.ilike(pattern),
+        ))
+    # Сортировка: сначала самые популярные (uses_count), затем свежие
+    stmt = stmt.order_by(UserSaves.uses_count.desc(), UserSaves.created_at.desc()).limit(limit)
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def get_user_saves(
+    session: AsyncSession,
+    user_id: int,
+    offset: int = 0,
+    limit: int = 10,
+) -> list[UserSaves]:
+    """Получить список сохранёнок пользователя"""
+    stmt = (
+        select(UserSaves)
+        .where(UserSaves.user_id == user_id)
+        .order_by(UserSaves.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def delete_user_save(session: AsyncSession, user_id: int, save_id: int) -> bool:
+    """Удалить сохранёнку по ID"""
+    stmt = delete(UserSaves).where(
+        UserSaves.id == save_id,
+        UserSaves.user_id == user_id,
+    )
+    result = await session.execute(stmt)
+    return bool(result.rowcount and result.rowcount > 0)
+
+
+async def get_user_saves_count(session: AsyncSession, user_id: int) -> int:
+    """Количество личных сохранёнок пользователя."""
+    stmt = select(func.count()).select_from(UserSaves).where(
+        UserSaves.user_id == user_id,
+        UserSaves.is_public.is_(False),
+    )
+    result = await session.execute(stmt)
+    return result.scalar() or 0
+
+
+async def get_pending_public_save(session: AsyncSession) -> UserSaves | None:
+    stmt = (
+        select(UserSaves)
+        .where(UserSaves.is_public.is_(True), UserSaves.is_approved.is_(False))
+        .order_by(UserSaves.created_at.asc())
+        .limit(1)
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def moderate_public_save(session: AsyncSession, save_id: int, approve: bool) -> UserSaves | None:
+    save = await get_save_by_id(session, save_id)
+    if not save or not save.is_public or save.is_approved:
+        return None
+    if approve:
+        save.is_approved = True
+    else:
+        save.is_public = False
+    await session.commit()
+    return save
+
+
+MUSIC_PLATFORMS = ("spotify", "applemusic", "apple_music", "deezer", "soundcloud", "ytmusic")
+
+
+async def search_cached_music(
+    session: AsyncSession,
+    query: str,
+    limit: int = 15,
+    platforms: tuple[str, ...] | None = MUSIC_PLATFORMS,
+) -> list[MediaCacheDTO]:
+    """Поиск по кэшированной музыке (только специализированные музыкальные сервисы)"""
+    stmt = (
+        select(MediaCache)
+        .where(
+            MediaCache.media_type == "audio",
+            MediaCache.telegram_file_id.isnot(None),
+        )
+    )
+    if platforms:
+        stmt = stmt.where(MediaCache.platform.in_(platforms))
+
+    if query:
+        pattern = f"%{query}%"
+        stmt = stmt.where(
+            or_(
+                MediaCache.data["title"].as_string().ilike(pattern),
+                MediaCache.data["author"].as_string().ilike(pattern),
+            )
+        )
+    stmt = stmt.order_by(MediaCache.created_at.desc()).limit(limit)
+    result = await session.execute(stmt)
+    rows = result.scalars().all()
+    return [MediaCacheDTO.model_validate(row, from_attributes=True) for row in rows]
+
+
+async def ban_user_from_public_saves(session: AsyncSession, user_id: int) -> bool:
+    """Заблокировать пользователю возможность предлагать мемы в публичную библиотеку."""
+    stmt = select(PublicSavesBan).where(PublicSavesBan.user_id == user_id)
+    existing = (await session.execute(stmt)).scalar_one_or_none()
+    if not existing:
+        ban = PublicSavesBan(user_id=user_id)
+        session.add(ban)
+        await session.commit()
+    await cache_set(f"public_saves_banned:{user_id}", {"banned": True}, ttl=86400)
+    return True
+
+
+async def unban_user_from_public_saves(session: AsyncSession, user_id: int) -> bool:
+    """Разблокировать пользователю возможность предлагать мемы."""
+    stmt = delete(PublicSavesBan).where(PublicSavesBan.user_id == user_id)
+    res = await session.execute(stmt)
+    await session.commit()
+    await cache_delete(f"public_saves_banned:{user_id}")
+    return bool(res.rowcount and res.rowcount > 0)
+
+
+async def is_user_public_saves_banned(session: AsyncSession, user_id: int) -> bool:
+    """Проверить, заблокирован ли пользователь от публикации мемов."""
+    cached = await cache_get(f"public_saves_banned:{user_id}")
+    if cached is not None and isinstance(cached, dict):
+        return bool(cached.get("banned", False))
+
+    stmt = select(PublicSavesBan).where(PublicSavesBan.user_id == user_id)
+    res = (await session.execute(stmt)).scalar_one_or_none()
+    is_banned = res is not None
+    await cache_set(f"public_saves_banned:{user_id}", {"banned": is_banned}, ttl=3600)
+    return is_banned
+
+
+async def list_public_saves_banned_users(session: AsyncSession) -> list[int]:
+    """Получить список ID всех заблокированных от предложки пользователей."""
+    stmt = select(PublicSavesBan.user_id).order_by(PublicSavesBan.created_at.desc())
+    res = await session.execute(stmt)
+    return list(res.scalars().all())
+
+

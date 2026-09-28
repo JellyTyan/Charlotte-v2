@@ -21,7 +21,7 @@ from senders.media_sender import MediaSender
 from states.youtube import YouTubeStates, YouTubeDialogStates
 from storage.db.crud import get_user
 from tasks.task_manager import task_manager
-from utils import format_duration, truncate_string, escape_html, build_caption, format_author_link, safe_truncate_html
+from utils import format_duration, truncate_string, escape_html, build_caption, format_author_link, safe_truncate_html, extract_url
 from utils.statistics_helper import log_download_event
 from aiogram_dialog import DialogManager
 from .dialogs import youtube_dialog
@@ -34,6 +34,15 @@ youtube_router.include_router(youtube_dialog)
 logger = logging.getLogger(__name__)
 
 YOUTUBE_REGEX = r"https?://(?:www\.)?(?:m\.)?(?:youtu\.be/|youtube\.com/(?:shorts/|watch\?v=))([\w-]+)"
+
+_background_tasks: set[asyncio.Task] = set()
+
+
+def run_background_task(coro) -> asyncio.Task:
+    t = asyncio.create_task(coro)
+    _background_tasks.add(t)
+    t.add_done_callback(_background_tasks.discard)
+    return t
 
 
 def handle_youtube_api_errors(res: httpx.Response, url: str):
@@ -140,21 +149,54 @@ async def get_youtube_metadata(http_client: httpx.AsyncClient, url: str) -> dict
     return res_json["data"]
 
 
-def map_items_to_media(data: dict) -> list[MediaContent]:
+def map_items_to_media(data: dict, extra_metadata: dict | None = None) -> list[MediaContent]:
+    extra_metadata = extra_metadata or {}
     media_content = []
-    caption = data.get("caption") or data.get("title") or ""
-    author_obj = data.get("author") if isinstance(data.get("author"), dict) else {}
-    author = author_obj.get("username") or author_obj.get("name") or data.get("author_username") or data.get("uploader")
-    author_url = author_obj.get("url") or data.get("uploader_url")
+    plain_title = str(data.get("title") or extra_metadata.get("title") or "").strip()
 
-    if not data.get("caption"):
-        title_esc = escape_html(str(data.get("title") or "").strip())
-        author_link = format_author_link(author, author_url, icon="👤")
-        desc_esc = escape_html(str(data.get("description") or "").strip())
+    author_obj = data.get("author") if isinstance(data.get("author"), dict) else {}
+    author = (
+        author_obj.get("username")
+        or author_obj.get("name")
+        or data.get("author_username")
+        or data.get("uploader")
+        or extra_metadata.get("uploader")
+        or ""
+    )
+    author_url = (
+        author_obj.get("url")
+        or data.get("uploader_url")
+        or data.get("channel_url")
+        or extra_metadata.get("uploader_url")
+        or extra_metadata.get("channel_url")
+        or ""
+    )
+    if not author_url and author and author.startswith("@"):
+        author_url = f"https://www.youtube.com/{author}"
+
+    author_link = format_author_link(author, author_url, icon="👤")
+
+    title_esc = escape_html(plain_title)
+    if author_link and title_esc:
+        header = f"{author_link}\n<b>{title_esc}</b>"
+    elif author_link:
+        header = author_link
+    else:
         header = f"<b>{title_esc}</b>" if title_esc else ""
-        if author_link:
-            header = f"{header}\n{author_link}" if header else author_link
-        caption = build_caption(header=header, description=desc_esc)
+
+    raw_description = str(
+        extra_metadata.get("description")
+        or data.get("description")
+        or data.get("caption")
+        or ""
+    ).strip()
+
+    if raw_description.lower().strip() == plain_title.lower().strip():
+        raw_description = ""
+
+    desc_esc = escape_html(raw_description)
+
+    caption = build_caption(header=header, description=desc_esc)
 
     for item in data.get("items", []):
         item_type = item.get("type", "video")
@@ -162,14 +204,22 @@ def map_items_to_media(data: dict) -> list[MediaContent]:
         if not path_str:
             continue
 
-        cover_str = item.get("cover_path") or item.get("cover") or item.get("thumbnail") or data.get("thumbnail") or data.get("cover_path")
+        cover_str = (
+            item.get("cover_path")
+            or item.get("cover")
+            or item.get("thumbnail")
+            or data.get("thumbnail")
+            or data.get("cover_path")
+            or extra_metadata.get("thumbnail")
+        )
         cover_path = Path(cover_str) if cover_str and Path(cover_str).exists() else None
 
         media_content.append(
             MediaContent(
                 type=MediaType.AUDIO if item_type == "audio" else MediaType.VIDEO,
                 path=Path(path_str),
-                title=caption,
+                title=plain_title if item_type == "audio" else caption,
+                description=caption,
                 performer=author,
                 width=item.get("width"),
                 height=item.get("height"),
@@ -180,6 +230,7 @@ def map_items_to_media(data: dict) -> list[MediaContent]:
     return media_content
 
 
+
 async def download_youtube_full(
     http_client: httpx.AsyncClient,
     url: str,
@@ -187,7 +238,8 @@ async def download_youtube_full(
     is_audio_only: bool,
     sponsor: bool,
     user_id: int,
-    is_topich: bool = False
+    is_topich: bool = False,
+    extra_metadata: dict | None = None
 ) -> list[MediaContent]:
     yt_opts: dict[str, Any] = {}
     if is_topich:
@@ -215,7 +267,7 @@ async def download_youtube_full(
         http_client=http_client,
     )
 
-    items = map_items_to_media(data)
+    items = map_items_to_media(data, extra_metadata=extra_metadata)
     if is_topich:
         for item in items:
             item.as_document = True
@@ -230,7 +282,8 @@ async def download_youtube_clip(
     start_time: str,
     end_time: str,
     sponsor: bool,
-    user_id: int
+    user_id: int,
+    extra_metadata: dict | None = None
 ) -> list[MediaContent]:
     yt_opts: dict[str, Any] = {}
     if target_height > 0:
@@ -258,7 +311,7 @@ async def download_youtube_clip(
         http_client=http_client,
     )
 
-    return map_items_to_media(data)
+    return map_items_to_media(data, extra_metadata=extra_metadata)
 
 
 @youtube_router.message(F.text.regexp(YOUTUBE_REGEX), StateFilter("*"))
@@ -270,29 +323,43 @@ async def youtube_handler(
     db_session: AsyncSession,
     http_client: httpx.AsyncClient
 ):
-    from aiogram_dialog import StartMode
+    from aiogram_dialog import StartMode, ShowMode
     stack = dialog_manager.current_stack()
     if stack and stack.last_message_id:
         try:
             await message.bot.delete_message(chat_id=message.chat.id, message_id=stack.last_message_id)
         except Exception:
             pass
+        stack.last_message_id = None
+        stack.last_media_id = None
+        stack.last_media_unique_id = None
+        try:
+            await dialog_manager.storage().save_stack(stack)
+        except Exception:
+            pass
 
-    match = re.search(YOUTUBE_REGEX, message.text)
-    url = match.group(0) if match else message.text
+    if not message.text or not message.from_user:
+        return
+
+    url = extract_url(YOUTUBE_REGEX, message.text)
+    if not url:
+        return
     chat_id = message.chat.id
 
-    async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=chat_id):
-        process_message = await message.reply(i18n.get('processing'))
+    # Задача 1: 👀 — бот получил ссылку
+    from utils.effects import react_safe
+    await react_safe(message, "👀")
 
-        try:
-            metadata = await get_youtube_metadata(http_client, url)
-        except Exception as e:
-            await process_message.delete()
-            raise e
+    from tasks.task_manager import task_manager
+    if task_manager.is_user_busy(message.from_user.id):
+        from utils.ephemeral import notify_already_downloading_if_ephemeral
+        await notify_already_downloading_if_ephemeral(message, message.from_user.id, i18n)
+
+    async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=chat_id):
+        metadata = await get_youtube_metadata(http_client, url)
 
     from utils.url_cache import store_url, url_hash
-    store_url(url)
+    await store_url(url)
     h = url_hash(url)
 
     from storage.db.crud import get_user_settings
@@ -313,8 +380,6 @@ async def youtube_handler(
     elif ui_mode == "advanced":
         target_state = YouTubeDialogStates.advanced
 
-    await process_message.delete()
-
     author_data = metadata.get("author") if isinstance(metadata.get("author"), dict) else {}
     uploader = author_data.get("username") or author_data.get("name") or metadata.get("uploader") or metadata.get("author_username")
     uploader_url = author_data.get("url") or metadata.get("uploader_url") or metadata.get("channel_url")
@@ -329,12 +394,16 @@ async def youtube_handler(
             "thumbnail": thumbnail,
             "uploader": uploader,
             "uploader_url": uploader_url,
+            "channel_url": metadata.get("channel_url"),
+            "description": metadata.get("description") or metadata.get("caption", ""),
             "duration": metadata.get("duration"),
             "options": metadata.get("options", []),
             "audio_only": metadata.get("audio_only"),
-            "is_premium": is_premium
+            "is_premium": is_premium,
+            "origin_message_id": message.message_id,
         },
-        mode=StartMode.RESET_STACK
+        mode=StartMode.RESET_STACK,
+        show_mode=ShowMode.SEND,
     )
 
 
@@ -523,16 +592,35 @@ async def menu_callback_handler(
         url = data["url"]
 
         await state.clear()
-        await message.delete()
+        try:
+            await message.delete()
+        except Exception:
+            pass
 
-        asyncio.create_task(process_youtube_download(
-            message=message.reply_to_message or message,
+        target_msg = message.reply_to_message or message
+        from tasks.task_manager import task_manager
+        if task_manager.is_user_busy(user_id):
+            from utils.ephemeral import notify_already_downloading_if_ephemeral
+            await notify_already_downloading_if_ephemeral(target_msg, user_id, i18n)
+
+        extra_metadata = {
+            "uploader": data.get("uploader"),
+            "uploader_url": data.get("uploader_url") or data.get("channel_url"),
+            "channel_url": data.get("channel_url"),
+            "description": data.get("description"),
+            "thumbnail": data.get("thumbnail"),
+            "title": data.get("title"),
+        }
+
+        run_background_task(process_youtube_download(
+            message=target_msg,
             url=url,
             target_height=0,
             is_audio_only=is_audio,
             user_id=user_id,
             db_session=db_session,
-            i18n=i18n
+            i18n=i18n,
+            extra_metadata=extra_metadata
         ))
         await callback_query.answer(i18n.get('starting-download'))
 
@@ -592,17 +680,36 @@ async def quality_callback_handler(
             await callback_query.answer()
             return
 
-        await state.clear()
-        await message.delete()
+        extra_metadata = {
+            "uploader": data.get("uploader"),
+            "uploader_url": data.get("uploader_url") or data.get("channel_url"),
+            "channel_url": data.get("channel_url"),
+            "description": data.get("description"),
+            "thumbnail": data.get("thumbnail"),
+            "title": data.get("title"),
+        }
 
-        asyncio.create_task(process_youtube_download(
-            message=message.reply_to_message or message,
+        await state.clear()
+        try:
+            await message.delete()
+        except Exception:
+            pass
+
+        target_msg = message.reply_to_message or message
+        from tasks.task_manager import task_manager
+        if task_manager.is_user_busy(user_id):
+            from utils.ephemeral import notify_already_downloading_if_ephemeral
+            await notify_already_downloading_if_ephemeral(target_msg, user_id, i18n)
+
+        run_background_task(process_youtube_download(
+            message=target_msg,
             url=url,
             target_height=callback_data.height,
             is_audio_only=is_audio,
             user_id=user_id,
             db_session=db_session,
-            i18n=i18n
+            i18n=i18n,
+            extra_metadata=extra_metadata
         ))
         await callback_query.answer(i18n.get('starting-download'))
 
@@ -620,19 +727,16 @@ async def time_range_message_handler(
     data = await state.get_data()
     url = data["url"]
     duration = data.get("duration", 0)
-    target_height = data.get("target_height", 0)
-    is_audio_only = data.get("format") == "audio"
-    user_id = message.from_user.id
+    dur_str = format_duration(duration) if duration else ""
 
     parsed = parse_time_range(message.text)
     if not parsed:
-        await message.reply(i18n.get("yt-trim-invalid-range"))
+        await message.reply(i18n.get("yt-trim-invalid-format"))
         return
 
     start_formatted, end_formatted, start_seconds, end_seconds = parsed
 
     if duration > 0:
-        dur_str = format_duration(duration)
         if start_seconds >= duration:
             await message.reply(i18n.get("yt-trim-out-of-bounds", duration=dur_str))
             return
@@ -640,11 +744,24 @@ async def time_range_message_handler(
             await message.reply(i18n.get("yt-trim-out-of-bounds", duration=dur_str))
             return
 
+    target_height = data.get("target_height", 0)
+    is_audio_only = data.get("format") == "audio"
+    user_id = message.from_user.id
+
+    extra_metadata = {
+        "uploader": data.get("uploader"),
+        "uploader_url": data.get("uploader_url") or data.get("channel_url"),
+        "channel_url": data.get("channel_url"),
+        "description": data.get("description"),
+        "thumbnail": data.get("thumbnail"),
+        "title": data.get("title"),
+    }
+
     await state.clear()
 
     process_message = await message.reply(i18n.get("yt-trim-processing"))
 
-    asyncio.create_task(process_clip_download(
+    run_background_task(process_clip_download(
         message=message,
         process_message=process_message,
         url=url,
@@ -654,7 +771,8 @@ async def time_range_message_handler(
         end_time=end_formatted,
         user_id=user_id,
         db_session=db_session,
-        i18n=i18n
+        i18n=i18n,
+        extra_metadata=extra_metadata
     ))
 
 
@@ -668,8 +786,14 @@ async def process_youtube_download(
     i18n: TranslatorRunner | None = None,
     payment_charge_id: str | None = None,
     http_client: httpx.AsyncClient | None = None,
-    is_topich: bool = False
+    is_topich: bool = False,
+    extra_metadata: dict | None = None
 ):
+    if not getattr(message, "bot", None):
+        from core.loader import bot as default_bot
+        if default_bot:
+            message._bot = default_bot
+
     send_manager = MediaSender()
 
     from storage.db import database_manager
@@ -691,16 +815,34 @@ async def process_youtube_download(
             user = await get_user(db_session, user_id)
             is_premium = (user.is_premium if user else False) or (payment_charge_id is not None)
 
+            _action = ChatActionSender.upload_voice if is_audio_only else ChatActionSender.upload_video
+
             cache_key = get_cache_key(url, target_height, is_audio_only, is_topich)
             cached = await cache_check(db_session, cache_key)
             if cached:
-                await send_manager.send(message, cached, service="youtube", db_session=db_session)
+                if message.bot:
+                    async with _action(bot=message.bot, chat_id=message.chat.id):
+                        await send_manager.send(message, cached, service="youtube", db_session=db_session)
+                else:
+                    await send_manager.send(message, cached, service="youtube", db_session=db_session)
                 await db_session.commit()
                 return
 
             client = http_client or httpx.AsyncClient()
             try:
-                async with ChatActionSender.record_video_note(bot=message.bot, chat_id=message.chat.id):
+                if message.bot:
+                    async with _action(bot=message.bot, chat_id=message.chat.id):
+                        media_content = await download_youtube_full(
+                            http_client=client,
+                            url=url,
+                            target_height=target_height,
+                            is_audio_only=is_audio_only,
+                            sponsor=is_premium,
+                            user_id=user_id,
+                            is_topich=is_topich,
+                            extra_metadata=extra_metadata
+                        )
+                else:
                     media_content = await download_youtube_full(
                         http_client=client,
                         url=url,
@@ -708,17 +850,28 @@ async def process_youtube_download(
                         is_audio_only=is_audio_only,
                         sponsor=is_premium,
                         user_id=user_id,
-                        is_topich=is_topich
+                        is_topich=is_topich,
+                        extra_metadata=extra_metadata
                     )
 
                 if media_content:
-                    await send_manager.send(
-                        message=message,
-                        content=media_content,
-                        service="youtube",
-                        cache_key=cache_key,
-                        db_session=db_session
-                    )
+                    if message.bot:
+                        async with _action(bot=message.bot, chat_id=message.chat.id):
+                            await send_manager.send(
+                                message=message,
+                                content=media_content,
+                                service="youtube",
+                                cache_key=cache_key,
+                                db_session=db_session,
+                            )
+                    else:
+                        await send_manager.send(
+                            message=message,
+                            content=media_content,
+                            service="youtube",
+                            cache_key=cache_key,
+                            db_session=db_session,
+                        )
 
                 await db_session.commit()
 
@@ -789,8 +942,14 @@ async def process_clip_download(
     user_id: int,
     db_session: AsyncSession,
     http_client: httpx.AsyncClient = None,
-    i18n: TranslatorRunner = None
+    i18n: TranslatorRunner = None,
+    extra_metadata: dict | None = None
 ):
+    if not getattr(message, "bot", None):
+        from core.loader import bot as default_bot
+        if default_bot:
+            message._bot = default_bot
+
     send_manager = MediaSender()
 
     from storage.db import database_manager
@@ -812,9 +971,24 @@ async def process_clip_download(
             user = await get_user(db_session, user_id)
             is_premium = user.is_premium if user else False
 
+            _action = ChatActionSender.upload_voice if is_audio_only else ChatActionSender.upload_video
+
             client = http_client or httpx.AsyncClient()
             try:
-                async with ChatActionSender.record_video_note(bot=message.bot, chat_id=message.chat.id):
+                if message.bot:
+                    async with _action(bot=message.bot, chat_id=message.chat.id):
+                        media_content = await download_youtube_clip(
+                            http_client=client,
+                            url=url,
+                            target_height=target_height,
+                            is_audio_only=is_audio_only,
+                            start_time=start_time,
+                            end_time=end_time,
+                            sponsor=is_premium,
+                            user_id=user_id,
+                            extra_metadata=extra_metadata
+                        )
+                else:
                     media_content = await download_youtube_clip(
                         http_client=client,
                         url=url,
@@ -823,7 +997,8 @@ async def process_clip_download(
                         start_time=start_time,
                         end_time=end_time,
                         sponsor=is_premium,
-                        user_id=user_id
+                        user_id=user_id,
+                        extra_metadata=extra_metadata
                     )
 
                 try:
@@ -832,13 +1007,23 @@ async def process_clip_download(
                     pass
 
                 if media_content:
-                    await send_manager.send(
-                        message=message,
-                        content=media_content,
-                        service="youtube",
-                        cache_key=None,
-                        db_session=db_session
-                    )
+                    if message.bot:
+                        async with _action(bot=message.bot, chat_id=message.chat.id):
+                            await send_manager.send(
+                                message=message,
+                                content=media_content,
+                                service="youtube",
+                                cache_key=None,
+                                db_session=db_session,
+                            )
+                    else:
+                        await send_manager.send(
+                            message=message,
+                            content=media_content,
+                            service="youtube",
+                            cache_key=None,
+                            db_session=db_session,
+                        )
 
                 await db_session.commit()
 

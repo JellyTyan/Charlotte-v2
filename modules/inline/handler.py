@@ -1,237 +1,278 @@
 import hashlib
 import logging
-import asyncio
-import re
-from aiogram import F, Router
+from aiogram import Router
 from aiogram.types import (
     InlineQuery,
     InlineQueryResultCachedVideo,
     InlineQueryResultCachedPhoto,
     InlineQueryResultCachedAudio,
-    InputTextMessageContent,
-    InlineQueryResultArticle,
-    InlineKeyboardMarkup,
-    InlineKeyboardButton
+    InlineQueryResultCachedGif,
+    ChosenInlineResult,
 )
-from core.config import Config
-from storage.cache.redis_client import cache_set
-from storage.db.crud import get_media_cache
-from senders.media_sender import MediaSender
-from models.media import MediaType, MediaContent
+from aiogram.exceptions import TelegramBadRequest
+from storage.db.crud import (
+    search_user_saves,
+    search_public_saves,
+    increment_save_uses,
+    search_cached_music,
+)
+from storage.cache.redis_client import cache_get
+from utils.recent_downloads import get_recent_downloads
 from sqlalchemy.ext.asyncio import AsyncSession
 from fluentogram import TranslatorRunner
 
-# Service Regexes & Utils
-from modules.services.twitter.handler import TWITTER_REGEX, get_cache_key as twitter_cache_key
-
-from modules.services.instagram.handler import INSTAGRAM_REGEX
-
-from modules.services.pinterest.handler import PINTEREST_REGEX, get_cache_key as pinterest_cache_key
-
-from modules.services.reddit.handler import REDDIT_REGEX, get_cache_key as reddit_cache_key
-
-from modules.services.tiktok.handler import TIKTOK_REGEX, get_cache_key as tiktok_cache_key
-
-from modules.services.youtube.handler import YOUTUBE_REGEX
-from modules.services.youtube.utils import get_cache_key as youtube_cache_key
-
-from modules.services.ytmusic.handler import YTMUSIC_REGEX
-from modules.services.soundcloud.handler import SOUNDCLOUD_REGEX
-from modules.services.spotify.handler import SPOTIFY_REGEX
-from modules.services.deezer.handler import DEEZER_REGEX
-
-from modules.services.apple_music.handler import APPLE_REGEX as APPLE_MUSIC_REGEX
-
-
-def apple_music_cache_key(url: str) -> str | None:
-    patterns = [
-        r"music\.apple\.com/[a-z]{2}/song/(?:[^/]+/)?(?P<id>\d+)",
-        r"music\.apple\.com/[a-z]{2}/album/(?:[^/]+/)?\d+.*?[?&]i=(?P<id>\d+)",
-    ]
-    for pattern in patterns:
-        if m := re.search(pattern, url):
-            return f"apple:{int(m.group('id'))}"
-    return None
-
-
-def spotify_cache_key(url: str) -> str | None:
-    match = re.search(r"/track/([\w-]+)", url)
-    if match:
-        return f"spotify:{match.group(1)}"
-    return None
-
-
-def deezer_cache_key(url: str) -> str | None:
-    match = re.search(r"/track/(\d+)", url)
-    if match:
-        return f"deezer:{match.group(1)}"
-    return None
-
-
-def soundcloud_cache_key(url: str) -> str | None:
-    match = re.search(r"soundcloud\.com/([^/?#]+/[^/?#]+)", url)
-    if match:
-        return f"sc:{match.group(1)}"
-    if "on.soundcloud.com" in url:
-        clean_url = url.split('?')[0].rstrip('/')
-        hashed = hashlib.md5(clean_url.encode('utf-8')).hexdigest()
-        return f"sc:{hashed}"
-    return None
-
-
-def ytmusic_cache_key(url: str, format_choice: str = None) -> str | None:
-    match = re.search(r"v=([\w-]+)", url)
-    if match:
-        return f"ytmusic:{match.group(1)}"
-    return None
-
-
-def instagram_cache_key(url: str) -> str | None:
-    match = re.search(r"/(?:p|reels?|tv)/([A-Za-z0-9_-]+)", url)
-    if match:
-        return f"ig:{match.group(1)}"
-    clean_url = url.split('?')[0].rstrip('/')
-    hashed = hashlib.md5(clean_url.encode('utf-8')).hexdigest()
-    return f"ig:{hashed}"
-
-
 inline_router = Router(name="inline_handler")
-
 logger = logging.getLogger(__name__)
 
-FAST_TRACK_SERVICES = []
+INLINE_SEARCH_LIMIT = 25
+VISUAL_MEDIA_TYPES = ("photo", "video", "gif")
 
-@inline_router.inline_query(F.query.regexp(r"^https?://"))
-async def inline_media_handler(inline_query: InlineQuery, config: Config, db_session: AsyncSession, i18n: TranslatorRunner):
-    url = inline_query.query.strip()
-    url_hash = hashlib.md5(url.encode()).hexdigest()
-    
-    service_name = None
-    cache_key = None
-    
-    # Определение сервиса и ключа кэша
-    if re.match(TWITTER_REGEX, url):
-        service_name = "twitter"
-        cache_key = twitter_cache_key(url)
-    elif re.match(REDDIT_REGEX, url):
-        service_name = "reddit"
-        cache_key = reddit_cache_key(url)
-    elif re.match(PINTEREST_REGEX, url):
-        service_name = "pinterest"
-        cache_key = pinterest_cache_key(url)
-    elif re.match(INSTAGRAM_REGEX, url):
-        service_name = "instagram"
-        cache_key = instagram_cache_key(url)
-    elif re.match(TIKTOK_REGEX, url):
-        service_name = "tiktok"
-        cache_key = tiktok_cache_key(url)
-    elif re.match(YOUTUBE_REGEX, url):
-        service_name = "youtube"
-        cache_key = youtube_cache_key(url, "default")
-    elif re.match(YTMUSIC_REGEX, url):
-        service_name = "ytmusic"
-        cache_key = ytmusic_cache_key(url, "default")
-    elif re.match(SOUNDCLOUD_REGEX, url):
-        service_name = "soundcloud"
-        cache_key = soundcloud_cache_key(url)
-    elif re.match(SPOTIFY_REGEX, url):
-        service_name = "spotify"
-        cache_key = spotify_cache_key(url)
-    elif re.match(DEEZER_REGEX, url):
-        service_name = "deezer"
-        cache_key = deezer_cache_key(url)
-    elif re.match(APPLE_MUSIC_REGEX, url):
-        service_name = "apple_music"
-        cache_key = apple_music_cache_key(url)
-        
-    if not service_name or not cache_key:
-        return await inline_query.answer([], cache_time=10)
+RECENT_TAGS = ("#recent", "#recents", "#недавнее", "#история", "#last")
+MUSIC_TAGS = ("#music", "#музыка", "🎵", "#audio")
+SAVED_TAGS = ("#saved", "#saves", "#сейв", "#сейвы")
+PASTE_TRIGGERS = ("paste", "#paste", "вставить", "буфер")
 
+
+def _match_hashtag(query: str, tags: tuple[str, ...]) -> tuple[bool, str]:
+    """Проверяет, начинается ли запрос с одного из хэштегов."""
+    q_lower = query.lower()
+    for tag in tags:
+        if q_lower == tag:
+            return True, ""
+        if q_lower.startswith(tag + " "):
+            sub = query[len(tag):].strip()
+            return True, sub
+    return False, ""
+
+
+def _build_save_inline_result(save, is_own: bool = True):
+    """Преобразует запись из БД в нативный результат инлайна без лишних подписей."""
+    icon = "💾" if is_own else "🌐"
+    res_id = f"save_{save.id}"
+    title = f"{icon} {save.label}"
+    if save.media_type == "video":
+        return InlineQueryResultCachedVideo(id=res_id, title=title, video_file_id=save.telegram_file_id, caption=None)
+    elif save.media_type == "photo":
+        return InlineQueryResultCachedPhoto(id=res_id, photo_file_id=save.telegram_file_id, title=title, caption=None)
+    elif save.media_type == "audio":
+        return InlineQueryResultCachedAudio(id=res_id, audio_file_id=save.telegram_file_id, caption=None)
+    elif save.media_type == "gif":
+        return InlineQueryResultCachedGif(id=res_id, title=title, gif_file_id=save.telegram_file_id, caption=None)
+    return None
+
+
+def _build_recent_inline_result(item: dict, idx: int):
+    """Преобразует недавнее скачанное медиа из Redis в результат инлайна."""
+    file_id = item.get("file_id")
+    m_type = item.get("media_type")
+    if not file_id or m_type not in VISUAL_MEDIA_TYPES:
+        return None
+
+    raw_title = item.get("title") or "Недавнее"
+    title = f"🕒 {raw_title}"
+    res_id = f"recent_{idx}_{hashlib.md5(file_id.encode()).hexdigest()[:8]}"
+
+    if m_type == "video":
+        return InlineQueryResultCachedVideo(id=res_id, title=title, video_file_id=file_id, caption=None)
+    elif m_type == "photo":
+        return InlineQueryResultCachedPhoto(id=res_id, photo_file_id=file_id, title=title, caption=None)
+    elif m_type == "gif":
+        return InlineQueryResultCachedGif(id=res_id, title=title, gif_file_id=file_id, caption=None)
+    return None
+
+
+async def _safe_answer_inline(
+    inline_query: InlineQuery,
+    results: list,
+    cache_time: int = 3,
+    is_personal: bool = True,
+):
+    """Безопасная отправка ответа инлайна с перехватом TelegramBadRequest (DOCUMENT_INVALID и др.)"""
     try:
-        # 1. ПРОВЕРЯЕМ КЭШ (Для ВСЕХ сервисов - это бесплатно)
-        cached_dto = await get_media_cache(db_session, cache_key)
-        media_items = []
+        return await inline_query.answer(results, cache_time=cache_time, is_personal=is_personal)
+    except TelegramBadRequest as e:
+        logger.warning(f"Failed to answer inline query with {len(results)} items ({e}). Possible foreign bot token file_ids.")
+        try:
+            return await inline_query.answer([], cache_time=1, is_personal=True)
+        except Exception:
+            pass
 
-        if cached_dto:
-            if cached_dto.media_type == "gallery":
-                for item in cached_dto.data.items:
-                    media_items.append(MediaContent(
-                        type=MediaType(item.media_type),
-                        telegram_file_id=item.file_id,
-                        title=cached_dto.data.title
-                    ))
-            else:
-                media_items.append(MediaContent(
-                    type=MediaType(cached_dto.media_type),
-                    telegram_file_id=cached_dto.telegram_file_id,
-                    title=cached_dto.data.title
-                ))
-        
-        # 2. КЭША НЕТ. Решаем, качать или сразу отправить в ЛС
-        if not media_items:
-            if service_name in FAST_TRACK_SERVICES:
-                pass
-            else:
-                # Для остальных сервисов (Instagram, TikTok, YouTube и т.д.) - сразу фолбэк
-                pass
 
-        # 3. ОТДАЕМ РЕЗУЛЬТАТ (Медиа или Фолбэк)
-        if not media_items:
-            await cache_set(f"inline_url:{url_hash}", {'url': url}, 600)
+@inline_router.inline_query()
+async def inline_main_handler(
+    inline_query: InlineQuery,
+    db_session: AsyncSession,
+    i18n: TranslatorRunner,
+):
+    """
+    Инлайн-поиск медиа:
+    1. Хэштег #recent (#recents, #недавнее) -> до 15 недавних загрузок пользователя (без музыки)
+    2. Запрос paste -> вставка последнего скопированного через /copy медиа из Redis (1 час)
+    3. Хэштег #music (#музыка, 🎵) -> поиск музыки в кэше бота
+    4. Хэштег #saved (#saves, #сейв, #сейвы) -> поиск только по личным сохранёнкам
+    5. По умолчанию пустой запрос (@bot) -> скопированное (1) + недавние (до 5) + личные (до 5) + публичные мемы
+    6. Поиск по тексту (@bot <текст>) -> поиск картинок/мемов по названию/описанию
+    """
+    raw_query = inline_query.query.strip()
+    user_id = inline_query.from_user.id
+    q_lower = raw_query.lower()
 
-            fallback = InlineQueryResultArticle(
-                id=url_hash,
-                title=i18n.inline.download.title(),
-                description=i18n.inline.download.desc(),
-                thumbnail_url="https://img.icons8.com/color/48/000000/download--v1.png",
-                input_message_content=InputTextMessageContent(
-                    message_text=i18n.inline.download.msg(service=service_name.capitalize()),
-                    parse_mode="Markdown"
-                ),
-                # ВОТ ОНА - КНОПКА ПРЯМОГО ПЕРЕХОДА
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text=i18n.inline.download.btn(), url=f"https://t.me/CharlotteFox_Bot?start={url_hash}")]
-                ])
-            )
-            return await inline_query.answer([fallback], cache_time=5, is_personal=True)
-
-        from storage.db.crud import get_user, get_user_settings
-        from utils.text_utils import truncate_string, escape_html
-
-        user = await get_user(db_session, inline_query.from_user.id)
-        is_premium = user.is_premium if user else False
-        user_settings = await get_user_settings(db_session, inline_query.from_user.id)
-        
-        show_ad = True
-        if user_settings and is_premium:
-            show_ad = user_settings.profile.bot_sign
-
+    # 1. ХЭШТЕГ #recent — до 15 недавних загрузок за 12 часов
+    is_recent, recent_query = _match_hashtag(raw_query, RECENT_TAGS)
+    if is_recent:
         results = []
-        for i, media in enumerate(media_items):
-            if not media.telegram_file_id:
-                continue
-            res_id = f"{url_hash}_{i}"
+        recents = await get_recent_downloads(user_id, limit=15)
+        seen_file_ids = set()
+        for idx, item in enumerate(recents):
+            fid = item.get("file_id")
+            if fid and fid not in seen_file_ids:
+                res = _build_recent_inline_result(item, idx)
+                if res:
+                    seen_file_ids.add(fid)
+                    results.append(res)
+        return await _safe_answer_inline(inline_query, results, cache_time=1, is_personal=True)
 
-            final_caption = escape_html(media.title) if media.title else ""
-            if show_ad:
-                ad_text = "\n\n<a href='https://t.me/CharlotteFox_Bot'>Charlotte 🧡</a>"
-                final_caption = truncate_string(final_caption, 1000)
-                final_caption += ad_text
-            elif not final_caption:
-                final_caption = None
-            
-            if media.type in [MediaType.VIDEO, MediaType.GIF]:
-                results.append(InlineQueryResultCachedVideo(id=res_id, title=media.title or "Video", video_file_id=media.telegram_file_id, caption=final_caption, parse_mode="HTML"))
-            elif media.type == MediaType.PHOTO:
-                results.append(InlineQueryResultCachedPhoto(id=res_id, photo_file_id=media.telegram_file_id, title=media.title or "Photo", caption=final_caption, parse_mode="HTML"))
-            elif media.type == MediaType.AUDIO:
-                results.append(InlineQueryResultCachedAudio(id=res_id, audio_file_id=media.telegram_file_id, caption=final_caption, parse_mode="HTML"))
+    # 2. ВСТАВКА ИЗ БУФЕРА ОБМЕНА: paste (или #paste, вставить, буфер)
+    if q_lower in PASTE_TRIGGERS:
+        copied = await cache_get(f"clipboard:{user_id}")
+        results = []
+        if copied and isinstance(copied, dict):
+            file_id = copied.get("file_id")
+            m_type = copied.get("media_type")
+            title = f"📋 {copied.get('title') or 'Вставить из буфера'}"
 
-        if not results:
-             return await inline_query.answer([], cache_time=5)
+            res_id = f"paste_{user_id}"
+            if m_type == "video":
+                results.append(InlineQueryResultCachedVideo(id=res_id, title=title, video_file_id=file_id, caption=None))
+            elif m_type == "photo":
+                results.append(InlineQueryResultCachedPhoto(id=res_id, photo_file_id=file_id, title=title, caption=None))
+            elif m_type == "audio":
+                results.append(InlineQueryResultCachedAudio(id=res_id, audio_file_id=file_id, caption=None))
+            elif m_type == "gif":
+                results.append(InlineQueryResultCachedGif(id=res_id, title=title, gif_file_id=file_id, caption=None))
 
-        return await inline_query.answer(results, cache_time=300)
-        
-    except Exception as e:
-        logger.error(f"Critical inline error: {e}")
-        return await inline_query.answer([], cache_time=10)
+        return await _safe_answer_inline(inline_query, results, cache_time=1, is_personal=True)
+
+    # 3. ХЭШТЕГ #music (или #музыка, 🎵) — поиск музыки
+    is_music, music_query = _match_hashtag(raw_query, MUSIC_TAGS)
+    if is_music:
+        results = []
+        tracks = await search_cached_music(db_session, music_query, limit=INLINE_SEARCH_LIMIT)
+        for idx, track in enumerate(tracks):
+            key_hash = hashlib.md5(track.cache_key.encode()).hexdigest()[:8]
+            results.append(
+                InlineQueryResultCachedAudio(
+                    id=f"music_{idx}_{key_hash}",
+                    audio_file_id=track.telegram_file_id,
+                    caption=None,
+                )
+            )
+        return await _safe_answer_inline(inline_query, results, cache_time=5, is_personal=True)
+
+    # 4. ХЭШТЕГ #saved (или #saves) — поиск только по личным сохранёнкам
+    is_saved, saved_query = _match_hashtag(raw_query, SAVED_TAGS)
+    if is_saved:
+        results = []
+        user_saves = await search_user_saves(
+            db_session, user_id, query=saved_query, limit=INLINE_SEARCH_LIMIT
+        )
+        for save in user_saves:
+            item = _build_save_inline_result(save, is_own=True)
+            if item:
+                results.append(item)
+        return await _safe_answer_inline(inline_query, results, cache_time=3, is_personal=True)
+
+    # 5. ПУСТОЙ ЗАПРОС (@bot): структурированная выдача без перегруза
+    if not raw_query:
+        results = []
+        seen_file_ids = set()
+
+        # А. Буфер обмена (первым, если есть скопированное визуальное медиа)
+        copied = await cache_get(f"clipboard:{user_id}")
+        if copied and isinstance(copied, dict):
+            file_id = copied.get("file_id")
+            m_type = copied.get("media_type")
+            if file_id and m_type in VISUAL_MEDIA_TYPES:
+                seen_file_ids.add(file_id)
+                title = f"📋 {copied.get('title') or 'Вставить из буфера'}"
+                res_id = f"paste_{user_id}"
+                if m_type == "video":
+                    results.append(InlineQueryResultCachedVideo(id=res_id, title=title, video_file_id=file_id, caption=None))
+                elif m_type == "photo":
+                    results.append(InlineQueryResultCachedPhoto(id=res_id, photo_file_id=file_id, title=title, caption=None))
+                elif m_type == "gif":
+                    results.append(InlineQueryResultCachedGif(id=res_id, title=title, gif_file_id=file_id, caption=None))
+
+        # Б. Недавно скачанное (до 5 шт., видео/фото/гиф за 12 часов)
+        recents = await get_recent_downloads(user_id, limit=5)
+        for idx, item in enumerate(recents):
+            fid = item.get("file_id")
+            if fid and fid not in seen_file_ids:
+                res = _build_recent_inline_result(item, idx)
+                if res:
+                    seen_file_ids.add(fid)
+                    results.append(res)
+
+        # В. Личные сохранёнки пользователя (до 5 шт.)
+        user_saves = await search_user_saves(
+            db_session, user_id, query="", limit=5, media_types=VISUAL_MEDIA_TYPES
+        )
+        for save in user_saves:
+            if save.telegram_file_id not in seen_file_ids:
+                res = _build_save_inline_result(save, is_own=True)
+                if res:
+                    seen_file_ids.add(save.telegram_file_id)
+                    results.append(res)
+
+        # Г. Популярные публичные мемы библиотеки (добирают до 25)
+        remaining = INLINE_SEARCH_LIMIT - len(results)
+        if remaining > 0:
+            pub_saves = await search_public_saves(
+                db_session, query="", exclude_user_id=user_id,
+                limit=remaining, media_types=VISUAL_MEDIA_TYPES
+            )
+            for save in pub_saves:
+                if save.telegram_file_id not in seen_file_ids:
+                    res = _build_save_inline_result(save, is_own=False)
+                    if res:
+                        seen_file_ids.add(save.telegram_file_id)
+                        results.append(res)
+
+        return await _safe_answer_inline(inline_query, results, cache_time=1, is_personal=True)
+
+    # 6. ПОИСК ПО ТЕКСТУ (@bot <текст>)
+    results = []
+    user_saves = await search_user_saves(
+        db_session, user_id, query=raw_query, limit=INLINE_SEARCH_LIMIT, media_types=VISUAL_MEDIA_TYPES
+    )
+    for save in user_saves:
+        item = _build_save_inline_result(save, is_own=True)
+        if item:
+            results.append(item)
+
+    if len(results) < INLINE_SEARCH_LIMIT:
+        pub_saves = await search_public_saves(
+            db_session, query=raw_query, exclude_user_id=user_id,
+            limit=INLINE_SEARCH_LIMIT - len(results), media_types=VISUAL_MEDIA_TYPES
+        )
+        for save in pub_saves:
+            item = _build_save_inline_result(save, is_own=False)
+            if item:
+                results.append(item)
+
+    return await _safe_answer_inline(inline_query, results, cache_time=3, is_personal=True)
+
+
+@inline_router.chosen_inline_result()
+async def handle_chosen_inline_result(
+    chosen: ChosenInlineResult,
+    db_session: AsyncSession,
+):
+    """Счётчик популярности: увеличивает uses_count при отправке сохранёнки/мема (чужими пользователями)"""
+    if chosen.result_id.startswith("save_"):
+        try:
+            save_id = int(chosen.result_id.split("_")[1])
+            user_id = chosen.from_user.id
+            await increment_save_uses(db_session, save_id, user_id=user_id)
+        except Exception as e:
+            logger.debug(f"Failed to increment save uses: {e}")

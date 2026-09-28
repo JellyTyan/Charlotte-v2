@@ -17,7 +17,7 @@ from models.service_list import Services
 from senders.media_sender import MediaSender
 from storage.db.crud import get_media_cache, check_if_user_premium, get_chat_settings
 from tasks.task_manager import task_manager
-from utils import escape_html, truncate_string, build_caption, format_author_link
+from utils import escape_html, truncate_string, build_caption, format_author_link, extract_url
 from utils.statistics_helper import log_download_event
 
 twitter_router = Router(name="twitter")
@@ -37,10 +37,19 @@ async def twitter_handler(
     if not message.text or not message.from_user:
         return
 
-    match = re.search(TWITTER_REGEX, message.text)
-    url = match.group(0) if match else message.text.strip()
+    url = extract_url(TWITTER_REGEX, message.text)
+    if not url:
+        return
     chat_id = message.chat.id
     user_id = message.from_user.id
+
+    from tasks.task_manager import task_manager
+    if task_manager.is_user_busy(user_id):
+        from utils.ephemeral import notify_already_downloading_if_ephemeral
+        await notify_already_downloading_if_ephemeral(message, user_id)
+
+    from utils.effects import react_safe
+    await react_safe(message, "👀")
 
     sponsor = await check_if_user_premium(db_session, user_id)
 
@@ -68,7 +77,7 @@ async def twitter_handler(
                     )
                 if not allow_nsfw:
                     raise BotError(
-                        code=ErrorCode.NOT_ALLOWED,
+                        code=ErrorCode.AGE_RESTRICTED,
                         url=url,
                         service=Services.TWITTER,
                         message="NSFW content is not allowed in this chat",

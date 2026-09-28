@@ -428,12 +428,10 @@ class MediaSender:
                     else await get_user_settings(db_session, message.chat.id)
                 )
 
-            is_premium = False
             show_ad = True
-            if db_session and message.from_user:
-                user = await get_user(db_session, message.from_user.id)
-                is_premium = user.is_premium if user else False
-
+            if settings and hasattr(settings.profile, "bot_sign"):
+                show_ad = settings.profile.bot_sign
+            elif db_session and message.from_user:
                 user_settings = await get_user_settings(db_session, message.from_user.id)
                 if user_settings:
                     show_ad = user_settings.profile.bot_sign
@@ -443,35 +441,75 @@ class MediaSender:
             )
 
             # 6. Отправка пользователю
+            sent_all = []
             if media_items:
-                await self._send_media_group(
-                    message, media_items, caption, settings, service, show_ad, skip_notification
-                )
+                has_video = any(getattr(m, "type", None) == MediaType.VIDEO for m in media_items)
+                media_action = ChatActionSender.upload_video if has_video else ChatActionSender.upload_photo
+                async with media_action(bot=message.bot, chat_id=message.chat.id):
+                    msgs = await self._send_media_group(
+                        message, media_items, caption, settings, service, show_ad, skip_notification
+                    )
+                    if msgs:
+                        sent_all.extend(msgs)
 
             for audio in audio_items:
                 async with ChatActionSender.upload_voice(bot=message.bot, chat_id=message.chat.id):
-                    await self._send_audio(message, audio, settings, service, caption, show_ad, skip_notification)
+                    msg = await self._send_audio(message, audio, settings, service, caption, show_ad, skip_notification)
+                    if msg:
+                        sent_all.append(msg)
 
             for gif in gif_items:
-                await self._send_gif(message, gif, settings, service, caption, show_ad, skip_notification)
+                async with ChatActionSender.upload_video(bot=message.bot, chat_id=message.chat.id):
+                    msg = await self._send_gif(message, gif, settings, service, caption, show_ad, skip_notification)
+                    if msg:
+                        sent_all.append(msg)
 
-            # 7. Реакции
-            if settings.profile.reactions and not skip_reaction:
-                emoji_pool = (
-                    REACTION_EMOJIS + NEGATIVITY_EMOJIS
-                    if settings.profile.negativity
-                    else REACTION_EMOJIS
-                )
-                try:
-                    await message.react(
-                        [ReactionTypeEmoji(emoji=random.choice(emoji_pool))]
+            if sent_all:
+                from utils.message_context import save_message_context
+                from utils.recent_downloads import extract_media_from_message, push_recent_download
+
+                user_id = message.from_user.id if message.from_user else None
+                ctx_payload = {
+                    "cache_key": cache_key,
+                    "service": service,
+                    "original_url": getattr(message, "text", None),
+                    "user_id": user_id,
+                }
+                for sm in sent_all:
+                    if sm and hasattr(sm, "message_id"):
+                        await save_message_context(sm.chat.id, sm.message_id, ctx_payload)
+
+                if user_id:
+                    saved_count = 0
+                    for sm in sent_all:
+                        if sm and hasattr(sm, "message_id"):
+                            fid, mtype, ftitle = extract_media_from_message(sm)
+                            if fid and mtype in ("video", "photo", "gif"):
+                                await push_recent_download(
+                                    user_id=user_id,
+                                    file_id=fid,
+                                    media_type=mtype,
+                                    title=ftitle or caption,
+                                )
+                                saved_count += 1
+                                if saved_count >= 2:
+                                    break
+
+            # 7. Реакции (оригинальная реакция Шарлотки на скачанный контент)
+            if not skip_reaction:
+                if settings.profile.reactions:
+                    emoji_pool = (
+                        REACTION_EMOJIS + NEGATIVITY_EMOJIS
+                        if settings.profile.negativity
+                        else REACTION_EMOJIS
                     )
-                except Exception as e:
-                    error_msg = str(e)
-                    if "message to react not found" in error_msg or "REACTION_INVALID" in error_msg:
-                        logger.debug(f"Failed to react (ignored expected error): {e}")
-                    else:
-                        logger.warning(f"Failed to react: {e}")
+                    from utils.effects import react_safe
+                    await react_safe(message, random.choice(emoji_pool))
+                else:
+                    try:
+                        await message.react([])
+                    except Exception:
+                        pass
 
             # 8. Если дамп упал, но юзеру доставили (сгенерировался file_id), сохраняем кэш постфактум
             if not dump_success and cache_key and db_session and service:
@@ -508,10 +546,11 @@ class MediaSender:
         service: Optional[str] = None,
         show_ad: bool = True,
         skip_notification: bool = False,
-    ) -> None:
+    ) -> List[types.Message]:
         if not content:
-            return
+            return []
 
+        all_sent: List[types.Message] = []
         service_settings = (
             getattr(settings.services, service, None) if service else None
         )
@@ -572,6 +611,7 @@ class MediaSender:
                     )
                 # Кэшируем новые file_id, если их не было
                 if isinstance(sent_messages, list):
+                    all_sent.extend(sent_messages)
                     for item, sent_msg in zip(group_items, sent_messages):
                         if sent_msg.photo:
                             item.telegram_file_id = sent_msg.photo[-1].file_id
@@ -587,15 +627,42 @@ class MediaSender:
                 raise BotError(
                     code=ErrorCode.LARGE_FILE,
                     message="File is too large for Telegram",
+                    service=self._get_service_enum(service) if service else None,
                     is_logged=True,
                 )
             except Exception as e:
+                # If Telegram fails with IMAGE_PROCESS_FAILED, fallback to sending as documents
+                if "IMAGE_PROCESS_FAILED" in str(e) and not send_as_raw:
+                    logger.warning("IMAGE_PROCESS_FAILED encountered in media group, retrying as documents")
+                    raw_group = MediaGroupBuilder()
+                    if i == 0 and final_caption:
+                        raw_group.caption = safe_truncate_html(final_caption, 1024)
+                    for item in group_items:
+                        media_input = self._get_input_media(item, as_document=True)
+                        raw_group.add_document(media=media_input)
+                    try:
+                        async with ChatActionSender(bot=message.bot, chat_id=message.chat.id, action="upload_document"):
+                            sent_messages = await self._safe_send(
+                                message,
+                                "answer_media_group",
+                                media=raw_group.build(),
+                                disable_notification=skip_notification or not settings.profile.notifications,
+                            )
+                        if isinstance(sent_messages, list):
+                            all_sent.extend(sent_messages)
+                            continue
+                    except Exception as raw_e:
+                        e = raw_e
+
                 raise BotError(
                     code=ErrorCode.SEND_ERROR,
                     message=f"Failed to send media group: {e}",
+                    service=self._get_service_enum(service) if service else None,
                     is_logged=True,
                     critical=True,
                 )
+
+        return all_sent
 
     async def _send_audio(
         self,
@@ -617,7 +684,7 @@ class MediaSender:
                 message,
                 "answer_audio",
                 audio=media_input,
-                disable_notification=skip_notification or not settings.profile.reactions,
+                disable_notification=skip_notification or not settings.profile.notifications,
                 thumbnail=self._get_thumb(audio.cover)
                 if not audio.telegram_file_id
                 else None,
@@ -654,6 +721,8 @@ class MediaSender:
                 )
                 if sent_cover.document:
                     audio.full_cover_file_id = sent_cover.document.file_id
+
+        return sent_msg
 
     async def _send_gif(
         self,
@@ -723,6 +792,8 @@ class MediaSender:
             if sent_msg.animation.thumbnail:
                 gif.cover_file_id = sent_msg.animation.thumbnail.file_id
 
+        return sent_msg
+
     # ==========================================
     # РАБОТА С БД (СОХРАНЕНИЕ КЭША)
     # ==========================================
@@ -756,7 +827,7 @@ class MediaSender:
                     or (existing.telegram_document_file_id if existing else None),
                     data=CacheMetadata(
                         title=item.title or caption,
-                        description=caption,
+                        description=item.description or caption,
                         author=item.performer,
                         duration=item.duration,
                         cover=item.cover_file_id or existing_data.cover,
@@ -814,8 +885,9 @@ class MediaSender:
         """Разбивает массив медиа на категории"""
         media, audio, gif, caption = [], [], [], None
         for item in content:
-            if item.title and not caption:
-                caption = item.title
+            if not caption:
+                # Предпочитаем description (HTML-caption) над title (чистый текст)
+                caption = item.description or item.title
 
             if item.type in (MediaType.PHOTO, MediaType.VIDEO):
                 media.append(item)

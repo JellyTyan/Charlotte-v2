@@ -3,6 +3,7 @@ from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from fluentogram import TranslatorRunner
+from utils.ephemeral import send_smart_message
 
 from aiogram import Router
 router = Router()
@@ -13,4 +14,12 @@ async def help_command(message: types.Message, state: FSMContext, i18n: Translat
     if user is None:
         return
 
-    await message.reply(i18n.msg.help(), parse_mode=ParseMode.HTML)
+    bot_info = await message.bot.get_me()
+    bot_username = bot_info.username or "CharlotteFox_Bot"
+
+    await send_smart_message(
+        message,
+        i18n.msg.help(bot_username=bot_username),
+        for_user_id=user.id,
+        parse_mode=ParseMode.HTML,
+    )

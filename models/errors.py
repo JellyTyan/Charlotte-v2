@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 from .service_list import Services
 
@@ -19,13 +18,12 @@ class ErrorCode(Enum):
     PREVIEW_ONLY = "PREVIEW_ONLY" # Скачалось только превью (30 сек)
 
 
-
 @dataclass
 class BotError(Exception):
     code: ErrorCode  # For example: "E001"
-    url: Optional[str] = None # Media URL
-    service: Optional[Services] = None # Service name
-    message: Optional[str] = None  # Message for Owner
+    url: str | None = None # Media URL
+    service: Services | None = None # Service name
+    message: str | None = None  # Message for Owner
     critical: bool = False # Send to owner?
     is_logged: bool = False # Need to be logged?
     send_user_message: bool = True # Send error message to user?

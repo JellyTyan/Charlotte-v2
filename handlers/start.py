@@ -87,7 +87,9 @@ async def start_command(
         owner_id = next((admin.user.id for admin in admins if admin.status == "creator"), message.from_user.id)
         await create_chat(session=db_session, chat_id=message.chat.id, owner_id=owner_id)
 
-        await message.answer(
+        from utils.ephemeral import send_smart_message
+        await send_smart_message(
+            message,
             i18n.msg.hello(name=message.from_user.first_name),
             parse_mode=ParseMode.MARKDOWN,
         )

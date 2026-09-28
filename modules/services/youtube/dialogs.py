@@ -206,6 +206,16 @@ async def get_advanced_data(dialog_manager: DialogManager, **kwargs) -> dict[str
 
 # --- Event Handlers ---
 
+_background_tasks: set[asyncio.Task] = set()
+
+
+def run_background_task(coro) -> asyncio.Task:
+    t = asyncio.create_task(coro)
+    _background_tasks.add(t)
+    t.add_done_callback(_background_tasks.discard)
+    return t
+
+
 async def trigger_download(
     dialog_manager: DialogManager,
     height: int,
@@ -240,16 +250,29 @@ async def trigger_download(
 
     is_premium = start_data.get("is_premium", False)
 
+    origin_msg_id = start_data.get("origin_message_id")
+    if origin_msg_id and target_message:
+        user_message = target_message.model_copy(update={"message_id": origin_msg_id})
+        if getattr(target_message, "bot", None):
+            user_message._bot = target_message.bot
+    else:
+        user_message = target_message
+
+    if not getattr(user_message, "bot", None):
+        from core.loader import bot as default_bot
+        if default_bot:
+            user_message._bot = default_bot
+
     if size_mb > 100 and not is_premium:
         from modules.payment.video import PaymentService
         payload = f"yt_{url_hash}_{height}_{1 if is_audio else 0}"
         invoice_params = await PaymentService.create_single_download_invoice(
-            chat_id=target_message.chat.id,
+            chat_id=user_message.chat.id,
             payload=payload,
             provider_token=""
         )
         invoice_params.pop('chat_id', None)
-        await target_message.answer_invoice(**invoice_params)
+        await user_message.answer_invoice(**invoice_params)
         if dialog_msg:
             try:
                 await dialog_msg.delete()
@@ -258,22 +281,51 @@ async def trigger_download(
         await dialog_manager.done()
         return
 
+    # Удаляем меню выбора, чтобы в чате не оставалось дубликата без кнопок
     if dialog_msg:
         try:
             await dialog_msg.delete()
-        except TelegramBadRequest as e:
-            logger.warning("Failed to delete dialog message %s: %s", dialog_msg.message_id, e)
+        except Exception:
+            pass
+    try:
+        stack = dialog_manager.current_stack()
+        stack.last_message_id = None
+        stack.last_media_id = None
+        stack.last_media_unique_id = None
+        await dialog_manager.storage().save_stack(stack)
+    except Exception:
+        pass
     await dialog_manager.done()
 
-    asyncio.create_task(process_youtube_download(
-        message=target_message,
+    # Задача 7: уведомить пользователя если уже есть активная загрузка,
+    # но только если у него включены ephemeral-сообщения.
+    from tasks.task_manager import task_manager
+    if task_manager.is_user_busy(user_id):
+        try:
+            from utils.ephemeral import notify_already_downloading_if_ephemeral
+            await notify_already_downloading_if_ephemeral(user_message, user_id, i18n)
+        except Exception as e:
+            logger.debug(f"Failed to send busy notification: {e}")
+
+    extra_metadata = {
+        "uploader": start_data.get("uploader"),
+        "uploader_url": start_data.get("uploader_url") or start_data.get("channel_url"),
+        "channel_url": start_data.get("channel_url"),
+        "description": start_data.get("description"),
+        "thumbnail": start_data.get("thumbnail"),
+        "title": start_data.get("title"),
+    }
+
+    run_background_task(process_youtube_download(
+        message=user_message,
         url=url,
         target_height=height,
         is_audio_only=is_audio,
         user_id=user_id,
         db_session=db_session,
         i18n=i18n,
-        is_topich=is_topich
+        is_topich=is_topich,
+        extra_metadata=extra_metadata
     ))
 
 
@@ -326,6 +378,14 @@ async def on_cancel_click(c: CallbackQuery, button: Button, manager: DialogManag
             await c.message.delete()
         except TelegramBadRequest as e:
             logger.warning("Failed to delete dialog message %s: %s", c.message.message_id, e)
+    try:
+        stack = manager.current_stack()
+        stack.last_message_id = None
+        stack.last_media_id = None
+        stack.last_media_unique_id = None
+        await manager.storage().save_stack(stack)
+    except Exception:
+        pass
     await manager.done()
     await c.answer()
 

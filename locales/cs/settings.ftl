@@ -1,30 +1,30 @@
-settings-welcome = Čauky! 👋 Tady si můžeš všechno nastavit podle svého gusta. Cít se tu jako doma!
+settings-welcome = Ahoj! Tady si můžeš všechno nastavit podle sebe, udělej si pohodlí.
 settings-back = 🔙 Zpět
 settings-title = Nastavení
-settings-no-permission = Aww, nemáš oprávnění měnit tato nastavení!
-settings-saved = Super! Nastavení aktualizováno! ✨
-settings-no-allowed-groups = Toto nastavení není dostupné pro skupiny, promiň!
-settings-no-allowed-dm = Toto nastavení není pro soukromé chaty, promiň!
+settings-no-permission = Jejda, nemáš oprávnění měnit toto nastavení.
+settings-saved = Nastavení aktualizováno! ✨
+settings-no-allowed-groups = Toto nastavení není dostupné ve skupinách, promiň.
+settings-no-allowed-dm = Toto nastavení nelze měnit v soukromých zprávách.
 
 btn-language = Jazyk
 btn-title-language = Popisky
-btn-blocked-services = Blokované služby
+btn-blocked-services = Blokování služeb
 
 btn-send-raw = { $is_enabled ->
-    [true] 🟢 Soubor
-    *[false] ⚪ Soubor
+    [true] 🟢 Jako soubor
+    *[false] ⚪ Jako soubor
 }
 btn-send-music-covers = { $is_enabled ->
-    [true] 🟢 Obaly alb
-    *[false] ⚪ Obaly alb
+    [true] 🟢 Přebaly
+    *[false] ⚪ Přebaly
 }
 btn-send-reactions = { $is_enabled ->
     [true] 🟢 Reakce
     *[false] ⚪ Reakce
 }
 btn-negativity = { $is_enabled ->
-    [true] 🟢 Negativita
-    *[false] ⚪ Negativita
+    [true] 🟢 Drzejší režim
+    *[false] ⚪ Drzejší režim
 }
 btn-auto-translate = { $is_enabled ->
     [true] 🟢 Překlad
@@ -35,8 +35,8 @@ btn-auto-caption = { $is_enabled ->
     *[false] ⚪ Popisky
 }
 btn-notifications = { $is_enabled ->
-    [true] 🟢 Oznámení
-    *[false] ⚪ Oznámení
+    [true] 🟢 Upozornění
+    *[false] ⚪ Upozornění
 }
 btn-allow-playlists = { $is_enabled ->
     [true] 🟢 Playlisty
@@ -47,48 +47,47 @@ btn-allow-nsfw = { $is_enabled ->
     *[false] ⚪ NSFW
 }
 
-desc-send-raw = Budu posílat média jako soubory pro nejlepší kvalitu! 🎨
-desc-send-music-covers = Ke každé skladbě připojím krásný obal. 🎵
-desc-send-reactions = Budu reagovat emoji, ať vidíš, že na tom makám! ⚡
-desc-negativity-mode = Budu používat toxické emoji při reakcích! 😈
-desc-send-notifications = Vypni, pokud chceš dostávat média bez zvuku oznámení. 🔕
-desc-auto-caption = Sama zkontroluji a přidám popis k médiím. 📝
-desc-auto-translate-titles = Přeložím popisky videí do tvého jazyka! 🌍
-desc-allow-playlists = Stáhnu celé playlisty (opatrně s tím!). 📂
-desc-allow-nsfw = Povolit NSFW obsah v tomto chatu. 🔞
-desc-lossless-mode = Pokusím se pro vás najít Hi-Res skladby! Ale neslibuji, že je najdu, nebo že to budou ty správné. 🎧
+desc-send-raw = Budu posílat média jako soubory — to zachová nejvyšší kvalitu.
+desc-send-music-covers = Připojím přebal alba ke každé skladbě.
+desc-send-reactions = Budu dávat emoji reakce, abys viděl(a) postup.
+desc-negativity-mode = V reakcích budu používat o něco drzejší emoji.
+desc-send-notifications = Vypni, pokud chceš dostávat média potichu.
+desc-auto-caption = Sama zkontroluji a přidám popis k médiím.
+desc-auto-translate-titles = Přeložím popisy videí do tvého jazyka.
+desc-allow-playlists = Stáhnu celé playlisty — opatrně s tím.
+desc-allow-nsfw = Povolit NSFW obsah v tomto chatu.
+desc-lossless-mode = Pokusím se najít Hi-Res verzi skladby. Neslibuji však, že to vyjde.
 
 setting-status-changed = { $is_enabled ->
-    [true] Jupí! Nastavení *{ $setting_name }* je zapnuto!
-    *[false] Rozumím! Nastavení *{ $setting_name }* je vypnuto!
+    [true] Zapnula jsem *{ $setting_name }*!
+    *[false] Vypnula jsem *{ $setting_name }*.
 }
 
-pick-language = Vyber si jazyk! 🌍
-pick-title-language = Vyber jazyk pro popisky!
-language-changed = Paráda! Teď mluvím *{ $language }*!
-language-updated = Jazyk aktualizován!
-title-language-changed = Popisky budou teď v *{ $language }*!
-title-language-updated = Jazyk popisků aktualizován!
-setting-updated = Hotovo! Aktualizováno.
-invalid-setting = Jejda, to nastavení vypadá divně!
-error-updating = Ach ne, nepovedlo se to aktualizovat. Zkusíme to znovu?
-setting-changed = Hotovo! *{ $setting }* je nyní { $status }!
+pick-language = Vyber jazyk 🌍
+pick-title-language = Vyber jazyk pro popisky
+language-changed = Teď mluvím v jazyce *{ $language }*!
+language-updated = Jazyk aktualizován.
+title-language-changed = Popisy teď budou v jazyce *{ $language }*.
+title-language-updated = Jazyk popisků aktualizován.
+setting-updated = Hotovo, aktualizováno.
+invalid-setting = Hmm, toto nastavení neznám.
+error-updating = Nepodařilo se aktualizovat, promiň. Zkusíme to znovu?
 enabled = zapnuto
 disabled = vypnuto
 enable = Zapnout
 disable = Vypnout
 back = Zpět
-service-status-changed = Služba { $service } je nyní { $status }!
-blocked = blokována
+service-status-changed = Služba { $service } je teď { $status }.
+blocked = zablokována
 unblocked = odblokována
-settings-not-found = Hmm, nemůžu ta nastavení najít!
-no-permission-service = Na tato nastavení nesmíš sahat!
-error-service-status = Nepovedlo se aktualizovat stav služby. :(
-current-status = Aktuální stav: { $status }
+settings-not-found = Tato nastavení nemohu najít.
+no-permission-service = Nemáš oprávnění měnit tato nastavení.
+error-service-status = Nepodařilo se aktualizovat stav služby, promiň.
+current-status = Současný stav: { $status }
 
-btn-configure-services = ⚙️ Configure Services
-settings-select-service = Select a service to configure:
-settings-service-title = ⚙️ **{ $name } Settings**
+btn-configure-services = ⚙️ Nastavení služeb
+settings-select-service = Vyber službu k nastavení:
+settings-service-title = **Nastavení { $name }**
 btn-lossless = { $is_enabled ->
     [true] 🟢 LOSSLESS
     *[false] ⚪ LOSSLESS
@@ -99,16 +98,16 @@ btn-service-enabled = { $is_enabled ->
 }
 
 btn-news-spam = { $is_enabled ->
-    [true] 🟢 Novinky
-    *[false] ⚪ Novinky
+    [true] 🟢 Odběr zpráv
+    *[false] ⚪ Odběr zpráv
 }
-desc-news-spam = Povolit botovi posílat vám novinky a aktualizace! 📰
+desc-news-spam = Povolit zasílání novinek a aktualizací.
 
 btn-bot-sign = { $is_enabled ->
     [true] 🟢 Bot Ad 🧡
     *[false] ⚪ Bot Ad 🧡
 }
-desc-bot-sign = Přidávat reklamní podpis „Charlotte 🧡“ ke staženým médiím. Vypnutí je zcela zdarma! ✨
+desc-bot-sign = Přidávat podpis „Charlotte 🧡“ k médiím. Vypnutí je zcela zdarma.
 
 btn-simple-mode = { $is_enabled ->
     [true] 🟢 Jednoduchý režim
@@ -116,16 +115,40 @@ btn-simple-mode = { $is_enabled ->
 }
 desc-simple =
     Jednoduché rozhraní YouTube:
-    Zapnuto — pouze dvě tlačítka (Video nebo Audio), stahování v maximální kvalitě do 100 MB (do 1 GB pro Sponzory).
-    Vypnuto — výběr rozlišení, ořez videa (pro Sponzory).
+    Zapnuto — pouze dvě tlačítka (Video nebo Audio), stahování v nejvyšší kvalitě do 100 MB (až 1 GB pro Sponzory).
+    Vypnuto — výběr rozlišení, ořezání videa (pro Sponzory).
 
 btn-youtube-ui-mode = Rozhraní YouTube
 yt-ui-mode-simple = Jednoduché
 yt-ui-mode-balance = Vyvážené
 yt-ui-mode-advanced = Pokročilé
 desc-youtube-ui-mode =
-    Vyberte styl rozhraní pro stahování z YouTube:
-    
-    • Jednoduché — 2 tlačítka (Video / Audio) pro stahování 1 kliknutím.
-    • Vyvážené — nejlepší kvality na 1 kliknutí + přístup k pokročilému nastavení.
-    • Pokročilé — výběr kvality zaškrtávacími políčky, zvukové stopy a ořezu videa (Trim).
+    Vyber styl rozhraní pro stahování z YouTube:
+
+    • Jednoduché — 2 tlačítka (Video / Audio), stahování jedním kliknutím.
+    • Vyvážené — tlačítka nejlepších kvalit na jedno kliknutí + přístup k pokročilému nastavení.
+    • Pokročilé — výběr libovolné kvality, zvukové stopy a ořezání videa (Trim).
+
+btn-experimental = 🧪 Nové funkce
+desc-experimental-features =
+    Experimentální funkce fungují pouze v novějších oficiálních aplikacích Telegramu a ve starších nebo alternativních klientech se mohou chovat nestabilně.
+
+btn-ephemeral-messages = { $is_enabled ->
+    [true] 🟢 Efemérní zprávy
+    *[false] ⚪ Efemérní zprávy
+}
+desc-ephemeral-messages = Odesílat servisní zprávy ve skupinách jako efemérní zprávy viditelné pouze pro tebe. Při vypnutí posílám běžné automaticky mazané zprávy.
+btn-chat-banned-users = 🚫 Seznam blokovaných
+desc-chat-banned-users = Správa uživatelů blokovaných v tomto chatu.
+cban-usage = Zadej ID uživatele nebo odpověz na jeho zprávu: <code>/cban &lt;user_id&gt;</code>
+cban-cannot-ban-self = Nemůžeš zablokovat sám sebe.
+cban-cannot-ban-admin = Správce chatu nelze zablokovat.
+cban-cannot-ban-bot = Bota nelze zablokovat.
+cban-success = Uživatel <code>{ $user_id }</code> byl v tomto chatu zablokován.
+cban-already-banned = Uživatel <code>{ $user_id }</code> je v tomto chatu již zablokován.
+cunban-usage = Zadej ID uživatele nebo odpověz na jeho zprávu: <code>/cunban &lt;user_id&gt;</code>
+cunban-not-banned = Uživatel <code>{ $user_id }</code> není v tomto chatu zablokován.
+cunban-success = Uživatel <code>{ $user_id }</code> byl v tomto chatu odblokován.
+cbanlist-empty = V tomto chatu nejsou žádní zablokovaní uživatelé.
+cbanlist-title = <b>Seznam blokovaných v chatu:</b>
+btn-unban-user = ❌ Odblokovat { $user_id }

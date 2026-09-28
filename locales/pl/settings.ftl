@@ -1,14 +1,14 @@
-settings-welcome = Hej! 👋 Tutaj możesz dostosować wszystko do siebie. Czuj się jak w domu!
+settings-welcome = Cześć! Tutaj możesz dostosować wszystko pod siebie, rozgość się.
 settings-back = 🔙 Wstecz
 settings-title = Ustawienia
-settings-no-permission = Aww, nie masz uprawnień do zmiany tych ustawień!
-settings-saved = Super! Ustawienia zaktualizowane! ✨
-settings-no-allowed-groups = To ustawienie nie jest dostępne dla grup, sorki!
-settings-no-allowed-dm = To ustawienie nie jest dla czatów prywatnych, sorki!
+settings-no-permission = Ojej, nie masz uprawnień do zmiany tych ustawień.
+settings-saved = Ustawienia zaktualizowane! ✨
+settings-no-allowed-groups = To ustawienie nie jest dostępne w grupach, przepraszam.
+settings-no-allowed-dm = Tego ustawienia nie można zmieniać w wiadomościach prywatnych.
 
 btn-language = Język
-btn-title-language = Opisy
-btn-blocked-services = Zablokowane serwisy
+btn-title-language = Podpisy
+btn-blocked-services = Blokada serwisów
 
 btn-send-raw = { $is_enabled ->
     [true] 🟢 Jako plik
@@ -23,16 +23,16 @@ btn-send-reactions = { $is_enabled ->
     *[false] ⚪ Reakcje
 }
 btn-negativity = { $is_enabled ->
-    [true] 🟢 Negatywność
-    *[false] ⚪ Negatywność
+    [true] 🟢 Z pazurem
+    *[false] ⚪ Z pazurem
 }
 btn-auto-translate = { $is_enabled ->
     [true] 🟢 Tłumaczenie
     *[false] ⚪ Tłumaczenie
 }
 btn-auto-caption = { $is_enabled ->
-    [true] 🟢 Opisy
-    *[false] ⚪ Opisy
+    [true] 🟢 Podpisy
+    *[false] ⚪ Podpisy
 }
 btn-notifications = { $is_enabled ->
     [true] 🟢 Powiadomienia
@@ -47,48 +47,47 @@ btn-allow-nsfw = { $is_enabled ->
     *[false] ⚪ NSFW
 }
 
-desc-send-raw = Będę wysyłać media jako pliki dla najlepszej jakości! 🎨
-desc-send-music-covers = Dołączę okładkę albumu do każdego utworu. 🎵
-desc-send-reactions = Będę reagować emotkami, żebyś widział(a) postęp! ⚡
-desc-negativity-mode = Będę używać toksycznych emoji w reakcjach! 😈
-desc-send-notifications = Wyłącz, jeśli chcesz otrzymywać media bez dźwięku powiadomienia. 🔕
-desc-auto-caption = Sama sprawdzę i dodam opisy do mediów. 📝
-desc-auto-translate-titles = Przetłumaczę opisy wideo na Twój język! 🌍
-desc-allow-playlists = Pobiorę całe playlisty (ostrożnie z tym!). 📂
-desc-allow-nsfw = Zezwalaj na zawartość NSFW w tym czacie. 🔞
-desc-lossless-mode = Spróbuję znaleźć dla Ciebie utwory w Hi-Res! Ale nie obiecuję, że znajdę, ani że będą to właściwe wersje. 🎧
+desc-send-raw = Będę wysyłać multimedia jako pliki — to zachowuje najwyższą jakość.
+desc-send-music-covers = Dołączę okładkę albumu do każdego utworu.
+desc-send-reactions = Będę dodawać reakcje emoji, abyś widział(-a) postęp prac.
+desc-negativity-mode = Będę używać nieco bardziej zadziornych reakcji emoji.
+desc-send-notifications = Wyłącz, jeśli chcesz otrzymywać multimedia po cichu.
+desc-auto-caption = Sama sprawdzę i dodam opisy do multimediów.
+desc-auto-translate-titles = Przetłumaczę opisy wideo na twój język.
+desc-allow-playlists = Pobiorę całe playlisty — ostrożnie z tym.
+desc-allow-nsfw = Zezwól na treści NSFW na tym czacie.
+desc-lossless-mode = Spróbuję znaleźć wersję Hi-Res utworu. Nie obiecuję jednak, że się uda.
 
 setting-status-changed = { $is_enabled ->
-    [true] Jeej! Ustawienie *{ $setting_name }* włączone!
-    *[false] Zrozumiałam! Ustawienie *{ $setting_name }* wyłączone!
+    [true] Włączyłam *{ $setting_name }*!
+    *[false] Wyłączyłam *{ $setting_name }*.
 }
 
-pick-language = Wybierz język! 🌍
-pick-title-language = Wybierz język opisów!
-language-changed = Ekstra! Teraz mówię po *{ $language }*!
-language-updated = Język zaktualizowany!
-title-language-changed = Opisy będą teraz po *{ $language }*!
-title-language-updated = Język opisów zaktualizowany!
-setting-updated = Gotowe! Zaktualizowano.
-invalid-setting = Ups, to ustawienie wygląda dziwnie!
-error-updating = O nie, nie udało się zaktualizować. Spróbuj ponownie?
-setting-changed = Zrobione! *{ $setting }* jest teraz { $status }!
+pick-language = Wybierz język 🌍
+pick-title-language = Wybierz język podpisów
+language-changed = Teraz mówię po *{ $language }*!
+language-updated = Język zaktualizowany.
+title-language-changed = Teraz opisy będą po *{ $language }*.
+title-language-updated = Język podpisów zaktualizowany.
+setting-updated = Gotowe, zaktualizowałam.
+invalid-setting = Hmm, nie znam takiego ustawienia.
+error-updating = Nie udało się zaktualizować, przepraszam. Spróbujemy jeszcze raz?
 enabled = włączone
 disabled = wyłączone
 enable = Włącz
 disable = Wyłącz
 back = Wstecz
-service-status-changed = Serwis { $service } jest teraz { $status }!
+service-status-changed = Serwis { $service } jest teraz { $status }.
 blocked = zablokowany
 unblocked = odblokowany
-settings-not-found = Hmm, nie mogę znaleźć tych ustawień!
-no-permission-service = Nie możesz dotykać tych ustawień!
-error-service-status = Nie udało się zaktualizować statusu serwisu. :(
-current-status = Obecny status: { $status }
+settings-not-found = Nie mogę znaleźć tych ustawień.
+no-permission-service = Nie możesz zmieniać tych ustawień.
+error-service-status = Nie udało się zaktualizować statusu serwisu, przepraszam.
+current-status = Aktualny status: { $status }
 
-btn-configure-services = ⚙️ Configure Services
-settings-select-service = Select a service to configure:
-settings-service-title = ⚙️ **{ $name } Settings**
+btn-configure-services = ⚙️ Ustawienia serwisów
+settings-select-service = Wybierz serwis do skonfigurowania:
+settings-service-title = **Ustawienia { $name }**
 btn-lossless = { $is_enabled ->
     [true] 🟢 LOSSLESS
     *[false] ⚪ LOSSLESS
@@ -102,30 +101,54 @@ btn-news-spam = { $is_enabled ->
     [true] 🟢 Newsletter
     *[false] ⚪ Newsletter
 }
-desc-news-spam = Zezwól botowi na wysyłanie nowości i aktualizacji! 📰
+desc-news-spam = Pozwól na wysyłanie ci nowości i aktualizacji.
 
 btn-bot-sign = { $is_enabled ->
     [true] 🟢 Bot Ad 🧡
     *[false] ⚪ Bot Ad 🧡
 }
-desc-bot-sign = Dodawać podpis „Charlotte 🧡” do pobranych multimediów. Wyłączenie jest całkowicie darmowe! ✨
+desc-bot-sign = Dodawaj podpis „Charlotte 🧡” do multimediów. Wyłączenie jest całkowicie darmowe.
 
 btn-simple-mode = { $is_enabled ->
-    [true] 🟢 Prosty tryb
-    *[false] ⚪ Prosty tryb
+    [true] 🟢 Tryb prosty
+    *[false] ⚪ Tryb prosty
 }
 desc-simple =
     Prosty interfejs YouTube:
-    Włączony — tylko dwa przyciski (Wideo lub Audio), pobieranie w maksymalnej jakości do 100 MB (do 1 GB dla Sponsorów).
+    Włączony — tylko dwa przyciski (Wideo lub Audio), pobieranie w najlepszej jakości do 100 MB (do 1 GB dla Sponsorów).
     Wyłączony — wybór rozdzielczości, przycinanie wideo (dla Sponsorów).
 
 btn-youtube-ui-mode = Interfejs YouTube
 yt-ui-mode-simple = Prosty
-yt-ui-mode-balance = Zrównoważony
+yt-ui-mode-balance = Zbalansowany
 yt-ui-mode-advanced = Zaawansowany
 desc-youtube-ui-mode =
     Wybierz styl interfejsu do pobierania z YouTube:
-    
-    • Prosty — 2 przyciski (Wideo / Audio) do pobierania 1 kliknięciem.
-    • Zrównoważony — najlepsze jakości za 1 kliknięciem + dostęp do zaawansowanych ustawień.
-    • Zaawansowany — pola wyboru dla rozdzielczości, ścieżki dźwiękowej i przycinania wideo (Trim).
+
+    • Prosty — 2 przyciski (Wideo / Audio), pobieranie jednym kliknięciem.
+    • Zbalansowany — przyciski najlepszych jakości jednym kliknięciem + dostęp do zaawansowanych ustawień.
+    • Zaawansowany — wybór dowolnej jakości, ścieżki dźwiękowej i przycinanie wideo (Trim).
+
+btn-experimental = 🧪 Nowe funkcje
+desc-experimental-features =
+    Funkcje eksperymentalne działają tylko w nowszych oficjalnych aplikacjach Telegrama i mogą działać niestabilnie w starszych lub nieoficjalnych klientach.
+
+btn-ephemeral-messages = { $is_enabled ->
+    [true] 🟢 Wiadomości efemeryczne
+    *[false] ⚪ Wiadomości efemeryczne
+}
+desc-ephemeral-messages = Wysyłaj wiadomości serwisowe w grupach jako efemeryczne, widoczne tylko dla ciebie. Gdy wyłączone — wysyłam zwykłe wiadomości z automatycznym usuwaniem.
+btn-chat-banned-users = 🚫 Lista zablokowanych
+desc-chat-banned-users = Zarządzaj użytkownikami zablokowanymi na tym czacie.
+cban-usage = Podaj ID użytkownika lub odpowiedz na jego wiadomość: <code>/cban &lt;user_id&gt;</code>
+cban-cannot-ban-self = Nie możesz zablokować samego siebie.
+cban-cannot-ban-admin = Nie możesz zablokować administratora czatu.
+cban-cannot-ban-bot = Nie możesz zablokować bota.
+cban-success = Użytkownik <code>{ $user_id }</code> został zablokowany na tym czacie.
+cban-already-banned = Użytkownik <code>{ $user_id }</code> jest już zablokowany na tym czacie.
+cunban-usage = Podaj ID użytkownika lub odpowiedz na jego wiadomość: <code>/cunban &lt;user_id&gt;</code>
+cunban-not-banned = Użytkownik <code>{ $user_id }</code> nie jest zablokowany na tym czacie.
+cunban-success = Użytkownik <code>{ $user_id }</code> został odblokowany na tym czacie.
+cbanlist-empty = Brak zablokowanych użytkowników na tym czacie.
+cbanlist-title = <b>Lista zablokowanych na czacie:</b>
+btn-unban-user = ❌ Odblokuj { $user_id }

@@ -18,8 +18,8 @@ async def cancel_command(
     if user is None:
         return
 
-    had_active_download = await task_manager.cancel_user(user.id, http_client)
+    await task_manager.cancel_user(user.id, http_client)
     await state.clear()
 
-    if not had_active_download:
-        await message.answer(i18n.get("action-cancelled"))
+    from utils.ephemeral import send_smart_message
+    await send_smart_message(message, i18n.get("action-cancelled"), for_user_id=user.id)

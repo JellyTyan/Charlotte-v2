@@ -3,6 +3,7 @@ import logging
 from aiogram import BaseMiddleware
 from aiogram.types import Message
 
+from core.config import settings
 from storage.cache import redis_client as redis_module
 
 
@@ -10,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 class RateLimiter(BaseMiddleware):
     """
-    Middleware to control users late limits.
+    Middleware to control users rate limits.
     """
     def __init__(self, rate: int = 10, per: int = 60):
         self.rate = rate
@@ -18,6 +19,10 @@ class RateLimiter(BaseMiddleware):
 
     async def __call__(self, handler, event, data):
         if not isinstance(event, Message) or not event.from_user:
+            return await handler(event, data)
+
+        user_id = event.from_user.id
+        if settings.ADMIN_ID and user_id == settings.ADMIN_ID:
             return await handler(event, data)
 
         client = redis_module.redis_client
@@ -38,7 +43,8 @@ class RateLimiter(BaseMiddleware):
             if not already_notified:
                 i18n = data.get("i18n")
                 msg = i18n.get("too-many-requests") if i18n else "⏳ Too many requests. Please wait."
-                await event.answer(msg)
+                from utils.ephemeral import send_smart_message
+                await send_smart_message(event, msg, for_user_id=user_id)
                 await client.set(notified_key, "1", ex=self.per)
             return
 

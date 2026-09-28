@@ -1,9 +1,17 @@
 import logging
 from typing import Optional, Any
 from aiogram import Bot
-from aiogram.types import Message
+from aiogram.types import Message, ReactionTypeEmoji
 
 logger = logging.getLogger(__name__)
+
+
+async def react_safe(message: Message, emoji: str) -> None:
+    """Set a single emoji reaction on a message. Silently ignores any errors."""
+    try:
+        await message.react([ReactionTypeEmoji(emoji=emoji)])
+    except Exception as e:
+        logger.debug(f"Failed to set reaction {emoji!r}: {e}")
 
 # Telegram Message Effect IDs (Bot API 7.4+)
 # Supported in private chats.

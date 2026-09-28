@@ -50,10 +50,15 @@ async def cleanup_old_downloads():
             cutoff_time = time.time() - 86400  # 24 hours ago
             deleted_count = 0
 
-            for file_path in temp_dir.iterdir():
-                if file_path.is_file() and file_path.stat().st_mtime < cutoff_time:
-                    file_path.unlink()
-                    deleted_count += 1
+            for file_path in temp_dir.rglob("*"):
+                try:
+                    if file_path.is_file() and file_path.stat().st_mtime < cutoff_time:
+                        file_path.unlink()
+                        deleted_count += 1
+                    elif file_path.is_dir() and not any(file_path.iterdir()):
+                        file_path.rmdir()
+                except Exception:
+                    pass
 
             if deleted_count > 0:
                 logger.info(f"Cleaned {deleted_count} old files from storage/temp (>24 hours)")

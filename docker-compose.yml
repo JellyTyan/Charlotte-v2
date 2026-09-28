@@ -35,8 +35,6 @@ services:
       - redis-data:/data
     networks:
       - charlotte-net
-    ports:
-      - "6379:6379"
     logging: *default-logging
 
   bgutil:
@@ -72,18 +70,18 @@ services:
       - PORT=7856
       - BGUTIL_URL=${BGUTIL_URL}
       - YOUTUBE_PROXY=socks5://warp:1080
+      - REDIS_ADDR=${REDIS_ADDR}
     networks:
       - charlotte-net
     deploy:
       resources:
         limits:
           cpus: '2'
-    sysctls:
-      - net.ipv6.ip_nonlocal_bind=1
     logging: *default-logging
 
   media-core:
     image: ghcr.io/jellytyan/media-core:latest
+    pull_policy: never
     container_name: charlotte_media_core
     restart: always
     volumes:
@@ -103,8 +101,6 @@ services:
       resources:
         limits:
           cpus: '2'
-    sysctls:
-      - net.ipv6.ip_nonlocal_bind=1
     logging: *default-logging
 
 #

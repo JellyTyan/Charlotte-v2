@@ -166,3 +166,6 @@ storage/temp/*
 tests
 /backups
 uv.lock
+/.agents
+/graphify-out
+/.claude

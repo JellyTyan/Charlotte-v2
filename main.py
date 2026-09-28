@@ -22,6 +22,7 @@ from modules.payment.router import payment_router
 from modules.services.router import service_router
 from storage.cache.redis_client import init_redis
 from storage.db import database_manager
+from storage.db.crud import sync_historical_donations
 from tasks.scheduled import start_scheduled_tasks
 from utils.i18n import create_translator_hub
 
@@ -41,6 +42,18 @@ async def main():
 
     logger.info("📋 Initializing Redis Client...")
     await init_redis()
+
+    logger.info("🔄 Checking and syncing historical donations...")
+    try:
+        async with database_manager.async_session() as session:
+            synced_count = await sync_historical_donations(session)
+            await session.commit()
+            if synced_count > 0:
+                logger.info(f"✅ Historical donations synced: {synced_count} users updated")
+            else:
+                logger.info("✅ Historical donations already up to date")
+    except Exception as e:
+        logger.error(f"⚠️ Failed to sync historical donations on startup: {e}")
 
     logger.info("📋 Loading configuration...")
     logger.info(f"✅ Configuration loaded. Admin ID: {settings.ADMIN_ID}")
@@ -83,7 +96,6 @@ async def main():
     dp.include_router(service_router)
 
     setup_dialogs(dp)
-    dp.message.middleware(ForceEditShowModeMiddleware())
     dp.callback_query.middleware(ForceEditShowModeMiddleware())
     logger.info("✅ All handlers registered")
 

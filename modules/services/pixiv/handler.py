@@ -16,7 +16,7 @@ from models.service_list import Services
 from senders.media_sender import MediaSender
 from storage.db.crud import get_media_cache, check_if_user_premium, get_chat_settings
 from tasks.task_manager import task_manager
-from utils import escape_html, truncate_string, build_caption, format_author_link
+from utils import escape_html, truncate_string, build_caption, format_author_link, extract_url
 from utils.statistics_helper import log_download_event
 
 pixiv_router = Router(name="pixiv")
@@ -36,10 +36,14 @@ async def pixiv_handler(
     if not message.text or not message.from_user:
         return
 
-    match = re.search(PIXIV_REGEX, message.text)
-    url = match.group(0) if match else message.text.strip()
+    url = extract_url(PIXIV_REGEX, message.text)
+    if not url:
+        return
     chat_id = message.chat.id
     user_id = message.from_user.id
+
+    from utils.effects import react_safe
+    await react_safe(message, "👀")
 
     sponsor = await check_if_user_premium(db_session, user_id)
 

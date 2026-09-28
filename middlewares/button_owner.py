@@ -77,6 +77,10 @@ class ButtonOwnerMiddleware(BaseMiddleware):
         if not chat or chat.id >= 0:
             return await handler(event, data)
 
+        # Ephemeral messages are only visible to their intended recipient
+        if getattr(event.message, 'ephemeral_message_id', None) is not None:
+            return await handler(event, data)
+
         message_id = getattr(event.message, 'message_id', None)
         if not message_id:
             return await handler(event, data)

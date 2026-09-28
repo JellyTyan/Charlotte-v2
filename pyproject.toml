@@ -19,7 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 bot = [
-    "aiogram[i18n]==3.29.1",
+    "aiogram[i18n]==3.31.0",
     "fluentogram==1.2.1",
     "python-dotenv==1.2.2",
     "sqlalchemy==2.0.51",
