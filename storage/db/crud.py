@@ -697,7 +697,10 @@ async def get_news_subscribers_ids(session: AsyncSession) -> list[int]:
         select(Users.user_id)
         .where(
             Users.is_banned == False,
-            Users.settings_json["profile"]["news_spam"].astext == "true",
+            or_(
+                Users.settings_json["profile"]["news_spam"].as_boolean() == True,
+                Users.settings_json["profile"]["news_spam"].as_string() == "true",
+            ),
         )
     )
     result_users = await session.execute(stmt_users)
@@ -705,7 +708,12 @@ async def get_news_subscribers_ids(session: AsyncSession) -> list[int]:
 
     stmt_chats = (
         select(Chats.chat_id)
-        .where(Chats.settings_json["profile"]["news_spam"].astext == "true")
+        .where(
+            or_(
+                Chats.settings_json["profile"]["news_spam"].as_boolean() == True,
+                Chats.settings_json["profile"]["news_spam"].as_string() == "true",
+            ),
+        )
     )
     result_chats = await session.execute(stmt_chats)
     chat_ids = [row[0] for row in result_chats.fetchall()]
