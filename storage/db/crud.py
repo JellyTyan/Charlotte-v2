@@ -950,10 +950,9 @@ async def delete_user_save(session: AsyncSession, user_id: int, save_id: int) ->
 
 
 async def get_user_saves_count(session: AsyncSession, user_id: int) -> int:
-    """Количество личных сохранёнок пользователя."""
+    """Количество сохранёнок пользователя."""
     stmt = select(func.count()).select_from(UserSaves).where(
         UserSaves.user_id == user_id,
-        UserSaves.is_public.is_(False),
     )
     result = await session.execute(stmt)
     return result.scalar() or 0
