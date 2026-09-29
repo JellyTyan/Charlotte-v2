@@ -9,9 +9,12 @@ from typing import List, Optional, Tuple, Union
 
 from aiogram import types, Bot
 from aiogram.types import ReactionTypeEmoji
-from aiogram.utils.media_group import MediaGroupBuilder
-from aiogram.exceptions import TelegramEntityTooLarge, TelegramRetryAfter
-from sqlalchemy.ext.asyncio import AsyncSession
+from aiogram.exceptions import (
+    TelegramEntityTooLarge,
+    TelegramRetryAfter,
+    TelegramNetworkError,
+    TelegramAPIError,
+)
 from aiogram.utils.chat_action import ChatActionSender
 
 from utils import delete_files, truncate_string, translate_text, safe_truncate_html
@@ -176,13 +179,20 @@ class MediaSender:
             return cache_id
 
         if not as_document:
-            if item.optimized_path:
+            if item.optimized_path and os.path.isfile(os.path.abspath(item.optimized_path)):
                 return types.FSInputFile(os.path.abspath(item.optimized_path))
             if getattr(item, "optimized_content", None) and item.filename:
                 return types.BufferedInputFile(item.optimized_content, item.filename)
 
         if item.path:
-            return types.FSInputFile(os.path.abspath(item.path))
+            abs_path = os.path.abspath(item.path)
+            if not os.path.isfile(abs_path):
+                raise BotError(
+                    code=ErrorCode.INTERNAL_ERROR,
+                    message=f"File not found on disk: {abs_path}",
+                    is_logged=True,
+                )
+            return types.FSInputFile(abs_path)
 
         if item.content and item.filename:
             return types.BufferedInputFile(item.content, item.filename)
@@ -191,9 +201,14 @@ class MediaSender:
             code=ErrorCode.SEND_ERROR, message="Missing file source", is_logged=True
         )
 
-    def _get_thumb(self, cover_path: Optional[Path]) -> Optional[types.FSInputFile]:
-        """Возвращает обложку, если она есть"""
-        return types.FSInputFile(os.path.abspath(cover_path)) if cover_path else None
+    def _get_thumb(self, cover_path: Optional[Union[Path, str]]) -> Optional[types.FSInputFile]:
+        """Возвращает обложку, если файл действительно существует на диске"""
+        if not cover_path:
+            return None
+        abs_path = os.path.abspath(cover_path)
+        if not os.path.isfile(abs_path):
+            return None
+        return types.FSInputFile(abs_path)
 
     def _check_file_size(self, item: MediaContent, is_audio: bool = False, as_document: bool = False) -> None:
         """Проверка размера файла на соответствие лимитам Telegram API"""
@@ -702,6 +717,13 @@ class MediaSender:
                 code=ErrorCode.LARGE_FILE,
                 message="Audio file is too large for Telegram",
                 is_logged=True,
+            )
+        except (TelegramNetworkError, TelegramAPIError) as e:
+            raise BotError(
+                code=ErrorCode.SEND_ERROR,
+                message=f"Failed to send audio via Telegram: {e}",
+                is_logged=True,
+                critical=True,
             )
 
         # Отправка обложки отдельным документом, если включено в настройках
