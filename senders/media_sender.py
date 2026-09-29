@@ -16,6 +16,7 @@ from aiogram.exceptions import (
     TelegramAPIError,
 )
 from aiogram.utils.chat_action import ChatActionSender
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from utils import delete_files, truncate_string, translate_text, safe_truncate_html
 from models.media import MediaContent, MediaType
