@@ -1,5 +1,6 @@
 import re
 import logging
+from typing import Optional
 from aiogram import Router, types, Bot
 from aiogram.enums import ParseMode
 from aiogram.filters import Command
@@ -56,11 +57,11 @@ async def report_command_handler(
     ctx = await get_message_context(reply.chat.id, reply.message_id) or {}
 
     # 5. Извлекаем данные медиафайла (если есть)
-    file_id = None
-    media_type = None
-    file_title = None
-    file_performer = None
-    file_duration = None
+    file_id: Optional[str] = None
+    media_type: Optional[str] = None
+    file_title: Optional[str] = None
+    file_performer: Optional[str] = None
+    file_duration: Optional[int] = None
 
     if reply.audio:
         file_id = reply.audio.file_id
@@ -159,9 +160,9 @@ async def report_command_handler(
         lines.append(
             f"• <b>Ошибка:</b> <code>{escape_html(str(error_code or ''))}</code> {escape_html(str(error_message or ''))}"
         )
-    elif reply_snippet and not file_id:
+    elif reply_snippet and isinstance(reply_snippet, str) and not file_id:
         lines.append(f"• <b>Текст сообщения:</b> <i>{escape_html(reply_snippet[:300])}</i>")
-    if file_id:
+    if file_id and isinstance(file_id, str):
         lines.append(f"• <b>File ID:</b> <code>{file_id[:32]}...</code>")
 
     if message.chat.type != "private":

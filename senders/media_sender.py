@@ -16,6 +16,7 @@ from aiogram.exceptions import (
     TelegramAPIError,
 )
 from aiogram.utils.chat_action import ChatActionSender
+from aiogram.utils.media_group import MediaGroupBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from utils import delete_files, truncate_string, translate_text, safe_truncate_html
@@ -577,8 +578,8 @@ class MediaSender:
             media_group = MediaGroupBuilder()
 
             # Обработка подписи и перевода (только для первого элемента)
+            final_caption = ""
             if i == 0:
-                final_caption = ""
                 if caption and getattr(service_settings, "caption", False):
                     if getattr(service_settings, "translate_caption", False):
                         caption = await translate_text(

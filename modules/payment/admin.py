@@ -5,7 +5,6 @@ from aiogram.filters import Command
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.config import settings
 from storage.db.crud import (
     get_global_settings,
     update_global_settings,
@@ -14,15 +13,14 @@ from storage.db.crud import (
     refund_donation_stars,
     sync_historical_donations,
 )
+from middlewares.admin_check import AdminMiddleware
 
 admin_router = Router(name="payment_admin")
+admin_router.message.middleware(AdminMiddleware())
 logger = logging.getLogger(__name__)
 
 @admin_router.message(Command("add_supporter"))
 async def add_supporter_command(message: Message, db_session: AsyncSession):
-    if message.from_user.id != settings.ADMIN_ID:
-        return
-
     args = message.text.split(maxsplit=1)
     if len(args) < 2:
         await message.answer("Usage: /add_supporter <name>")
@@ -44,9 +42,6 @@ async def add_supporter_command(message: Message, db_session: AsyncSession):
 
 @admin_router.message(Command("remove_supporter"))
 async def remove_supporter_command(message: Message, db_session: AsyncSession):
-    if message.from_user.id != settings.ADMIN_ID:
-        return
-
     args = message.text.split(maxsplit=1)
     if len(args) < 2:
         await message.answer("Usage: /remove_supporter <name>")
@@ -68,9 +63,6 @@ async def remove_supporter_command(message: Message, db_session: AsyncSession):
 
 @admin_router.message(Command("list_supporters"))
 async def list_supporters_command(message: Message, db_session: AsyncSession):
-    if message.from_user.id != settings.ADMIN_ID:
-        return
-
     settings = await get_global_settings(db_session)
     supporters = settings.get("supporters", [])
 
@@ -86,9 +78,6 @@ async def list_supporters_command(message: Message, db_session: AsyncSession):
 
 @admin_router.message(Command("refund"))
 async def refund_command(message: Message, bot: Bot, db_session: AsyncSession):
-    if message.from_user.id != settings.ADMIN_ID:
-        return
-
     args = message.text.split()
     if len(args) < 2:
         await message.answer(
@@ -163,9 +152,6 @@ async def refund_command(message: Message, bot: Bot, db_session: AsyncSession):
 
 @admin_router.message(Command("sync_donations"))
 async def sync_donations_command(message: Message, db_session: AsyncSession):
-    if message.from_user.id != settings.ADMIN_ID:
-        return
-
     msg = await message.answer("🔄 Syncing historical donations...")
     try:
         synced_count = await sync_historical_donations(db_session)
