@@ -16,7 +16,7 @@ from storage.db.crud import (
     increment_save_uses,
     search_cached_music,
 )
-from storage.cache.redis_client import cache_get
+from storage.cache.redis_client import cache_get, cache_delete
 from utils.recent_downloads import get_recent_downloads
 from sqlalchemy.ext.asyncio import AsyncSession
 from fluentogram import TranslatorRunner
@@ -270,7 +270,11 @@ async def handle_chosen_inline_result(
     chosen: ChosenInlineResult,
     db_session: AsyncSession,
 ):
-    """Счётчик популярности: увеличивает uses_count при отправке сохранёнки/мема (чужими пользователями)"""
+    """
+    Обработка выбора инлайн-результата:
+    1. save_*: увеличивает uses_count для сохранёнки/мема
+    2. paste_*: очищает буфер обмена пользователя в Redis после вставки
+    """
     if chosen.result_id.startswith("save_"):
         try:
             save_id = int(chosen.result_id.split("_")[1])
@@ -278,3 +282,11 @@ async def handle_chosen_inline_result(
             await increment_save_uses(db_session, save_id, user_id=user_id)
         except Exception as e:
             logger.debug(f"Failed to increment save uses: {e}")
+    elif chosen.result_id.startswith("paste_"):
+        try:
+            user_id = chosen.from_user.id
+            await cache_delete(f"clipboard:{user_id}")
+            logger.info(f"Clipboard cleared for user {user_id} after inline paste")
+        except Exception as e:
+            logger.debug(f"Failed to clear clipboard: {e}")
+
