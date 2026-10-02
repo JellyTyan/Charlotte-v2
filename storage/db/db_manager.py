@@ -27,8 +27,20 @@ class DatabaseManager:
 
         db_url = os.getenv("DATABASE_URL", "postgresql+asyncpg://charlotte:charlottepass@localhost/charlotte")
         echo = os.getenv("SQLALCHEMY_ECHO", "False").lower() == "true"
+        pool_size = int(os.getenv("DB_POOL_SIZE", "20"))
+        max_overflow = int(os.getenv("DB_MAX_OVERFLOW", "20"))
+        pool_timeout = int(os.getenv("DB_POOL_TIMEOUT", "30"))
 
-        self.engine = create_async_engine(db_url, echo=echo, future=True)
+        self.engine = create_async_engine(
+            db_url,
+            echo=echo,
+            future=True,
+            pool_size=pool_size,
+            max_overflow=max_overflow,
+            pool_timeout=pool_timeout,
+            pool_recycle=1800,
+            pool_pre_ping=True,
+        )
         self.async_session = async_sessionmaker(self.engine, expire_on_commit=False)
 
         logger.info("Connection to the database successful")

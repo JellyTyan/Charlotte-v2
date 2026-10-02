@@ -79,6 +79,8 @@ async def process_track(
         )
         return True
 
+    await db_session.commit()
+
     track_data = None
     current_lossless = lossless_mode
     search_query = f"{track_meta['artist']} - {track_meta['title']}"
@@ -175,6 +177,7 @@ async def apple_handler(
         else await get_user_settings(db_session, chat_id)
     )
     lossless_mode = settings.services.applemusic.lossless if settings else False
+    await db_session.commit()
 
     async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=chat_id):
         response = await http_client.post(

@@ -75,6 +75,8 @@ async def process_track(
         )
         return True
 
+    await db_session.commit()
+
     payload = {
         "isrc": isrc,
         "search_query": f"{track_meta['artist']} - {track_meta['title']}",
@@ -135,6 +137,7 @@ async def ytmusic_handler(
         if chat_id < 0
         else await get_user_settings(db_session, chat_id)
     )
+    await db_session.commit()
 
     async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=chat_id):
         response = await http_client.post(

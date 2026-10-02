@@ -828,6 +828,8 @@ async def process_youtube_download(
                 await db_session.commit()
                 return
 
+            await db_session.commit()
+
             client = http_client or httpx.AsyncClient()
             try:
                 if message.bot:
@@ -970,6 +972,8 @@ async def process_clip_download(
 
             user = await get_user(db_session, user_id)
             is_premium = user.is_premium if user else False
+
+            await db_session.commit()
 
             _action = ChatActionSender.upload_voice if is_audio_only else ChatActionSender.upload_video
 

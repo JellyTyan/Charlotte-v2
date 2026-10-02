@@ -51,5 +51,10 @@ class BanCheckMiddleware(BaseMiddleware):
                             pass
                     return
 
+            try:
+                await session.commit()
+            except Exception:
+                await session.rollback()
+
         return await handler(event, data)
 
