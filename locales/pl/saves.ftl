@@ -76,3 +76,20 @@ saves-mod-banned =
     <b>Dostęp ograniczony</b>
 
     Administrator zablokował ci możliwość proponowania memów do biblioteki publicznej. Twoje prywatne zapisy pozostają z tobą 🔒
+
+saves-label-reserved = Nazwa «<b>{ $label }</b>» jest zarezerwowana przez bota dla komend systemowych. Wybierz inną!
+saves-label-trash = Nazwa jest nieprawidłowa lub zawiera wyłącznie symbole. Wybierz czytelną nazwę.
+saves-dupe-media = Ten plik jest już zapisany w twojej bibliotece jako «<b>{ $existing_label }</b>».
+saves-dupe-label =
+    Masz już zapis o nazwie «<b>{ $label }</b>».
+    Czy chcesz zastąpić stary plik tym nowym?
+saves-replace-expired = Czas na potwierdzenie upłynął. Spróbuj ponownie użyć /save.
+saves-replaced-toast = Plik został pomyślnie zastąpiony!
+saves-cancelled-toast = Anulowano zastąpienie.
+saves-replace-cancelled = Zastąpienie anulowane. Poprzedni plik pozostał bez zmian.
+saves-dupe-public = Ten plik znajduje się już w publicznej bibliotece memów!
+saves-rename-hint = Aby zmienić nazwę, wyślij /save z nową nazwą.
+saves-dupe-label-short = Masz już zapis o takiej nazwie!
+saves-renamed-toast = Nazwa została zaktualizowana!
+saves-rename-remoderation = Nazwa została zmieniona — mem wysłano do ponownej moderacji przed wyświetleniem w wyszukiwaniu publicznym.
+

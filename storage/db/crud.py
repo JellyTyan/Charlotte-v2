@@ -3,7 +3,7 @@ import datetime
 import json
 from datetime import date
 
-from sqlalchemy import select, update, func, desc, or_, and_, delete, cast, case
+from sqlalchemy import select, update, func, desc, or_, and_, delete, cast, case, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert
 
@@ -11,6 +11,7 @@ from .models import Users, Chats, Statistics, BotSetting, MediaCache, UserSaves,
 from storage.cache.redis_client import cache_get, cache_set, cache_delete, orm_to_dict, dict_to_orm
 from models.settings import UserSettingsJson, ChatSettingsJson
 from models.media_cache import MediaCacheDTO
+from utils.search_utils import escape_ilike, normalize_query
 
 
 async def get_user(session: AsyncSession, user_id: int) -> Users | None:
@@ -879,18 +880,72 @@ async def search_user_saves(
     limit: int = 20,
     media_types: tuple[str, ...] | None = None,
 ) -> list[UserSaves]:
-    """Поиск по сохранёнкам пользователя (или последние, если query пустой)"""
-    stmt = select(UserSaves).where(UserSaves.user_id == user_id)
+    """Поиск по сохранёнкам пользователя (или последние, если query пустой).
+
+    Стратегия (последовательный fallback):
+    1. tsvector @@ plainto_tsquery('russian', ...) — полнотекстовый поиск с GIN-индексом
+    2. Если 0 результатов — ILIKE '%...%' по label/title/caption (с экранированием метасимволов)
+    3. Если снова 0 — pg_trgm similarity на label (fuzzy, нечёткий)
+
+    Перед поиском запрос нормализуется: раскладка клавиатуры исправляется, если она перепутана.
+    """
+    base_filter = select(UserSaves).where(UserSaves.user_id == user_id)
     if media_types:
-        stmt = stmt.where(UserSaves.media_type.in_(media_types))
-    if query:
-        pattern = f"%{query}%"
-        stmt = stmt.where(or_(
-            UserSaves.label.ilike(pattern),
-            UserSaves.title.ilike(pattern),
-            UserSaves.caption.ilike(pattern),
-        ))
-    stmt = stmt.order_by(UserSaves.created_at.desc()).limit(limit)
+        base_filter = base_filter.where(UserSaves.media_type.in_(media_types))
+
+    if not query:
+        stmt = base_filter.order_by(UserSaves.created_at.desc()).limit(limit)
+        result = await session.execute(stmt)
+        return list(result.scalars().all())
+
+    clean, layout_alt = normalize_query(query)
+
+    # --- 1. tsvector full-text search ---
+    ts_query = clean
+    if layout_alt:
+        ts_query = f"{clean} | {layout_alt}"  # OR between original and layout-fixed
+
+    stmt = base_filter.where(
+        text("search_vector @@ plainto_tsquery('russian', :q)")
+        .bindparams(q=ts_query)
+    ).order_by(UserSaves.created_at.desc()).limit(limit)
+
+    result = await session.execute(stmt)
+    rows = list(result.scalars().all())
+    if rows:
+        return rows
+
+    # --- 2. ILIKE fallback (escaped, covers partial substring, no tsvector yet on old rows) ---
+    escaped = escape_ilike(clean)
+    pattern = f"%{escaped}%"
+    ilike_condition = or_(
+        UserSaves.label.ilike(pattern, escape="\\"),
+        UserSaves.title.ilike(pattern, escape="\\"),
+        UserSaves.caption.ilike(pattern, escape="\\"),
+    )
+    if layout_alt:
+        escaped_alt = escape_ilike(layout_alt)
+        alt_pattern = f"%{escaped_alt}%"
+        ilike_condition = or_(
+            ilike_condition,
+            UserSaves.label.ilike(alt_pattern, escape="\\"),
+            UserSaves.title.ilike(alt_pattern, escape="\\"),
+            UserSaves.caption.ilike(alt_pattern, escape="\\"),
+        )
+
+    stmt = base_filter.where(ilike_condition).order_by(UserSaves.created_at.desc()).limit(limit)
+    result = await session.execute(stmt)
+    rows = list(result.scalars().all())
+    if rows:
+        return rows
+
+    # --- 3. pg_trgm fuzzy fallback on label ---
+    stmt = base_filter.where(
+        text("label % :q").bindparams(q=clean)
+    ).order_by(
+        text("similarity(label, :q) DESC").bindparams(q=clean),
+        UserSaves.created_at.desc()
+    ).limit(limit)
     result = await session.execute(stmt)
     return list(result.scalars().all())
 
@@ -902,21 +957,74 @@ async def search_public_saves(
     limit: int = 20,
     media_types: tuple[str, ...] | None = None,
 ) -> list[UserSaves]:
-    """Поиск по публичной библиотеке мемов сообщества"""
-    stmt = select(UserSaves).where(UserSaves.is_public.is_(True), UserSaves.is_approved.is_(True))
+    """Поиск по публичной библиотеке мемов сообщества.
+
+    Та же трёхуровневая стратегия, что и в search_user_saves.
+    Сортировка: сначала uses_count DESC, затем created_at DESC.
+    """
+    base_filter = select(UserSaves).where(
+        UserSaves.is_public.is_(True),
+        UserSaves.is_approved.is_(True),
+    )
     if exclude_user_id:
-        stmt = stmt.where(UserSaves.user_id != exclude_user_id)
+        base_filter = base_filter.where(UserSaves.user_id != exclude_user_id)
     if media_types:
-        stmt = stmt.where(UserSaves.media_type.in_(media_types))
-    if query:
-        pattern = f"%{query}%"
-        stmt = stmt.where(or_(
-            UserSaves.label.ilike(pattern),
-            UserSaves.title.ilike(pattern),
-            UserSaves.caption.ilike(pattern),
-        ))
-    # Сортировка: сначала самые популярные (uses_count), затем свежие
-    stmt = stmt.order_by(UserSaves.uses_count.desc(), UserSaves.created_at.desc()).limit(limit)
+        base_filter = base_filter.where(UserSaves.media_type.in_(media_types))
+
+    order = [UserSaves.uses_count.desc(), UserSaves.created_at.desc()]
+
+    if not query:
+        stmt = base_filter.order_by(*order).limit(limit)
+        result = await session.execute(stmt)
+        return list(result.scalars().all())
+
+    clean, layout_alt = normalize_query(query)
+
+    # --- 1. tsvector ---
+    ts_query = clean
+    if layout_alt:
+        ts_query = f"{clean} | {layout_alt}"
+
+    stmt = base_filter.where(
+        text("search_vector @@ plainto_tsquery('russian', :q)").bindparams(q=ts_query)
+    ).order_by(*order).limit(limit)
+
+    result = await session.execute(stmt)
+    rows = list(result.scalars().all())
+    if rows:
+        return rows
+
+    # --- 2. ILIKE fallback ---
+    escaped = escape_ilike(clean)
+    pattern = f"%{escaped}%"
+    ilike_condition = or_(
+        UserSaves.label.ilike(pattern, escape="\\"),
+        UserSaves.title.ilike(pattern, escape="\\"),
+        UserSaves.caption.ilike(pattern, escape="\\"),
+    )
+    if layout_alt:
+        escaped_alt = escape_ilike(layout_alt)
+        alt_pattern = f"%{escaped_alt}%"
+        ilike_condition = or_(
+            ilike_condition,
+            UserSaves.label.ilike(alt_pattern, escape="\\"),
+            UserSaves.title.ilike(alt_pattern, escape="\\"),
+            UserSaves.caption.ilike(alt_pattern, escape="\\"),
+        )
+
+    stmt = base_filter.where(ilike_condition).order_by(*order).limit(limit)
+    result = await session.execute(stmt)
+    rows = list(result.scalars().all())
+    if rows:
+        return rows
+
+    # --- 3. pg_trgm fuzzy on label ---
+    stmt = base_filter.where(
+        text("label % :q").bindparams(q=clean)
+    ).order_by(
+        text("similarity(label, :q) DESC").bindparams(q=clean),
+        *order,
+    ).limit(limit)
     result = await session.execute(stmt)
     return list(result.scalars().all())
 
@@ -956,6 +1064,92 @@ async def get_user_saves_count(session: AsyncSession, user_id: int) -> int:
     )
     result = await session.execute(stmt)
     return result.scalar() or 0
+
+
+async def get_save_by_file_id(
+    session: AsyncSession, user_id: int, telegram_file_id: str
+) -> UserSaves | None:
+    """Найти личную сохранёнку пользователя по file_id (дубль медиа)."""
+    stmt = select(UserSaves).where(
+        UserSaves.user_id == user_id,
+        UserSaves.telegram_file_id == telegram_file_id,
+    ).limit(1)
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def get_save_by_label(
+    session: AsyncSession, user_id: int, label: str
+) -> UserSaves | None:
+    """Найти личную сохранёнку пользователя по точному label (дубль названия)."""
+    stmt = select(UserSaves).where(
+        UserSaves.user_id == user_id,
+        UserSaves.label == label.strip(),
+    ).limit(1)
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def get_public_save_by_file_id(
+    session: AsyncSession, telegram_file_id: str, exclude_save_id: int | None = None
+) -> UserSaves | None:
+    """Найти одобренный публичный мем с таким же file_id."""
+    stmt = select(UserSaves).where(
+        UserSaves.telegram_file_id == telegram_file_id,
+        UserSaves.is_public.is_(True),
+        UserSaves.is_approved.is_(True),
+    )
+    if exclude_save_id is not None:
+        stmt = stmt.where(UserSaves.id != exclude_save_id)
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def replace_save_media(
+    session: AsyncSession,
+    save_id: int,
+    user_id: int,
+    new_file_id: str,
+    new_media_type: str,
+    new_title: str | None = None,
+    new_caption: str | None = None,
+) -> UserSaves | None:
+    """Заменить медиафайл в сохранёнке (при конфликте file_id под другим label).
+
+    Сбрасывает is_approved в False, если сохранёнка публичная.
+    """
+    save = await get_save_by_id(session, save_id)
+    if not save or save.user_id != user_id:
+        return None
+    save.telegram_file_id = new_file_id
+    save.media_type = new_media_type
+    if new_title is not None:
+        save.title = new_title
+    if new_caption is not None:
+        save.caption = new_caption
+    if save.is_public:
+        save.is_approved = False  # сброс модерации при замене медиа
+    await session.commit()
+    return save
+
+
+async def rename_user_save(
+    session: AsyncSession,
+    save_id: int,
+    user_id: int,
+    new_label: str,
+) -> UserSaves | None:
+    """Переименовать сохранёнку.
+
+    Если сохранёнка была одобрена публично (is_public=True, is_approved=True),
+    переименование автоматически сбрасывает is_approved в False — требуется
+    повторная модерация.
+    """
+    save = await get_save_by_id(session, save_id)
+    if not save or save.user_id != user_id:
+        return None
+    save.label = new_label.strip()
+    if save.is_public and save.is_approved:
+        save.is_approved = False  # публичный мем требует повторной модерации
+    await session.commit()
+    return save
 
 
 async def get_pending_public_save(session: AsyncSession) -> UserSaves | None:

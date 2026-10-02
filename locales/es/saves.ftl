@@ -76,3 +76,20 @@ saves-mod-banned =
     <b>Acceso restringido</b>
 
     Un administrador te restringió proponer memes a la biblioteca pública. Tus guardados privados siguen contigo 🔒
+
+saves-label-reserved = El nombre «<b>{ $label }</b>» está reservado por el bot para comandos del sistema. ¡Por favor elige otro!
+saves-label-trash = El nombre no es válido o solo contiene símbolos. Por favor indica un nombre claro.
+saves-dupe-media = Este archivo ya está guardado en tu biblioteca como «<b>{ $existing_label }</b>».
+saves-dupe-label =
+    Ya tienes un elemento guardado con el nombre «<b>{ $label }</b>».
+    ¿Quieres reemplazar el archivo anterior con este?
+saves-replace-expired = El tiempo de espera ha caducado. Vuelve a intentar con /save.
+saves-replaced-toast = ¡Archivo multimedia reemplazado con éxito!
+saves-cancelled-toast = Reemplazo cancelado.
+saves-replace-cancelled = Reemplazo cancelado. El archivo anterior se mantiene sin cambios.
+saves-dupe-public = ¡Este archivo ya está publicado en la biblioteca pública de memes!
+saves-rename-hint = Para renombrar un elemento guardado, envía /save con un nuevo nombre.
+saves-dupe-label-short = ¡Ya tienes un elemento guardado con este nombre!
+saves-renamed-toast = ¡Nombre actualizado!
+saves-rename-remoderation = Nombre modificado — enviado a moderación antes de mostrarse en la búsqueda pública.
+

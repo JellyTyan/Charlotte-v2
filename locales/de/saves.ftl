@@ -76,3 +76,20 @@ saves-mod-banned =
     <b>Zugriff eingeschränkt</b>
 
     Ein Administrator hat dir das Vorschlagen von Memes für die öffentliche Bibliothek untersagt. Deine privaten Medien bleiben erhalten 🔒
+
+saves-label-reserved = Der Name «<b>{ $label }</b>» ist vom Bot für Systembefehle reserviert. Bitte wähle einen anderen!
+saves-label-trash = Der Name ist ungültig oder besteht nur aus Symbolen. Bitte wähle einen aussagekräftigen Namen.
+saves-dupe-media = Diese Datei ist bereits als «<b>{ $existing_label }</b>» in deiner Mediathek gespeichert.
+saves-dupe-label =
+    Du hast bereits eine Speicherung namens «<b>{ $label }</b>».
+    Möchtest du die alte Datei durch diese neue ersetzen?
+saves-replace-expired = Der Bestätigungsdialog ist abgelaufen. Bitte versuche /save erneut.
+saves-replaced-toast = Mediendatei erfolgreich ersetzt!
+saves-cancelled-toast = Ersetzung abgebrochen.
+saves-replace-cancelled = Ersetzung abgebrochen. Die vorherige Datei bleibt unverändert.
+saves-dupe-public = Diese Datei existiert bereits in der öffentlichen Meme-Bibliothek!
+saves-rename-hint = Um eine Speicherung umzubenennen, sende /save mit einem neuen Namen.
+saves-dupe-label-short = Du hast bereits eine Speicherung mit diesem Namen!
+saves-renamed-toast = Name aktualisiert!
+saves-rename-remoderation = Name geändert — zur erneuten Moderation eingereicht, bevor sie in der öffentlichen Suche erscheint.
+

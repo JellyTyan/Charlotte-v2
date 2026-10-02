@@ -76,3 +76,20 @@ saves-mod-banned =
     <b>Přístup omezen</b>
 
     Správce ti zakázal navrhovat memy do veřejné knihovny. Tvá soukromá uložená média ti zůstávají 🔒
+
+saves-label-reserved = Název «<b>{ $label }</b>» je vyhrazen botem pro systémové příkazy. Zvol prosím jiný!
+saves-label-trash = Název je neplatný nebo obsahuje pouze symboly. Zadej prosím smysluplný název.
+saves-dupe-media = Tento soubor již máš uložený ve své knihovně jako «<b>{ $existing_label }</b>».
+saves-dupe-label =
+    Již máš uloženou položku s názvem «<b>{ $label }</b>».
+    Chceš nahradit staré médium tímto novým?
+saves-replace-expired = Čas pro potvrzení vypršel. Zkus příkaz /save znovu.
+saves-replaced-toast = Mediální soubor byl úspěšně nahrazen!
+saves-cancelled-toast = Nahrazení zrušeno.
+saves-replace-cancelled = Nahrazení zrušeno. Původní médium zůstává beze změny.
+saves-dupe-public = Tento soubor již existuje ve veřejné knihovně memů!
+saves-rename-hint = Pro přejmenování pošli příkaz /save s novým názvem.
+saves-dupe-label-short = Již máš položku s tímto názvem!
+saves-renamed-toast = Název byl aktualizován!
+saves-rename-remoderation = Název byl změněn — odesláno k novému posouzení před zobrazením ve veřejném vyhledávání.
+

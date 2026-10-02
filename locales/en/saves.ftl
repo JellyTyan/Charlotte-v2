@@ -76,3 +76,20 @@ saves-mod-banned =
     <b>Access restricted</b>
 
     An administrator restricted you from suggesting memes to the public library. Your private saves stay with you 🔒
+
+saves-label-reserved = The name «<b>{ $label }</b>» is reserved by the bot for system commands. Please choose another!
+saves-label-trash = Name is invalid or consists only of symbols. Please choose a meaningful name.
+saves-dupe-media = This file is already saved in your library as «<b>{ $existing_label }</b>».
+saves-dupe-label =
+    You already have a save named «<b>{ $label }</b>».
+    Do you want to replace the old media with this one?
+saves-replace-expired = This confirmation dialog has expired. Please try /save again.
+saves-replaced-toast = Media replaced successfully!
+saves-cancelled-toast = Replacement cancelled.
+saves-replace-cancelled = Replacement cancelled. The original media remains unchanged.
+saves-dupe-public = This media is already available in the public meme library!
+saves-rename-hint = To rename a save, send /save with a new name.
+saves-dupe-label-short = You already have a save with this name!
+saves-renamed-toast = Save renamed!
+saves-rename-remoderation = Name changed — submitted for re-moderation before appearing in public search.
+
