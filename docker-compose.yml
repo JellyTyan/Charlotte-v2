@@ -9,6 +9,7 @@ services:
     build: .
     container_name: charlotte_bot
     restart: unless-stopped
+    user: "1000:1000"
     env_file: .env
     volumes:
       - ./storage:/app/storage
@@ -19,11 +20,16 @@ services:
     networks:
       - charlotte-net
     depends_on:
-      - redis
-      - postgres
-      - migrations
-      - lossless-core
-      - media-core
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_started
+      migrations:
+        condition: service_completed_successfully
+      lossless-core:
+        condition: service_started
+      media-core:
+        condition: service_started
     logging: *default-logging
 
   redis:
@@ -176,6 +182,7 @@ services:
   migrations:
     build: .
     container_name: charlotte_migrations
+    user: "1000:1000"
     env_file: .env
     command: alembic upgrade head
     depends_on:

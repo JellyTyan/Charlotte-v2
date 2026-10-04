@@ -2,6 +2,7 @@ import logging
 import os
 
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from .models import Base
@@ -49,6 +50,8 @@ class DatabaseManager:
     async def init_db(self):
         try:
             async with self.engine.begin() as conn:
+                # нужен для GIN-индекса gin_trgm_ops на user_saves.label
+                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
                 await conn.run_sync(Base.metadata.create_all)
             logger.info("The database has been initialized.")
         except SQLAlchemyError as e:

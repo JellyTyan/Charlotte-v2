@@ -36,16 +36,8 @@ saves-empty = Пакуль што ў цябе пуста ў медыяпакоі
 
 saves-header = <b>Твой медыяпакой</b> ({ $count }):
 
-saves-delete-btn = 🗑 Выдаліць «{ $label }»
-
-saves-prev-btn = ◀️ Назад
-saves-next-btn = Уперад ▶️
-
 saves-deleted-toast = Выдаліла з захаванак.
 saves-missing-toast = Не знайшла гэты элемент, можа ўжо выдалены?
-
-saves-footer-hint = <i>Каб адправіць медыя, напішы ў любым чаце:</i>
-    <code>@{ $bot_username } &lt;назва&gt;</code>
 
 saves-mod-approved =
     <b>Тваю захаванку ўхвалілі!</b> 🎉
@@ -88,8 +80,32 @@ saves-replaced-toast = Медыяфайл паспяхова заменены!
 saves-cancelled-toast = Замена адменена.
 saves-replace-cancelled = Замена адменена. Папярэдняе медыя засталося без зменаў.
 saves-dupe-public = Гэты файл ужо ёсць у публічнай бібліятэцы мемаў!
-saves-rename-hint = Каб перайменаваць захаванку, дашлі /save з новай назвай.
 saves-dupe-label-short = У цябе ўжо ёсць захаванка з такой назвай!
-saves-renamed-toast = Назва абноўлена!
 saves-rename-remoderation = Назва зменена — мем адпраўлены на паўторную мадэрацыю перад паказам у публічным пошуку.
 
+saves-list-hint = Абяры захаванне для прагляду і кіравання:
+saves-card =
+    { $emoji } <b>{ $label }</b>
+
+    { $status }
+    👁 Выкарыстанняў: <b>{ $uses }</b>
+    📅 Дададзена: <b>{ $date }</b>
+
+    <i>Адправіць у любым чаце:</i>
+    <code>@{ $bot_username } { $label }</code>
+saves-btn-preview = 👁 Праглядзець
+saves-btn-send = 🚀 У чат
+saves-btn-rename = ✏️ Перайменаваць
+saves-btn-delete = 🗑 Выдаліць
+saves-btn-back = ◀️ Да спіса
+saves-btn-close = ❌ Закрыць
+saves-btn-cancel = ◀️ Адмена
+saves-btn-replace = 🔄 Замяніць медыя
+saves-foreign-library = ❌ Гэта не твая медыятэка
+saves-preview-failed = Не атрымалася адправіць прэв'ю.
+saves-rename-prompt =
+    ✏️ <b>Перайменаванне</b> «{ $label }»
+
+    Адпраў новую назву паведамленнем (да { $max } сімвалаў):
+saves-renamed = ✅ Назва абноўлена: «<b>{ $label }</b>»
+saves-label-word-too-long = Адно са слоў у назве занадта доўгае. Укажы карацейшую назву.

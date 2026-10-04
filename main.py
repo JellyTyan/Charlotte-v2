@@ -2,7 +2,6 @@ import asyncio
 import os
 
 import httpx
-from aiogram_dialog import setup_dialogs
 from dotenv import load_dotenv
 
 from core.bot_commands import set_default_commands
@@ -14,7 +13,6 @@ from handlers import user_router, admin_router
 from middlewares.ban_check import BanCheckMiddleware
 from middlewares.button_owner import UserContextMiddleware, ButtonOwnerMiddleware
 from middlewares.db import DbSessionMiddleware
-from middlewares.force_edit_show_mode import ForceEditShowModeMiddleware
 from middlewares.i18n import TranslatorRunnerMiddleware
 from middlewares.rate_limiter import RateLimiter
 from modules.inline.handler import inline_router
@@ -94,9 +92,6 @@ async def main():
     dp.include_router(admin_router)
     dp.include_router(inline_router)
     dp.include_router(service_router)
-
-    setup_dialogs(dp)
-    dp.callback_query.middleware(ForceEditShowModeMiddleware())
     logger.info("✅ All handlers registered")
 
     register_error_handler(dp, bot)

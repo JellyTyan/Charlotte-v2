@@ -36,16 +36,8 @@ saves-empty = Deine Mediathek ist aktuell noch leer.
 
 saves-header = <b>Deine Mediathek</b> ({ $count }):
 
-saves-delete-btn = 🗑 «{ $label }» löschen
-
-saves-prev-btn = ◀️ Zurück
-saves-next-btn = Weiter ▶️
-
 saves-deleted-toast = Aus gespeicherten Medien entfernt.
 saves-missing-toast = Konnte dieses Element nicht finden, vielleicht wurde es schon gelöscht?
-
-saves-footer-hint = <i>Um Medien zu senden, schreibe in einem beliebigen Chat:</i>
-    <code>@{ $bot_username } &lt;Name&gt;</code>
 
 saves-mod-approved =
     <b>Dein gespeichertes Medium wurde genehmigt!</b> 🎉
@@ -88,8 +80,32 @@ saves-replaced-toast = Mediendatei erfolgreich ersetzt!
 saves-cancelled-toast = Ersetzung abgebrochen.
 saves-replace-cancelled = Ersetzung abgebrochen. Die vorherige Datei bleibt unverändert.
 saves-dupe-public = Diese Datei existiert bereits in der öffentlichen Meme-Bibliothek!
-saves-rename-hint = Um eine Speicherung umzubenennen, sende /save mit einem neuen Namen.
 saves-dupe-label-short = Du hast bereits eine Speicherung mit diesem Namen!
-saves-renamed-toast = Name aktualisiert!
 saves-rename-remoderation = Name geändert — zur erneuten Moderation eingereicht, bevor sie in der öffentlichen Suche erscheint.
 
+saves-list-hint = Wähle ein Element zum Ansehen und Verwalten:
+saves-card =
+    { $emoji } <b>{ $label }</b>
+
+    { $status }
+    👁 Verwendungen: <b>{ $uses }</b>
+    📅 Hinzugefügt: <b>{ $date }</b>
+
+    <i>In jedem Chat senden:</i>
+    <code>@{ $bot_username } { $label }</code>
+saves-btn-preview = 👁 Vorschau
+saves-btn-send = 🚀 In den Chat
+saves-btn-rename = ✏️ Umbenennen
+saves-btn-delete = 🗑 Löschen
+saves-btn-back = ◀️ Zur Liste
+saves-btn-close = ❌ Schließen
+saves-btn-cancel = ◀️ Abbrechen
+saves-btn-replace = 🔄 Medien ersetzen
+saves-foreign-library = ❌ Das ist nicht deine Mediathek
+saves-preview-failed = Vorschau konnte nicht gesendet werden.
+saves-rename-prompt =
+    ✏️ <b>Umbenennen</b> «{ $label }»
+
+    Sende den neuen Namen als Nachricht (max. { $max } Zeichen):
+saves-renamed = ✅ Name aktualisiert: «<b>{ $label }</b>»
+saves-label-word-too-long = Ein Wort im Namen ist zu lang. Bitte wähle einen kürzeren Namen.

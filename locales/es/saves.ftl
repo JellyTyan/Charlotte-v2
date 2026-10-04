@@ -36,16 +36,8 @@ saves-empty = Tu biblioteca está vacía por ahora.
 
 saves-header = <b>Tu biblioteca</b> ({ $count }):
 
-saves-delete-btn = 🗑 Eliminar «{ $label }»
-
-saves-prev-btn = ◀️ Atrás
-saves-next-btn = Siguiente ▶️
-
 saves-deleted-toast = Eliminado de tus guardados.
 saves-missing-toast = No encontré ese elemento, ¿quizá ya se borró?
-
-saves-footer-hint = <i>Para enviar multimedia, escribe en cualquier chat:</i>
-    <code>@{ $bot_username } &lt;nombre&gt;</code>
 
 saves-mod-approved =
     <b>¡Aprobaron tu archivo guardado!</b> 🎉
@@ -88,8 +80,32 @@ saves-replaced-toast = ¡Archivo multimedia reemplazado con éxito!
 saves-cancelled-toast = Reemplazo cancelado.
 saves-replace-cancelled = Reemplazo cancelado. El archivo anterior se mantiene sin cambios.
 saves-dupe-public = ¡Este archivo ya está publicado en la biblioteca pública de memes!
-saves-rename-hint = Para renombrar un elemento guardado, envía /save con un nuevo nombre.
 saves-dupe-label-short = ¡Ya tienes un elemento guardado con este nombre!
-saves-renamed-toast = ¡Nombre actualizado!
 saves-rename-remoderation = Nombre modificado — enviado a moderación antes de mostrarse en la búsqueda pública.
 
+saves-list-hint = Elige un guardado para verlo y gestionarlo:
+saves-card =
+    { $emoji } <b>{ $label }</b>
+
+    { $status }
+    👁 Usos: <b>{ $uses }</b>
+    📅 Añadido: <b>{ $date }</b>
+
+    <i>Envíalo en cualquier chat:</i>
+    <code>@{ $bot_username } { $label }</code>
+saves-btn-preview = 👁 Ver
+saves-btn-send = 🚀 Al chat
+saves-btn-rename = ✏️ Renombrar
+saves-btn-delete = 🗑 Eliminar
+saves-btn-back = ◀️ A la lista
+saves-btn-close = ❌ Cerrar
+saves-btn-cancel = ◀️ Cancelar
+saves-btn-replace = 🔄 Reemplazar medio
+saves-foreign-library = ❌ Esta no es tu biblioteca
+saves-preview-failed = No se pudo enviar la vista previa.
+saves-rename-prompt =
+    ✏️ <b>Renombrar</b> «{ $label }»
+
+    Envía el nuevo nombre en un mensaje (hasta { $max } caracteres):
+saves-renamed = ✅ Nombre actualizado: «<b>{ $label }</b>»
+saves-label-word-too-long = Una de las palabras del nombre es demasiado larga. Usa un nombre más corto.

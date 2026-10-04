@@ -36,16 +36,8 @@ saves-empty = Na razie masz pusto w bibliotece.
 
 saves-header = <b>Twoja biblioteka</b> ({ $count }):
 
-saves-delete-btn = 🗑 Usuń «{ $label }»
-
-saves-prev-btn = ◀️ Wstecz
-saves-next-btn = Dalej ▶️
-
 saves-deleted-toast = Usunięto z zapisanych.
 saves-missing-toast = Nie znalazłam tego elementu, może został już usunięty?
-
-saves-footer-hint = <i>Aby wysłać multimedia, wpisz w dowolnym czacie:</i>
-    <code>@{ $bot_username } &lt;nazwa&gt;</code>
 
 saves-mod-approved =
     <b>Twój zapis został zatwierdzony!</b> 🎉
@@ -88,8 +80,32 @@ saves-replaced-toast = Plik został pomyślnie zastąpiony!
 saves-cancelled-toast = Anulowano zastąpienie.
 saves-replace-cancelled = Zastąpienie anulowane. Poprzedni plik pozostał bez zmian.
 saves-dupe-public = Ten plik znajduje się już w publicznej bibliotece memów!
-saves-rename-hint = Aby zmienić nazwę, wyślij /save z nową nazwą.
 saves-dupe-label-short = Masz już zapis o takiej nazwie!
-saves-renamed-toast = Nazwa została zaktualizowana!
 saves-rename-remoderation = Nazwa została zmieniona — mem wysłano do ponownej moderacji przed wyświetleniem w wyszukiwaniu publicznym.
 
+saves-list-hint = Wybierz zapis, aby go wyświetlić i zarządzać nim:
+saves-card =
+    { $emoji } <b>{ $label }</b>
+
+    { $status }
+    👁 Użycia: <b>{ $uses }</b>
+    📅 Dodano: <b>{ $date }</b>
+
+    <i>Wyślij w dowolnym czacie:</i>
+    <code>@{ $bot_username } { $label }</code>
+saves-btn-preview = 👁 Podgląd
+saves-btn-send = 🚀 Do czatu
+saves-btn-rename = ✏️ Zmień nazwę
+saves-btn-delete = 🗑 Usuń
+saves-btn-back = ◀️ Do listy
+saves-btn-close = ❌ Zamknij
+saves-btn-cancel = ◀️ Anuluj
+saves-btn-replace = 🔄 Zamień media
+saves-foreign-library = ❌ To nie jest twoja biblioteka
+saves-preview-failed = Nie udało się wysłać podglądu.
+saves-rename-prompt =
+    ✏️ <b>Zmiana nazwy</b> «{ $label }»
+
+    Wyślij nową nazwę w wiadomości (maks. { $max } znaków):
+saves-renamed = ✅ Nazwa zmieniona: «<b>{ $label }</b>»
+saves-label-word-too-long = Jedno ze słów w nazwie jest za długie. Podaj krótszą nazwę.

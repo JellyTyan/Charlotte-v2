@@ -15,6 +15,18 @@ MAX_STORED_RECENT = 15
 ALLOWED_MEDIA_TYPES = ("video", "photo", "gif")
 
 
+def extract_file_unique_id(message: Message) -> str | None:
+    """file_unique_id того же медиа, что выбирает extract_media_from_message (порядок проверок совпадает).
+
+    В отличие от file_id он одинаков для одного файла в любых сообщениях — годится для поиска дублей.
+    """
+    media = (
+        message.video or message.animation or (message.photo[-1] if message.photo else None)
+        or message.audio or message.voice or message.video_note or message.document
+    )
+    return media.file_unique_id if media else None
+
+
 def extract_media_from_message(message: Message) -> tuple[str | None, str | None, str | None]:
     """
     Extract (telegram_file_id, media_type, title) from a Telegram message.

@@ -36,16 +36,8 @@ saves-empty = کتابخانه رسانه تو فعلاً خالیه.
 
 saves-header = <b>کتابخانه رسانه تو</b> ({ $count }):
 
-saves-delete-btn = 🗑 حذف «{ $label }»
-
-saves-prev-btn = ◀️ قبلی
-saves-next-btn = بعدی ▶️
-
 saves-deleted-toast = از ذخیره‌شده‌ها حذف شد.
 saves-missing-toast = این مورد رو پیدا نکردم، شاید قبلاً حذف شده؟
-
-saves-footer-hint = <i>برای ارسال رسانه، در هر چتی تایپ کن:</i>
-    <code>@{ $bot_username } &lt;نام&gt;</code>
 
 saves-mod-approved =
     <b>مورد ذخیره‌شده تو تأیید شد!</b> 🎉
@@ -88,8 +80,32 @@ saves-replaced-toast = رسانه با موفقیت جایگزین شد!
 saves-cancelled-toast = جایگزینی لغو شد.
 saves-replace-cancelled = جایگزینی لغو شد. رسانه قبلی بدون تغییر باقی ماند.
 saves-dupe-public = این فایل قبلاً در کتابخانه عمومی میم‌ها ثبت شده است!
-saves-rename-hint = برای تغییر نام، دستور /save را همراه با نام جدید ارسال کن.
 saves-dupe-label-short = تو قبلاً فایلی با این نام ذخیره کردی!
-saves-renamed-toast = نام با موفقیت تغییر کرد!
 saves-rename-remoderation = نام تغییر کرد — میم قبل از نمایش در جستجوی عمومی برای بررسی مجدد ارسال شد.
 
+saves-list-hint = یک مورد ذخیره‌شده را برای مشاهده و مدیریت انتخاب کن:
+saves-card =
+    { $emoji } <b>{ $label }</b>
+
+    { $status }
+    👁 استفاده‌ها: <b>{ $uses }</b>
+    📅 افزوده شده: <b>{ $date }</b>
+
+    <i>ارسال در هر چتی:</i>
+    <code>@{ $bot_username } { $label }</code>
+saves-btn-preview = 👁 پیش‌نمایش
+saves-btn-send = 🚀 ارسال به چت
+saves-btn-rename = ✏️ تغییر نام
+saves-btn-delete = 🗑 حذف
+saves-btn-back = ◀️ بازگشت به فهرست
+saves-btn-close = ❌ بستن
+saves-btn-cancel = ◀️ لغو
+saves-btn-replace = 🔄 جایگزینی رسانه
+saves-foreign-library = ❌ این کتابخانهٔ تو نیست
+saves-preview-failed = ارسال پیش‌نمایش ممکن نشد.
+saves-rename-prompt =
+    ✏️ <b>تغییر نام</b> «{ $label }»
+
+    نام جدید را در یک پیام بفرست (حداکثر { $max } نویسه):
+saves-renamed = ✅ نام به‌روز شد: «<b>{ $label }</b>»
+saves-label-word-too-long = یکی از کلمه‌های نام خیلی طولانی است. لطفاً نام کوتاه‌تری انتخاب کن.

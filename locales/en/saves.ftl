@@ -36,16 +36,8 @@ saves-empty = Your media library is empty for now.
 
 saves-header = <b>Your media library</b> ({ $count }):
 
-saves-delete-btn = 🗑 Delete «{ $label }»
-
-saves-prev-btn = ◀️ Back
-saves-next-btn = Next ▶️
-
 saves-deleted-toast = Removed from your saves.
 saves-missing-toast = Couldn't find that item, maybe it was already deleted?
-
-saves-footer-hint = <i>To send media, type in any chat:</i>
-    <code>@{ $bot_username } &lt;name&gt;</code>
 
 saves-mod-approved =
     <b>Your save was approved!</b> 🎉
@@ -88,8 +80,32 @@ saves-replaced-toast = Media replaced successfully!
 saves-cancelled-toast = Replacement cancelled.
 saves-replace-cancelled = Replacement cancelled. The original media remains unchanged.
 saves-dupe-public = This media is already available in the public meme library!
-saves-rename-hint = To rename a save, send /save with a new name.
 saves-dupe-label-short = You already have a save with this name!
-saves-renamed-toast = Save renamed!
 saves-rename-remoderation = Name changed — submitted for re-moderation before appearing in public search.
 
+saves-list-hint = Pick a save to view and manage:
+saves-card =
+    { $emoji } <b>{ $label }</b>
+
+    { $status }
+    👁 Uses: <b>{ $uses }</b>
+    📅 Added: <b>{ $date }</b>
+
+    <i>Send in any chat:</i>
+    <code>@{ $bot_username } { $label }</code>
+saves-btn-preview = 👁 Preview
+saves-btn-send = 🚀 Send to chat
+saves-btn-rename = ✏️ Rename
+saves-btn-delete = 🗑 Delete
+saves-btn-back = ◀️ Back to list
+saves-btn-close = ❌ Close
+saves-btn-cancel = ◀️ Cancel
+saves-btn-replace = 🔄 Replace media
+saves-foreign-library = ❌ This is not your library
+saves-preview-failed = Couldn't send the preview.
+saves-rename-prompt =
+    ✏️ <b>Renaming</b> «{ $label }»
+
+    Send the new name as a message (up to { $max } characters):
+saves-renamed = ✅ Name updated: «<b>{ $label }</b>»
+saves-label-word-too-long = One of the words in the name is too long. Please use a shorter name.

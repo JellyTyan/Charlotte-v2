@@ -87,12 +87,17 @@ async def wait_for_media_task(
     status_timeout: float = 3.0,
     base_url: Optional[str] = None,
     result_prefix: str = "media:result:",
+    max_wait: float = 1800.0,
+    max_status_failures: int = 20,
 ) -> dict:
     """
     Wait for media-core or lossless-core task completion.
     Polls Redis keys on both media_redis_client and redis_client for fast response.
     Every `status_timeout` (3s), checks `GET /status/{task_id}` to verify liveness.
-    Keeps waiting if status is pending, active, or retry.
+    Keeps waiting if status is pending, active, or retry — but no longer than `max_wait`
+    seconds overall, and gives up after `max_status_failures` failed /status checks in a row
+    (core down / 5xx / unknown status). Otherwise a dead backend would hold the user lock
+    and a global semaphore slot forever.
     """
     from storage.cache.redis_client import media_redis_client, redis_client
 
@@ -100,10 +105,29 @@ async def wait_for_media_task(
     target_url = (base_url or settings.MEDIA_CORE_URL).rstrip("/")
     elapsed_since_status = 0.0
 
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + max_wait
+    status_failures = 0
+
+    def give_up(reason: str) -> BotError:
+        return BotError(
+            code=ErrorCode.INTERNAL_ERROR,
+            url=url,
+            service=service,
+            message=f"Task {task_id} abandoned: {reason}",
+            is_logged=True,
+            critical=True,
+        )
+
     # Polling frequency
     check_interval = 0.5 if clients_to_use else 1.5
 
     while True:
+        if loop.time() > deadline:
+            raise give_up(f"no result after {max_wait:.0f}s")
+        if status_failures >= max_status_failures:
+            raise give_up(f"{status_failures} failed /status checks in a row")
+
         # Check if cancelled by /cancel command
         if task_manager.is_user_cancelled(user_id):
             raise BotError(
@@ -151,6 +175,7 @@ async def wait_for_media_task(
 
                     # If still in queue or active or retry -> keep waiting
                     if task_status in ("pending", "active", "retry"):
+                        status_failures = 0
                         continue
                     elif task_status in ("completed", "success", "done", "failed", "cancelled") or "items" in status_data:
                         return handle_task_result(status_data, url, service)
@@ -163,13 +188,19 @@ async def wait_for_media_task(
                             is_logged=True,
                             critical=True,
                         )
+                    else:
+                        status_failures += 1
+                        logger.warning(f"Unknown status from /status/{task_id}: {status_data}")
                 else:
+                    status_failures += 1
                     logger.warning(f"Unexpected response from /status/{task_id}: {res.status_code} {res.text}")
             except httpx.RequestError as e:
+                status_failures += 1
                 logger.warning(f"Network error checking /status/{task_id}: {e}")
             except BotError:
                 raise
             except Exception as e:
+                status_failures += 1
                 logger.error(f"Error checking status for {task_id}: {e}")
 
 

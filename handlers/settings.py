@@ -23,7 +23,6 @@ router = Router()
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
-# todo Try to use aiogram-dialog for this shit :)
 LANGUAGES = [
     { "code": "en", "name": "English", "flag": "🇺🇲" },
     { "code": "uk", "name": "Українська", "flag": "🇺🇦" },

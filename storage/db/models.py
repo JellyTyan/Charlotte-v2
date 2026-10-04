@@ -1,7 +1,8 @@
 import datetime
 from datetime import timezone
 from typing import Any
-from sqlalchemy import BigInteger, Boolean, Date, Integer, String, DateTime, JSON, Text, Index
+from sqlalchemy import BigInteger, Boolean, Date, Integer, String, DateTime, JSON, Text, Index, Computed
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -114,12 +115,16 @@ class UserSaves(Base):
     __tablename__ = "user_saves"
     __table_args__ = (
         Index("ix_user_saves_user_label", "user_id", "label"),
+        Index("ix_user_saves_search_vector", "search_vector", postgresql_using="gin"),
+        Index("ix_user_saves_label_trgm", "label", postgresql_using="gin", postgresql_ops={"label": "gin_trgm_ops"}),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
     label: Mapped[str] = mapped_column(String(128), nullable=False)
     telegram_file_id: Mapped[str] = mapped_column(String, nullable=False)
+    # NULL у записей, созданных до миграции b7c8d9e0f1a2 — для них дубли ищутся по telegram_file_id
+    file_unique_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     media_type: Mapped[str] = mapped_column(String(16), nullable=False)  # 'video', 'photo', 'audio', 'gif'
     title: Mapped[str | None] = mapped_column(String(256), nullable=True)
     caption: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -130,6 +135,15 @@ class UserSaves(Base):
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(timezone.utc),
         nullable=False
+    )
+    # Заполняется самой БД (миграция a1b2c3d4e5f6); deferred — не тянем в каждый SELECT
+    search_vector: Mapped[Any] = mapped_column(
+        TSVECTOR,
+        Computed(
+            "to_tsvector('russian', coalesce(label, '') || ' ' || coalesce(title, '') || ' ' || coalesce(caption, ''))",
+            persisted=True,
+        ),
+        deferred=True,
     )
 
 

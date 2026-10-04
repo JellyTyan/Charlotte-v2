@@ -1,88 +1,87 @@
-import html
 import logging
 import re
-from aiogram import Router, F
-from aiogram.filters import Command, CommandObject
-from aiogram.types import (
-    Message,
-    CallbackQuery,
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
-)
-from aiogram.utils.keyboard import InlineKeyboardBuilder
-from sqlalchemy.ext.asyncio import AsyncSession
-from fluentogram import TranslatorRunner
+import time
 
+from aiogram import Bot, F, Router
+from aiogram.dispatcher.event.bases import SkipHandler
+from aiogram.filters import Command, CommandObject
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
+from fluentogram import TranslatorRunner
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from keyboards.saves import (
+    PAGE_SIZE,
+    TYPE_EMOJIS,
+    SavesItemCallback,
+    SavesPageCallback,
+    SavesReplaceCallback,
+    build_rename_cancel_keyboard,
+    build_replace_keyboard,
+    build_save_card_keyboard,
+    build_saves_list_keyboard,
+    format_save_card_text,
+    format_saves_list_text,
+    save_status_text,
+)
+from middlewares.button_owner import register_message_owner
+from modules.inline.handler import MUSIC_TAGS, PASTE_TRIGGERS, RECENT_TAGS, SAVED_TAGS
+from states.saves import SavesStates
+from storage.cache.redis_client import cache_delete, cache_get, cache_set
 from storage.db.crud import (
-    save_user_media,
+    check_if_user_premium,
+    delete_user_save,
+    get_public_save_by_file_id,
+    get_save_by_file_id,
+    get_save_by_id,
+    get_save_by_label,
     get_user_saves,
     get_user_saves_count,
-    delete_user_save,
-    toggle_save_public,
-    get_save_by_id,
-    check_if_user_premium,
     is_user_public_saves_banned,
-    get_save_by_file_id,
-    get_save_by_label,
-    get_public_save_by_file_id,
-    replace_save_media,
     rename_user_save,
+    replace_save_media,
+    save_user_media,
+    toggle_save_public,
 )
-from utils.text_utils import escape_html
 from utils.ephemeral import send_smart_message
-from storage.cache.redis_client import cache_set, cache_get, cache_delete
+from utils.recent_downloads import extract_file_unique_id, extract_media_from_message
+from utils.text_utils import escape_html
 
 router = Router(name="saves")
 logger = logging.getLogger(__name__)
 
 MAX_SAVES_FREE = 200
 MAX_SAVES_PREMIUM = 1000
-PAGE_SIZE = 5
+MAX_LABEL_LEN = 128
+_MAX_WORD_LEN = 64  # защита от «словa» из сотни символов без пробелов
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Зарезервированные системные метки — их нельзя использовать в качестве названия
-# ─────────────────────────────────────────────────────────────────────────────
-RESERVED_LABELS: frozenset[str] = frozenset({
-    # inline-теги бота
-    "#music", "#музыка", "#audio",
-    "#recent", "#recents", "#недавнее", "#история", "#last",
-    "#saved", "#saves", "#сейв", "#сейвы",
-    "#paste", "paste", "вставить", "буфер",
-    # общие системные слова
-    "#public", "#private", "#all", "#вся", "#всё",
-})
+# Inline-триггеры бота: название, начинающееся с них, никогда не найдётся поиском
+_RESERVED_PREFIXES = frozenset(t.lower() for t in RECENT_TAGS + MUSIC_TAGS + SAVED_TAGS)
+_RESERVED_EXACT = frozenset(t.lower() for t in PASTE_TRIGGERS)
 
-# Паттерн «мусорных» названий: пустая строка после strip, только пунктуация/эмодзи, только цифры
-_TRASH_PATTERN = re.compile(r"^[\W\d]+$", re.UNICODE)
+# «Мусорное» название: только цифры, пунктуация, эмодзи, подчёркивания
+_TRASH_PATTERN = re.compile(r"^[\W\d_]+$")
 
-# Предел длины одного слова внутри label (защита от спама пробелами/padding)
-_MAX_WORD_LEN = 64
+_REPLACE_TTL = 300  # сек. — сколько живёт диалог «заменить медиа?»
+_RENAME_TTL = 300  # сек. — сколько ждём новое название после «Переименовать»
 
 
-def _validate_label(label: str) -> str | None:
-    """Проверить label. Вернуть None если OK, или строку с причиной ошибки."""
-    stripped = label.strip()
-    if not stripped:
-        return "empty"
-    if stripped.lower() in RESERVED_LABELS:
-        return "reserved"
-    if _TRASH_PATTERN.match(stripped):
-        return "trash"
-    if any(len(w) > _MAX_WORD_LEN for w in stripped.split()):
-        return "word_too_long"
+def _label_error(label: str, i18n: TranslatorRunner) -> str | None:
+    """Вернуть текст ошибки для пользователя или None, если название подходит."""
+    if len(label) > MAX_LABEL_LEN:
+        return i18n.saves.name.too.long()
+    lowered = label.lower()
+    if lowered in _RESERVED_EXACT or lowered.split()[0] in _RESERVED_PREFIXES:
+        return i18n.saves.label.reserved(label=escape_html(label))
+    if _TRASH_PATTERN.match(label):
+        return i18n.saves.label.trash()
+    if any(len(w) > _MAX_WORD_LEN for w in label.split()):
+        return i18n.saves.label.word.too.long()
     return None
 
 
-from utils.recent_downloads import extract_media_from_message
-
-TYPE_EMOJIS = {"video": "🎬", "photo": "🖼", "audio": "🎵", "gif": "🎞"}
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Ключ Redis для pending-диалога замены: saves:replace:{user_id}
-# Хранит {"old_save_id": int, "new_file_id": str, "new_media_type": str,
-#          "new_title": str|None, "new_caption": str|None, "label": str}
-# ─────────────────────────────────────────────────────────────────────────────
-_REPLACE_TTL = 300  # 5 минут актуальности диалога
+async def _bot_username(bot: Bot) -> str:
+    return (await bot.me()).username or "CharlotteFox_Bot"
 
 
 async def _safe_edit_message(
@@ -95,28 +94,26 @@ async def _safe_edit_message(
         return
     try:
         if getattr(callback.message, "ephemeral_message_id", None) is not None:
-            await callback.message.edit_ephemeral_text(
-                text,
-                reply_markup=reply_markup,
-                parse_mode="HTML",
-            )
+            await callback.message.edit_ephemeral_text(text, reply_markup=reply_markup, parse_mode="HTML")
         else:
-            await callback.message.edit_text(
-                text,
-                reply_markup=reply_markup,
-                parse_mode="HTML",
-            )
+            await callback.message.edit_text(text, reply_markup=reply_markup, parse_mode="HTML")
     except Exception as e:
         logger.debug(f"Could not edit message in saves callback: {e}")
 
 
-def _save_action_markup(save_id: int, i18n: TranslatorRunner) -> InlineKeyboardMarkup:
-    """Стандартная клавиатура после сохранения (публикация + удаление)."""
-    builder = InlineKeyboardBuilder()
-    builder.button(text=i18n.saves.btn.make.public(), callback_data=f"saves_toggle_pub:{save_id}")
-    builder.button(text="🗑 Удалить", callback_data=f"saves_del:{save_id}:0")
-    builder.adjust(2)
-    return builder.as_markup()
+async def _render_list(
+    session: AsyncSession, user_id: int, page: int, i18n: TranslatorRunner
+) -> tuple[str, InlineKeyboardMarkup | None]:
+    total_count = await get_user_saves_count(session, user_id)
+    if total_count == 0:
+        return i18n.saves.empty(), None
+    total_pages = (total_count + PAGE_SIZE - 1) // PAGE_SIZE
+    page = max(0, min(page, total_pages - 1))
+    saves = await get_user_saves(session, user_id, offset=page * PAGE_SIZE, limit=PAGE_SIZE)
+    return (
+        format_saves_list_text(total_count, i18n),
+        build_saves_list_keyboard(saves, page=page, total_pages=total_pages, owner_id=user_id, i18n=i18n),
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -135,111 +132,61 @@ async def handle_save_command(
         return
 
     user_id = message.from_user.id
-    reply = message.reply_to_message
-    if not reply:
-        await send_smart_message(message, i18n.saves.usage(), for_user_id=user_id, parse_mode="HTML")
-        return
 
-    # Защита: сохранять можно только сообщения, отправленные ботом
-    bot_info = await message.bot.get_me()
-    if not reply.from_user or reply.from_user.id != bot_info.id:
-        await send_smart_message(message, i18n.saves.bot.only(), for_user_id=user_id, parse_mode="HTML")
-        return
+    async def reply(text: str, **kwargs) -> None:
+        await send_smart_message(message, text, for_user_id=user_id, parse_mode="HTML", **kwargs)
 
-    args_str = (command.args or "").strip()
-    if not args_str:
-        await send_smart_message(message, i18n.saves.no.name(), for_user_id=user_id, parse_mode="HTML")
-        return
+    source = message.reply_to_message
+    if not source:
+        return await reply(i18n.saves.usage())
 
-    label = args_str
+    # Сохранять можно только сообщения, отправленные ботом
+    if not source.from_user or source.from_user.id != message.bot.id:
+        return await reply(i18n.saves.bot.only())
 
-    # ── Длина ──
-    if len(label) > 128:
-        await send_smart_message(message, i18n.saves.name.too.long(), for_user_id=user_id, parse_mode="HTML")
-        return
+    label = (command.args or "").strip()
+    if not label:
+        return await reply(i18n.saves.no.name())
+    if error := _label_error(label, i18n):
+        return await reply(error)
 
-    # ── Фильтр зарезервированных/мусорных названий ──
-    label_error = _validate_label(label)
-    if label_error == "reserved":
-        await send_smart_message(
-            message,
-            i18n.saves.label.reserved(label=escape_html(label)),
-            for_user_id=user_id,
-            parse_mode="HTML",
-        )
-        return
-    if label_error == "trash":
-        await send_smart_message(
-            message,
-            i18n.saves.label.trash(),
-            for_user_id=user_id,
-            parse_mode="HTML",
-        )
-        return
-
-    file_id, media_type, file_title = extract_media_from_message(reply)
+    file_id, media_type, file_title = extract_media_from_message(source)
     if not file_id or not media_type:
-        await send_smart_message(message, i18n.saves.no.media(), for_user_id=user_id, parse_mode="HTML")
-        return
+        return await reply(i18n.saves.no.media())
 
-    caption = reply.caption or None
+    file_unique_id = extract_file_unique_id(source)
+    caption = source.caption or None
     title = file_title or label
 
-    # ── Проверка 1: тот же файл уже сохранён у пользователя? ──
-    dupe_media = await get_save_by_file_id(db_session, user_id, file_id)
+    # Тот же файл уже сохранён?
+    dupe_media = await get_save_by_file_id(db_session, user_id, file_id, file_unique_id)
     if dupe_media:
-        await send_smart_message(
-            message,
-            i18n.saves.dupe.media(existing_label=escape_html(dupe_media.label)),
-            for_user_id=user_id,
-            parse_mode="HTML",
-        )
-        return
+        return await reply(i18n.saves.dupe.media(existing_label=escape_html(dupe_media.label)))
 
-    # ── Проверка 2: такое название уже существует у пользователя? ──
+    # Такое название уже есть → предложить заменить медиа
     dupe_label = await get_save_by_label(db_session, user_id, label)
     if dupe_label:
-        # Предложить диалог «Заменить медиа / Отмена»
         await cache_set(
-            f"saves:replace:{user_id}",
+            f"saves:replace:{user_id}:{dupe_label.id}",
             {
-                "old_save_id": dupe_label.id,
                 "new_file_id": file_id,
+                "new_file_unique_id": file_unique_id,
                 "new_media_type": media_type,
                 "new_title": title,
                 "new_caption": caption,
-                "label": label,
             },
             ttl=_REPLACE_TTL,
         )
-        builder = InlineKeyboardBuilder()
-        builder.button(text="🔄 Заменить медиа", callback_data=f"saves_replace:{user_id}")
-        builder.button(text="❌ Отмена", callback_data=f"saves_replace_cancel:{user_id}")
-        builder.adjust(2)
-        await send_smart_message(
-            message,
-            i18n.saves.dupe.label(label=escape_html(label)),
-            for_user_id=user_id,
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
+        return await reply(
+            i18n.saves.dupe.label(label=escape_html(dupe_label.label)),
+            reply_markup=build_replace_keyboard(dupe_label.id, user_id, i18n),
         )
-        return
 
-    # ── Лимит ──
     current_count = await get_user_saves_count(db_session, user_id)
-    is_premium = await check_if_user_premium(db_session, user_id)
-    limit = MAX_SAVES_PREMIUM if is_premium else MAX_SAVES_FREE
-
+    limit = MAX_SAVES_PREMIUM if await check_if_user_premium(db_session, user_id) else MAX_SAVES_FREE
     if current_count >= limit:
-        await send_smart_message(
-            message,
-            i18n.saves.limit.reached(current=current_count, limit=limit),
-            for_user_id=user_id,
-            parse_mode="HTML",
-        )
-        return
+        return await reply(i18n.saves.limit.reached(current=current_count, limit=limit))
 
-    # ── Сохраняем ──
     save = await save_user_media(
         session=db_session,
         user_id=user_id,
@@ -249,22 +196,19 @@ async def handle_save_command(
         title=title,
         caption=caption,
         is_public=False,
+        file_unique_id=file_unique_id,
     )
 
-    bot_username = bot_info.username or "CharlotteFox_Bot"
-    emoji = TYPE_EMOJIS.get(media_type, "📁")
-
-    await send_smart_message(
-        message,
+    status = save_status_text(save, i18n)  # до i18n.saves.saved — см. format_save_card_text
+    bot_username = await _bot_username(message.bot)
+    await reply(
         i18n.saves.saved(
-            emoji=emoji,
-            label=escape_html(label),
-            status=i18n.saves.status.private(),
+            emoji=TYPE_EMOJIS.get(media_type, "📁"),
+            label=escape_html(save.label),
+            status=status,
             bot_username=bot_username,
         ),
-        for_user_id=user_id,
-        reply_markup=_save_action_markup(save.id, i18n),
-        parse_mode="HTML",
+        reply_markup=build_save_card_keyboard(save, page=0, owner_id=user_id, i18n=i18n),
     )
 
 
@@ -272,124 +216,62 @@ async def handle_save_command(
 # Диалог замены медиа при конфликте названия
 # ─────────────────────────────────────────────────────────────────────────────
 
-@router.callback_query(F.data.startswith("saves_replace:"))
-async def handle_replace_confirm(
+@router.callback_query(SavesReplaceCallback.filter())
+async def handle_replace(
     callback: CallbackQuery,
+    callback_data: SavesReplaceCallback,
     db_session: AsyncSession,
     i18n: TranslatorRunner,
 ) -> None:
-    """Пользователь подтвердил замену медиа под существующим label."""
     user_id = callback.from_user.id
-    pending = await cache_get(f"saves:replace:{user_id}")
+    if user_id != callback_data.owner_id:
+        await callback.answer(i18n.saves.foreign.library(), show_alert=True)
+        return
+
+    key = f"saves:replace:{user_id}:{callback_data.save_id}"
+    if not callback_data.confirm:
+        await cache_delete(key)
+        await callback.answer(i18n.saves.cancelled.toast())
+        await _safe_edit_message(callback, i18n.saves.replace.cancelled())
+        return
+
+    pending = await cache_get(key)
     if not pending:
         await callback.answer(i18n.saves.replace.expired(), show_alert=True)
         return
-
-    await cache_delete(f"saves:replace:{user_id}")
+    await cache_delete(key)
 
     save = await replace_save_media(
         session=db_session,
-        save_id=pending["old_save_id"],
+        save_id=callback_data.save_id,
         user_id=user_id,
         new_file_id=pending["new_file_id"],
         new_media_type=pending["new_media_type"],
         new_title=pending.get("new_title"),
         new_caption=pending.get("new_caption"),
+        new_file_unique_id=pending.get("new_file_unique_id"),
     )
     if not save:
         await callback.answer(i18n.saves.missing.toast(), show_alert=True)
         return
 
-    await callback.answer(i18n.saves.replaced.toast(), show_alert=False)
-
-    emoji = TYPE_EMOJIS.get(save.media_type, "📁")
-    bot_info = await callback.bot.get_me()
-    bot_username = bot_info.username or "CharlotteFox_Bot"
-    status = i18n.saves.status.pending() if save.is_public else i18n.saves.status.private()
-
+    await callback.answer(i18n.saves.replaced.toast())
+    status = save_status_text(save, i18n)  # до i18n.saves.saved — см. format_save_card_text
+    bot_username = await _bot_username(callback.bot)
     await _safe_edit_message(
         callback,
-        i18n.saves.saved(emoji=emoji, label=escape_html(save.label), status=status, bot_username=bot_username),
-        reply_markup=_save_action_markup(save.id, i18n),
+        i18n.saves.saved(
+            emoji=TYPE_EMOJIS.get(save.media_type, "📁"),
+            label=escape_html(save.label),
+            status=status,
+            bot_username=bot_username,
+        ),
+        reply_markup=build_save_card_keyboard(save, page=0, owner_id=user_id, i18n=i18n),
     )
 
 
-@router.callback_query(F.data.startswith("saves_replace_cancel:"))
-async def handle_replace_cancel(
-    callback: CallbackQuery,
-    i18n: TranslatorRunner,
-) -> None:
-    """Пользователь отменил замену."""
-    user_id = callback.from_user.id
-    await cache_delete(f"saves:replace:{user_id}")
-    await callback.answer(i18n.saves.cancelled.toast(), show_alert=False)
-    await _safe_edit_message(callback, i18n.saves.replace.cancelled())
-
-
 # ─────────────────────────────────────────────────────────────────────────────
-# Toggle public / private
-# ─────────────────────────────────────────────────────────────────────────────
-
-@router.callback_query(F.data.startswith("saves_toggle_pub:"))
-async def handle_toggle_public_callback(
-    callback: CallbackQuery,
-    db_session: AsyncSession,
-    i18n: TranslatorRunner,
-) -> None:
-    """Toggle save between private and public."""
-    try:
-        save_id = int(callback.data.split(":")[1])
-    except (IndexError, ValueError):
-        return
-
-    save_item = await get_save_by_id(db_session, save_id)
-    if not save_item or save_item.user_id != callback.from_user.id:
-        await callback.answer(i18n.saves.missing.toast(), show_alert=True)
-        return
-
-    if not save_item.is_public and await is_user_public_saves_banned(db_session, callback.from_user.id):
-        await callback.answer(i18n.saves.banned.alert(), show_alert=True)
-        return
-
-    # ── Защита: нельзя опубликовать дубликат уже одобренного публичного мема ──
-    if not save_item.is_public:
-        existing_public = await get_public_save_by_file_id(
-            db_session, save_item.telegram_file_id, exclude_save_id=save_item.id
-        )
-        if existing_public:
-            await callback.answer(i18n.saves.dupe.public(), show_alert=True)
-            return
-
-    save = await toggle_save_public(db_session, callback.from_user.id, save_id)
-    if not save:
-        await callback.answer(i18n.saves.missing.toast(), show_alert=True)
-        return
-
-    toast = i18n.saves.toast.pending() if save.is_public else i18n.saves.toast.private()
-    await callback.answer(toast, show_alert=False)
-
-    toggle_btn_text = i18n.saves.btn.make.private() if save.is_public else i18n.saves.btn.make.public()
-    builder = InlineKeyboardBuilder()
-    builder.button(text=toggle_btn_text, callback_data=f"saves_toggle_pub:{save.id}")
-    builder.button(text="🗑 Удалить", callback_data=f"saves_del:{save.id}:0")
-    builder.adjust(2)
-
-    bot_info = await callback.bot.get_me()
-    bot_username = bot_info.username or "CharlotteFox_Bot"
-    emoji = TYPE_EMOJIS.get(save.media_type, "📁")
-    status_text = i18n.saves.status.pending() if save.is_public else i18n.saves.status.private()
-
-    new_text = i18n.saves.saved(
-        emoji=emoji,
-        label=escape_html(save.label),
-        status=status_text,
-        bot_username=bot_username,
-    )
-    await _safe_edit_message(callback, new_text, reply_markup=builder.as_markup())
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# /saves list + pagination
+# /saves list, cards, actions
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.message(Command("saves"))
@@ -398,201 +280,188 @@ async def handle_saves_list(
     db_session: AsyncSession,
     i18n: TranslatorRunner,
 ) -> None:
-    """Display user's saved media list with pagination."""
+    """Show the user's media library."""
     if not message.from_user:
         return
 
     user_id = message.from_user.id
-    total_count = await get_user_saves_count(db_session, user_id)
-
-    if total_count == 0:
-        await send_smart_message(message, i18n.saves.empty(), for_user_id=user_id, parse_mode="HTML")
+    text, markup = await _render_list(db_session, user_id, 0, i18n)
+    if markup is None:
+        await send_smart_message(message, text, for_user_id=user_id, parse_mode="HTML")
         return
 
-    bot_info = await message.bot.get_me()
-    bot_username = bot_info.username or "CharlotteFox_Bot"
-
-    text, markup = await _render_saves_page(db_session, user_id, page=0, total_count=total_count, i18n=i18n, bot_username=bot_username)
-    await send_smart_message(message, text, for_user_id=user_id, reply_markup=markup, parse_mode="HTML")
+    menu_msg = await message.reply(text, reply_markup=markup, parse_mode="HTML")
+    await register_message_owner(menu_msg, user_id)
 
 
-@router.callback_query(F.data.startswith("saves_page:"))
-async def handle_saves_page_callback(
+@router.callback_query(SavesPageCallback.filter())
+async def handle_saves_page(
     callback: CallbackQuery,
+    callback_data: SavesPageCallback,
     db_session: AsyncSession,
     i18n: TranslatorRunner,
 ) -> None:
-    """Handle pagination clicks in /saves list."""
-    try:
-        page = int(callback.data.split(":")[1])
-    except (IndexError, ValueError):
-        page = 0
-
-    user_id = callback.from_user.id
-    total_count = await get_user_saves_count(db_session, user_id)
-    if total_count == 0:
-        await _safe_edit_message(callback, i18n.saves.empty())
-        await callback.answer()
+    if callback.from_user.id != callback_data.owner_id:
+        await callback.answer(i18n.saves.foreign.library(), show_alert=True)
         return
 
-    bot_info = await callback.bot.get_me()
-    bot_username = bot_info.username or "CharlotteFox_Bot"
-
-    text, markup = await _render_saves_page(db_session, user_id, page=page, total_count=total_count, i18n=i18n, bot_username=bot_username)
+    text, markup = await _render_list(db_session, callback.from_user.id, callback_data.page, i18n)
     await _safe_edit_message(callback, text, reply_markup=markup)
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("saves_del:"))
-async def handle_delete_save_callback(
+@router.callback_query(SavesItemCallback.filter())
+async def handle_saves_item(
     callback: CallbackQuery,
+    callback_data: SavesItemCallback,
+    state: FSMContext,
     db_session: AsyncSession,
     i18n: TranslatorRunner,
 ) -> None:
-    """Handle delete save button click."""
-    parts = callback.data.split(":")
-    save_id = int(parts[1])
-    page = int(parts[2]) if len(parts) > 2 else 0
-
     user_id = callback.from_user.id
-
-    # ── Защита публичных одобренных мемов от молчаливого удаления ──
-    # (удаление разрешено всегда — это личная сохранёнка пользователя;
-    #  но при удалении одобренный мем будет автоматически убран из публичной базы)
-    deleted = await delete_user_save(db_session, user_id, save_id)
-
-    if deleted:
-        await callback.answer(i18n.saves.deleted.toast(), show_alert=False)
-    else:
-        await callback.answer(i18n.saves.missing.toast(), show_alert=True)
-
-    total_count = await get_user_saves_count(db_session, user_id)
-    if total_count == 0:
-        await _safe_edit_message(callback, i18n.saves.empty())
+    if user_id != callback_data.owner_id:
+        await callback.answer(i18n.saves.foreign.library(), show_alert=True)
         return
 
-    # Adjust page if out of range
-    max_page = (total_count - 1) // PAGE_SIZE
-    if page > max_page:
-        page = max_page
+    action = callback_data.action
+    page = callback_data.page
 
-    bot_info = await callback.bot.get_me()
-    bot_username = bot_info.username or "CharlotteFox_Bot"
-
-    text, markup = await _render_saves_page(db_session, user_id, page=page, total_count=total_count, i18n=i18n, bot_username=bot_username)
-    await _safe_edit_message(callback, text, reply_markup=markup)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Переименование сохранёнки
-# ─────────────────────────────────────────────────────────────────────────────
-
-@router.callback_query(F.data.startswith("saves_rename:"))
-async def handle_rename_callback(
-    callback: CallbackQuery,
-    db_session: AsyncSession,
-    i18n: TranslatorRunner,
-) -> None:
-    """Entry point for renaming a save. Asks user to send new name via ForceReply."""
-    # Ключ для ожидания нового имени — пока реализован через простое сообщение-инструкцию.
-    # Полноценный FSM (aiogram-dialog) добавляется отдельно.
-    await callback.answer(i18n.saves.rename.hint(), show_alert=True)
-
-
-@router.callback_query(F.data.startswith("saves_rename_confirm:"))
-async def handle_rename_confirm(
-    callback: CallbackQuery,
-    db_session: AsyncSession,
-    i18n: TranslatorRunner,
-) -> None:
-    """Confirm rename with new label from Redis pending state."""
-    user_id = callback.from_user.id
-    pending = await cache_get(f"saves:rename:{user_id}")
-    if not pending:
-        await callback.answer(i18n.saves.replace.expired(), show_alert=True)
+    if action == "close":
+        await state.clear()
+        if callback.message:
+            try:
+                await callback.message.delete()
+            except Exception:
+                pass
+        await callback.answer()
         return
 
-    await cache_delete(f"saves:rename:{user_id}")
-
-    new_label = pending.get("new_label", "")
-    save_id = pending.get("save_id")
-
-    # Проверяем, нет ли уже сохранёнки с новым label
-    dupe = await get_save_by_label(db_session, user_id, new_label)
-    if dupe and dupe.id != save_id:
-        await callback.answer(i18n.saves.dupe.label_short(), show_alert=True)
+    if action == "to_list":
+        await state.clear()
+        text, markup = await _render_list(db_session, user_id, page, i18n)
+        await _safe_edit_message(callback, text, reply_markup=markup)
+        await callback.answer()
         return
 
-    save = await rename_user_save(db_session, save_id, user_id, new_label)
-    if not save:
+    if action == "del":
+        deleted = await delete_user_save(db_session, user_id, callback_data.save_id)
+        if deleted:
+            await callback.answer(i18n.saves.deleted.toast())
+        else:
+            await callback.answer(i18n.saves.missing.toast(), show_alert=True)
+        text, markup = await _render_list(db_session, user_id, page, i18n)
+        await _safe_edit_message(callback, text, reply_markup=markup)
+        return
+
+    # Остальные действия работают с конкретной сохранёнкой пользователя
+    save = await get_save_by_id(db_session, callback_data.save_id)
+    if not save or save.user_id != user_id:
         await callback.answer(i18n.saves.missing.toast(), show_alert=True)
         return
 
-    await callback.answer(i18n.saves.renamed.toast(), show_alert=False)
+    if action == "view":
+        await state.clear()
+        text = format_save_card_text(save, await _bot_username(callback.bot), i18n)
+        await _safe_edit_message(callback, text, reply_markup=build_save_card_keyboard(save, page, user_id, i18n))
+        await callback.answer()
 
-    emoji = TYPE_EMOJIS.get(save.media_type, "📁")
-    bot_info = await callback.bot.get_me()
-    bot_username = bot_info.username or "CharlotteFox_Bot"
-    status = i18n.saves.status.pending() if save.is_public else i18n.saves.status.private()
-    moderation_note = f"\n⚠️ {i18n.saves.rename.remoderation()}" if (save.is_public and not save.is_approved) else ""
+    elif action == "preview":
+        send = {
+            "video": callback.bot.send_video,
+            "photo": callback.bot.send_photo,
+            "gif": callback.bot.send_animation,
+            "audio": callback.bot.send_audio,
+        }.get(save.media_type, callback.bot.send_document)
+        try:
+            await send(callback.message.chat.id, save.telegram_file_id, caption=f"👁 <b>{escape_html(save.label)}</b>", parse_mode="HTML")
+            await callback.answer()
+        except Exception as e:
+            logger.warning("Failed to preview save %s: %s", save.id, e)
+            await callback.answer(i18n.saves.preview.failed(), show_alert=True)
 
-    await _safe_edit_message(
-        callback,
-        i18n.saves.saved(emoji=emoji, label=escape_html(save.label), status=status, bot_username=bot_username) + moderation_note,
-        reply_markup=_save_action_markup(save.id, i18n),
-    )
+    elif action == "toggle_pub":
+        if not save.is_public:
+            if await is_user_public_saves_banned(db_session, user_id):
+                await callback.answer(i18n.saves.banned.alert(), show_alert=True)
+                return
+            if await get_public_save_by_file_id(
+                db_session, save.telegram_file_id, save.file_unique_id, exclude_save_id=save.id
+            ):
+                await callback.answer(i18n.saves.dupe.public(), show_alert=True)
+                return
 
+        updated = await toggle_save_public(db_session, user_id, save.id)
+        if not updated:
+            await callback.answer(i18n.saves.missing.toast(), show_alert=True)
+            return
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Render helper
-# ─────────────────────────────────────────────────────────────────────────────
+        await callback.answer(i18n.saves.toast.pending() if updated.is_public else i18n.saves.toast.private())
+        text = format_save_card_text(updated, await _bot_username(callback.bot), i18n)
+        await _safe_edit_message(callback, text, reply_markup=build_save_card_keyboard(updated, page, user_id, i18n))
 
-async def _render_saves_page(
-    session: AsyncSession,
-    user_id: int,
-    page: int,
-    total_count: int,
-    i18n: TranslatorRunner,
-    bot_username: str,
-) -> tuple[str, InlineKeyboardMarkup]:
-    """Helper to render /saves page text and pagination buttons."""
-    offset = page * PAGE_SIZE
-    saves = await get_user_saves(session, user_id, offset=offset, limit=PAGE_SIZE)
-
-    lines = [
-        i18n.saves.header(count=total_count),
-        "",
-    ]
-
-    builder = InlineKeyboardBuilder()
-
-    for idx, save in enumerate(saves, start=offset + 1):
-        emoji = TYPE_EMOJIS.get(save.media_type, "📁")
-        pub_icon = "🌐" if save.is_public else "🔒"
-        uses_str = f" • 👁 {save.uses_count}" if save.uses_count > 0 else ""
-        lines.append(f"{idx}. {emoji} <b>{escape_html(save.label)}</b> {pub_icon}{uses_str}")
-        builder.button(
-            text=i18n.saves.delete.btn(label=save.label[:16]),
-            callback_data=f"saves_del:{save.id}:{page}",
+    elif action == "rename":
+        await state.set_state(SavesStates.rename_input)
+        await state.set_data({"save_id": save.id, "page": page, "ts": time.time()})
+        await _safe_edit_message(
+            callback,
+            i18n.saves.rename.prompt(label=escape_html(save.label), max=MAX_LABEL_LEN),
+            reply_markup=build_rename_cancel_keyboard(save.id, page, user_id, i18n),
         )
+        await callback.answer()
 
-    builder.adjust(1)
+    else:
+        await callback.answer()
 
-    # Navigation buttons
-    max_page = (total_count - 1) // PAGE_SIZE
-    nav_buttons = []
-    if page > 0:
-        nav_buttons.append(InlineKeyboardButton(text=i18n.saves.prev.btn(), callback_data=f"saves_page:{page - 1}"))
-    nav_buttons.append(InlineKeyboardButton(text=f"{page + 1}/{max_page + 1}", callback_data="noop"))
-    if page < max_page:
-        nav_buttons.append(InlineKeyboardButton(text=i18n.saves.next.btn(), callback_data=f"saves_page:{page + 1}"))
 
-    builder.row(*nav_buttons)
+@router.message(SavesStates.rename_input, F.text)
+async def handle_rename_input(
+    message: Message,
+    state: FSMContext,
+    db_session: AsyncSession,
+    i18n: TranslatorRunner,
+) -> None:
+    data = await state.get_data()
+    is_link = any(e.type in ("url", "text_link") for e in (message.entities or []))
 
-    lines.append("")
-    lines.append(i18n.saves.footer.hint(bot_username=bot_username))
+    # Команды, ссылки на скачивание и «забытый» режим переименования отдаём остальным хендлерам
+    if message.text.startswith("/") or is_link or time.time() - data.get("ts", 0) > _RENAME_TTL:
+        await state.clear()
+        raise SkipHandler()
 
-    return "\n".join(lines), builder.as_markup()
+    user_id = message.from_user.id
+    save_id = data.get("save_id")
+    label = message.text.strip()
+
+    if error := _label_error(label, i18n):
+        await message.reply(error, parse_mode="HTML")
+        return
+
+    dupe = await get_save_by_label(db_session, user_id, label)
+    if dupe and dupe.id != save_id:
+        await message.reply(i18n.saves.dupe.label.short(), parse_mode="HTML")
+        return
+
+    was_approved_public = False
+    current = await get_save_by_id(db_session, save_id)
+    if current:
+        was_approved_public = current.is_public and current.is_approved
+
+    updated = await rename_user_save(db_session, save_id, user_id, label)
+    await state.clear()
+    if not updated:
+        await message.reply(i18n.saves.missing.toast())
+        return
+
+    text = i18n.saves.renamed(label=escape_html(updated.label))
+    if was_approved_public and not updated.is_approved:
+        text += f"\n<i>⚠️ {i18n.saves.rename.remoderation()}</i>"
+    text += "\n\n" + format_save_card_text(updated, await _bot_username(message.bot), i18n)
+
+    await message.reply(
+        text,
+        reply_markup=build_save_card_keyboard(updated, page=data.get("page", 0), owner_id=user_id, i18n=i18n),
+        parse_mode="HTML",
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -614,8 +483,7 @@ async def handle_copy_command(
         await send_smart_message(message, i18n.copy.usage(), for_user_id=user_id, parse_mode="HTML")
         return
 
-    bot_info = await message.bot.get_me()
-    if not reply.from_user or reply.from_user.id != bot_info.id:
+    if not reply.from_user or reply.from_user.id != message.bot.id:
         await send_smart_message(message, i18n.copy.bot.only(), for_user_id=user_id, parse_mode="HTML")
         return
 
@@ -624,23 +492,18 @@ async def handle_copy_command(
         await send_smart_message(message, i18n.copy.no.media(), for_user_id=user_id, parse_mode="HTML")
         return
 
-    bot_username = bot_info.username or "CharlotteFox_Bot"
-    title = file_title or "Copied media"
-
     data = {
         "file_id": file_id,
         "media_type": media_type,
-        "title": title,
+        "title": file_title or "Copied media",
     }
     await cache_set(f"clipboard:{user_id}", data, ttl=3600)
-
-    emoji = TYPE_EMOJIS.get(media_type, "📋")
 
     await send_smart_message(
         message,
         i18n.copy.copied(
-            emoji=emoji,
-            bot_username=bot_username,
+            emoji=TYPE_EMOJIS.get(media_type, "📋"),
+            bot_username=await _bot_username(message.bot),
         ),
         for_user_id=user_id,
         parse_mode="HTML",

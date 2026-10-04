@@ -3,6 +3,7 @@ import logging
 import re
 from pathlib import Path
 
+from curl_cffi.requests import AsyncSession as CurlAsyncSession
 import httpx
 from aiogram import F, Router
 from aiogram.types import Message
@@ -20,14 +21,35 @@ tiktok_router = Router(name="tiktok")
 
 logger = logging.getLogger(__name__)
 
-TIKTOK_REGEX = r"https?://(?:www\.)?(?:tiktok\.com/\S+|(?:vm|vt)\.tiktok\.com/\S+)"
+TIKTOK_REGEX = r"https?://(?:(?:www\.|m\.)?tiktok\.com/\S+|(?:vm|vt)\.tiktok\.com/\S+|(?:www\.)?tt\.site/\S+)"
+
+
+async def resolve_tiktok_url(url: str) -> str:
+    """
+    Resolves short or redirecting TikTok URLs (e.g. tt.site/t/..., vm.tiktok.com/..., vt.tiktok.com/...)
+    to canonical tiktok.com/@user/video/... or tiktok.com/@user/photo/... URL
+    using curl_cffi with Chrome browser impersonation.
+    """
+    if re.search(r"tiktok\.com/.+/(?:video|photo)/\d+", url):
+        return url
+
+    try:
+        async with CurlAsyncSession(impersonate="chrome") as session:
+            res = await session.get(url, allow_redirects=True, timeout=10.0)
+            final_url = str(res.url)
+            return final_url.split("#")[0]
+    except Exception as e:
+        logger.warning(f"Failed to resolve TikTok URL {url} with curl_cffi: {e}")
+        return url
+
 
 @tiktok_router.message(F.text.regexp(TIKTOK_REGEX))
 async def tiktok_handler(message: Message, db_session: AsyncSession, http_client: httpx.AsyncClient):
-    if not message.text or not message.from_user:
+    raw_text = message.text or message.caption
+    if not raw_text or not message.from_user:
         return
 
-    url = extract_url(TIKTOK_REGEX, message.text)
+    url = extract_url(TIKTOK_REGEX, raw_text)
     if not url:
         return
     url = url.split("#")[0]
@@ -42,9 +64,14 @@ async def tiktok_handler(message: Message, db_session: AsyncSession, http_client
 
     async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=message.chat.id):
         send_manager = MediaSender()
-        cache_key = get_cache_key(url)
+        resolved_url = await resolve_tiktok_url(url)
+        cache_key = get_cache_key(resolved_url)
 
         cached = await cache_check(db_session, cache_key)
+        if not cached and resolved_url != url:
+            fallback_cache_key = get_cache_key(url)
+            cached = await cache_check(db_session, fallback_cache_key)
+
         if cached:
             await send_manager.send(message, cached, service="tiktok", db_session=db_session)
             return
@@ -52,13 +79,13 @@ async def tiktok_handler(message: Message, db_session: AsyncSession, http_client
     async with ChatActionSender.record_video_note(bot=message.bot, chat_id=message.chat.id):
         payload = {
             "user_id": user_id,
-            "url": url,
+            "url": resolved_url,
             "sponsor": False,
             "nsfw": False,
         }
         metadata = await task_manager.run_media_download(
             user_id=user_id,
-            url=url,
+            url=resolved_url,
             service=Services.TIKTOK,
             payload=payload,
             http_client=http_client,

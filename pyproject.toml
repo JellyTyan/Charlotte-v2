@@ -28,7 +28,6 @@ bot = [
     "redis~=8.0.1",
     "alembic==1.18.5",
     "translators~=6.0.1",
-    "aiogram-dialog~=2.6.0",
     "pydantic-settings"
 ]
 

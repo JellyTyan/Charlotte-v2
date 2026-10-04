@@ -36,16 +36,8 @@ saves-empty = Zatím máš v knihovně prázdno.
 
 saves-header = <b>Tvá knihovna médií</b> ({ $count }):
 
-saves-delete-btn = 🗑 Smazat «{ $label }»
-
-saves-prev-btn = ◀️ Zpět
-saves-next-btn = Další ▶️
-
 saves-deleted-toast = Smazáno z uložených médií.
 saves-missing-toast = Tuto položku jsem nenašla, možná už byla smazána?
-
-saves-footer-hint = <i>Chceš-li poslat médium, napiš v jakémkoliv chatu:</i>
-    <code>@{ $bot_username } &lt;název&gt;</code>
 
 saves-mod-approved =
     <b>Tvé uložené médium bylo schváleno!</b> 🎉
@@ -88,8 +80,32 @@ saves-replaced-toast = Mediální soubor byl úspěšně nahrazen!
 saves-cancelled-toast = Nahrazení zrušeno.
 saves-replace-cancelled = Nahrazení zrušeno. Původní médium zůstává beze změny.
 saves-dupe-public = Tento soubor již existuje ve veřejné knihovně memů!
-saves-rename-hint = Pro přejmenování pošli příkaz /save s novým názvem.
 saves-dupe-label-short = Již máš položku s tímto názvem!
-saves-renamed-toast = Název byl aktualizován!
 saves-rename-remoderation = Název byl změněn — odesláno k novému posouzení před zobrazením ve veřejném vyhledávání.
 
+saves-list-hint = Vyber uložení pro zobrazení a správu:
+saves-card =
+    { $emoji } <b>{ $label }</b>
+
+    { $status }
+    👁 Použití: <b>{ $uses }</b>
+    📅 Přidáno: <b>{ $date }</b>
+
+    <i>Odeslat v libovolném chatu:</i>
+    <code>@{ $bot_username } { $label }</code>
+saves-btn-preview = 👁 Náhled
+saves-btn-send = 🚀 Do chatu
+saves-btn-rename = ✏️ Přejmenovat
+saves-btn-delete = 🗑 Smazat
+saves-btn-back = ◀️ Zpět na seznam
+saves-btn-close = ❌ Zavřít
+saves-btn-cancel = ◀️ Zrušit
+saves-btn-replace = 🔄 Nahradit média
+saves-foreign-library = ❌ Tohle není tvoje knihovna
+saves-preview-failed = Náhled se nepodařilo odeslat.
+saves-rename-prompt =
+    ✏️ <b>Přejmenování</b> «{ $label }»
+
+    Pošli nový název zprávou (max. { $max } znaků):
+saves-renamed = ✅ Název změněn: «<b>{ $label }</b>»
+saves-label-word-too-long = Jedno ze slov v názvu je příliš dlouhé. Zadej kratší název.

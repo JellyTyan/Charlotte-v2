@@ -6,8 +6,9 @@ from pathlib import Path
 from typing import Any
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, FSInputFile, Message, InlineKeyboardButton
+from aiogram.types import CallbackQuery, FSInputFile, Message, InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.chat_action import ChatActionSender
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters import StateFilter
@@ -18,19 +19,27 @@ from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.service_list import Services
 from senders.media_sender import MediaSender
-from states.youtube import YouTubeStates, YouTubeDialogStates
+from states.youtube import YouTubeStates
 from storage.db.crud import get_user
 from tasks.task_manager import task_manager
 from utils import format_duration, truncate_string, escape_html, build_caption, format_author_link, safe_truncate_html, extract_url
 from utils.statistics_helper import log_download_event
-from aiogram_dialog import DialogManager
-from .dialogs import youtube_dialog
+from storage.cache.redis_client import cache_set, cache_get, cache_delete
+from middlewares.button_owner import register_message_owner
 
-from .models import YoutubeMenuCallback, YoutubeQualityCallback
+from .keyboards import (
+    YouTubeActionCallback,
+    YouTubeFormatCallback,
+    get_reliable_thumbnail,
+    build_yt_header,
+    build_simple_keyboard,
+    build_balance_keyboard,
+    build_advanced_keyboard,
+    build_trim_input_keyboard,
+)
 from .utils import get_cache_key, cache_check, parse_time_range
 
 youtube_router = Router(name="youtube")
-youtube_router.include_router(youtube_dialog)
 logger = logging.getLogger(__name__)
 
 YOUTUBE_REGEX = r"https?://(?:www\.)?(?:m\.)?(?:youtu\.be/|youtube\.com/(?:shorts/|watch\?v=))([\w-]+)"
@@ -314,30 +323,107 @@ async def download_youtube_clip(
     return map_items_to_media(data, extra_metadata=extra_metadata)
 
 
+async def safe_edit_markup(message: Message, reply_markup: InlineKeyboardMarkup) -> None:
+    try:
+        await message.edit_reply_markup(reply_markup=reply_markup)
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e).lower():
+            logger.warning("Failed to edit reply markup: %s", e)
+    except Exception as e:
+        logger.warning("Failed to edit reply markup: %s", e)
+
+
+async def trigger_download_native(
+    callback: CallbackQuery,
+    meta_data: dict[str, Any],
+    height: int,
+    is_audio: bool,
+    size_mb: float = 0.0,
+    is_topich: bool = False,
+    i18n: TranslatorRunner | None = None,
+    db_session: AsyncSession | None = None,
+) -> None:
+    user_id = callback.from_user.id
+    target_message = callback.message.reply_to_message or callback.message
+    url = meta_data["url"]
+    url_hash = meta_data["url_hash"]
+    is_premium = meta_data.get("is_premium", False)
+
+    origin_msg_id = meta_data.get("origin_message_id")
+    if origin_msg_id and target_message:
+        user_message = target_message.model_copy(update={"message_id": origin_msg_id})
+        if getattr(target_message, "bot", None):
+            user_message._bot = target_message.bot
+    else:
+        user_message = target_message
+
+    if not getattr(user_message, "bot", None):
+        from core.loader import bot as default_bot
+        if default_bot:
+            user_message._bot = default_bot
+
+    if size_mb > 100 and not is_premium:
+        from modules.payment.video import PaymentService
+        payload = f"yt_{url_hash}_{height}_{1 if is_audio else 0}"
+        invoice_params = await PaymentService.create_single_download_invoice(
+            chat_id=user_message.chat.id,
+            payload=payload,
+            provider_token=""
+        )
+        invoice_params.pop('chat_id', None)
+        await user_message.answer_invoice(**invoice_params)
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        await callback.answer()
+        return
+
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+
+    from tasks.task_manager import task_manager
+    if task_manager.is_user_busy(user_id):
+        try:
+            from utils.ephemeral import notify_already_downloading_if_ephemeral
+            await notify_already_downloading_if_ephemeral(user_message, user_id, i18n)
+        except Exception as e:
+            logger.debug(f"Failed to send busy notification: {e}")
+
+    extra_metadata = {
+        "uploader": meta_data.get("uploader"),
+        "uploader_url": meta_data.get("uploader_url") or meta_data.get("channel_url"),
+        "channel_url": meta_data.get("channel_url"),
+        "description": meta_data.get("description"),
+        "thumbnail": meta_data.get("thumbnail"),
+        "title": meta_data.get("title"),
+    }
+
+    run_background_task(process_youtube_download(
+        message=user_message,
+        url=url,
+        target_height=height,
+        is_audio_only=is_audio,
+        user_id=user_id,
+        db_session=db_session,
+        i18n=i18n,
+        is_topich=is_topich,
+        extra_metadata=extra_metadata
+    ))
+    toast = i18n.get('starting-download') if i18n else "Начинаем загрузку..."
+    await callback.answer(toast)
+
+
 @youtube_router.message(F.text.regexp(YOUTUBE_REGEX), StateFilter("*"))
 async def youtube_handler(
     message: Message,
     state: FSMContext,
-    dialog_manager: DialogManager,
     i18n: TranslatorRunner,
     db_session: AsyncSession,
     http_client: httpx.AsyncClient
 ):
-    from aiogram_dialog import StartMode, ShowMode
-    stack = dialog_manager.current_stack()
-    if stack and stack.last_message_id:
-        try:
-            await message.bot.delete_message(chat_id=message.chat.id, message_id=stack.last_message_id)
-        except Exception:
-            pass
-        stack.last_message_id = None
-        stack.last_media_id = None
-        stack.last_media_unique_id = None
-        try:
-            await dialog_manager.storage().save_stack(stack)
-        except Exception:
-            pass
-
     if not message.text or not message.from_user:
         return
 
@@ -346,7 +432,6 @@ async def youtube_handler(
         return
     chat_id = message.chat.id
 
-    # Задача 1: 👀 — бот получил ссылку
     from utils.effects import react_safe
     await react_safe(message, "👀")
 
@@ -374,344 +459,292 @@ async def youtube_handler(
     elif settings and hasattr(settings.services.youtube, "simple"):
         ui_mode = "simple" if settings.services.youtube.simple else "advanced"
 
-    target_state = YouTubeDialogStates.simple
-    if ui_mode == "balance":
-        target_state = YouTubeDialogStates.balance
-    elif ui_mode == "advanced":
-        target_state = YouTubeDialogStates.advanced
-
     author_data = metadata.get("author") if isinstance(metadata.get("author"), dict) else {}
     uploader = author_data.get("username") or author_data.get("name") or metadata.get("uploader") or metadata.get("author_username")
     uploader_url = author_data.get("url") or metadata.get("uploader_url") or metadata.get("channel_url")
     thumbnail = metadata.get("cover_path") or metadata.get("thumbnail") or metadata.get("cover")
 
-    await dialog_manager.start(
-        target_state,
-        data={
-            "url": url,
-            "url_hash": h,
-            "title": metadata.get("title") or metadata.get("caption"),
-            "thumbnail": thumbnail,
-            "uploader": uploader,
-            "uploader_url": uploader_url,
-            "channel_url": metadata.get("channel_url"),
-            "description": metadata.get("description") or metadata.get("caption", ""),
-            "duration": metadata.get("duration"),
-            "options": metadata.get("options", []),
-            "audio_only": metadata.get("audio_only"),
-            "is_premium": is_premium,
-            "origin_message_id": message.message_id,
-        },
-        mode=StartMode.RESET_STACK,
-        show_mode=ShowMode.SEND,
-    )
+    options = metadata.get("options", [])
+    audio_only = metadata.get("audio_only", {})
+    default_selected = ""
+    if options:
+        highest = max(options, key=lambda x: x.get("target_height", 0))
+        default_selected = f"v_{highest.get('target_height', 0)}"
+    elif audio_only:
+        default_selected = "audio"
 
+    meta_data = {
+        "url": url,
+        "url_hash": h,
+        "title": metadata.get("title") or metadata.get("caption"),
+        "thumbnail": thumbnail,
+        "uploader": uploader,
+        "uploader_url": uploader_url,
+        "channel_url": metadata.get("channel_url"),
+        "description": metadata.get("description") or metadata.get("caption", ""),
+        "duration": metadata.get("duration"),
+        "options": options,
+        "audio_only": audio_only,
+        "is_premium": is_premium,
+        "origin_message_id": message.message_id,
+        "selected_format": default_selected,
+        "trim_active": False,
+        "ui_mode": ui_mode,
+    }
+    await cache_set(f"yt_meta:{h}", meta_data, ttl=3600)
 
-async def send_mode_selection_menu(
-    message_or_query: Message | CallbackQuery,
-    state: FSMContext,
-    i18n: TranslatorRunner,
-    db_session: AsyncSession
-):
-    data = await state.get_data()
-    user_id = message_or_query.from_user.id
+    header = build_yt_header(meta_data, i18n)
 
-    user = await get_user(db_session, user_id)
-    is_premium = user.is_premium if user else False
-
-    from storage.db.crud import get_user_settings
-    settings = await get_user_settings(db_session, user_id)
-    is_simple = settings.services.youtube.simple if settings else True
-
-    trim_active = data.get("trim", False)
-    current_format = data.get("format", "video")
-
-    markup = InlineKeyboardBuilder()
-
-    if is_simple:
-        markup.button(
-            text=i18n.get("yt-btn-video"),
-            callback_data=YoutubeMenuCallback(action="download_simple", format="video", trim=False).pack()
-        )
-        markup.button(
-            text=i18n.get("yt-btn-audio"),
-            callback_data=YoutubeMenuCallback(action="download_simple", format="audio", trim=False).pack()
-        )
-        markup.button(
-            text=i18n.get("yt-btn-cancel"),
-            callback_data=YoutubeMenuCallback(action="cancel", format="video", trim=False).pack()
-        )
-        markup.adjust(2, 1)
+    if ui_mode == "balance":
+        keyboard = build_balance_keyboard(user_id, h, meta_data, i18n)
+    elif ui_mode == "advanced":
+        keyboard = build_advanced_keyboard(user_id, h, meta_data, i18n)
     else:
-        options = data.get("options", [])
-        audio_only = data.get("audio_only", {})
+        keyboard = build_simple_keyboard(user_id, h, i18n)
 
-        # Video resolutions buttons
-        for opt in options:
-            label = opt.get("label", "")
-            height = opt.get("target_height", 0)
-            size_mb = opt.get("size_mb", 0)
-
-            if size_mb > 100 and not is_premium and not trim_active:
-                btn_text = f"★ {label} (~{size_mb:.1f} MB)"
-            else:
-                btn_text = f"{label} (~{size_mb:.1f} MB)"
-
-            markup.button(
-                text=btn_text,
-                callback_data=YoutubeQualityCallback(height=height, size_mb=size_mb, label=label).pack()
-            )
-
-        # Audio button
-        if audio_only:
-            a_label = audio_only.get("label", "Audio")
-            a_height = audio_only.get("target_height", 0)
-            a_size = audio_only.get("size_mb", 0)
-            markup.button(
-                text=f"🎵 {a_label} (~{a_size:.1f} MB)",
-                callback_data=YoutubeQualityCallback(height=a_height, size_mb=a_size, label=a_label).pack()
-            )
-
-        markup.adjust(2)
-
-        # Trim Button
-        if is_premium:
-            if trim_active:
-                markup.row(
-                    InlineKeyboardButton(
-                        text=i18n.get("yt-btn-trim-active"),
-                        callback_data=YoutubeMenuCallback(action="toggle_trim", format=current_format, trim=False).pack()
-                    )
-                )
-            else:
-                markup.row(
-                    InlineKeyboardButton(
-                        text=i18n.get("yt-btn-trim"),
-                        callback_data=YoutubeMenuCallback(action="toggle_trim", format=current_format, trim=True).pack()
-                    )
-                )
-        else:
-            markup.row(
-                InlineKeyboardButton(
-                    text=i18n.get("yt-btn-trim-locked"),
-                    callback_data=YoutubeMenuCallback(action="toggle_trim", format=current_format, trim=True).pack()
-                )
-            )
-
-        # Cancel Button
-        markup.row(
-            InlineKeyboardButton(
-                text=i18n.get("yt-btn-cancel"),
-                callback_data=YoutubeMenuCallback(action="cancel", format=current_format, trim=trim_active).pack()
-            )
-        )
-
-    title_esc = escape_html(str(data.get('title') or ''))
-    header = f"<b>{title_esc}</b>\n\n" if title_esc else ""
-    if data.get("uploader"):
-        uploader_esc = escape_html(str(data.get('uploader') or ''))
-        uploader_url = data.get('uploader_url')
-        if uploader_url:
-            uploader_url_esc = escape_html(str(uploader_url))
-            header += f"<b>Channel:</b> <a href='{uploader_url_esc}'>{uploader_esc}</a>\n"
-        else:
-            header += f"<b>Channel:</b> {uploader_esc}\n"
-
-    duration = data.get("duration")
-    if duration:
-        header += f"<b>Duration:</b> {format_duration(duration)}\n"
-
-    desc = data.get('description')
-    desc_escaped = escape_html(desc.strip()) if desc and desc.strip() else ""
-
-    caption = build_caption(header=header.strip(), description=desc_escaped, max_total_length=1024)
-    caption = safe_truncate_html(caption, 1024)
-
-    reply_markup = markup.as_markup()
-    thumbnail = data.get("thumbnail")
-
-    import os
-    if isinstance(message_or_query, Message):
-        if thumbnail and os.path.exists(thumbnail):
-            await message_or_query.reply_photo(
-                photo=FSInputFile(thumbnail),
-                caption=caption,
-                reply_markup=reply_markup
-            )
-        else:
-            await message_or_query.reply(
-                caption,
-                reply_markup=reply_markup
-            )
-    else:
+    reliable_thumb = get_reliable_thumbnail(url, thumbnail)
+    menu_msg = None
+    if reliable_thumb:
         try:
-            await message_or_query.message.edit_reply_markup(reply_markup=reply_markup)
-        except Exception:
-            pass
+            menu_msg = await message.reply_photo(
+                photo=reliable_thumb,
+                caption=header,
+                reply_markup=keyboard,
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            logger.warning("Failed to send thumbnail photo: %s", e)
+
+    if not menu_msg:
+        menu_msg = await message.reply(
+            text=header,
+            reply_markup=keyboard,
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+        )
+
+    await register_message_owner(menu_msg, user_id)
 
 
-@youtube_router.callback_query(YoutubeMenuCallback.filter(), StateFilter(YouTubeStates.choosing_mode))
-async def menu_callback_handler(
-    callback_query: CallbackQuery,
-    callback_data: YoutubeMenuCallback,
+@youtube_router.callback_query(YouTubeActionCallback.filter())
+async def on_yt_action_callback(
+    callback: CallbackQuery,
+    callback_data: YouTubeActionCallback,
     state: FSMContext,
     i18n: TranslatorRunner,
-    db_session: AsyncSession
+    db_session: AsyncSession,
 ):
-    user_id = callback_query.from_user.id
-    message = callback_query.message
+    if callback.from_user.id != callback_data.owner_id:
+        not_yours = i18n.get("menu-not-yours") if i18n else "❌ Это не ваш запрос"
+        await callback.answer(not_yours, show_alert=True)
+        return
 
-    if message.reply_to_message and message.reply_to_message.from_user:
-        if message.reply_to_message.from_user.id != user_id:
-            await callback_query.answer(i18n.get("menu-not-yours"), show_alert=True)
-            return
+    h = callback_data.h
+    meta_data = await cache_get(f"yt_meta:{h}")
+    if not meta_data:
+        expired = i18n.get("action-cancelled") if i18n else "⚠️ Запрос устарел, отправьте ссылку заново."
+        await callback.answer(expired, show_alert=True)
+        return
 
     action = callback_data.action
 
     if action == "cancel":
         await state.clear()
-        await message.delete()
-        await callback_query.answer(i18n.get("action-cancelled"))
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        canceled_text = i18n.get("action-cancelled") if i18n else "Отменено"
+        await callback.answer(canceled_text)
         return
 
-    user = await get_user(db_session, user_id)
-    is_premium = user.is_premium if user else False
+    elif action == "to_adv":
+        meta_data["ui_mode"] = "advanced"
+        await cache_set(f"yt_meta:{h}", meta_data, ttl=3600)
+        kb = build_advanced_keyboard(callback_data.owner_id, h, meta_data, i18n)
+        await safe_edit_markup(callback.message, kb)
+        await callback.answer()
+        return
 
-    if action == "toggle_trim":
-        if callback_data.trim and not is_premium:
-            await callback_query.answer(i18n.get("yt-trim-sponsor-only"), show_alert=True)
+    elif action == "to_bal":
+        meta_data["ui_mode"] = "balance"
+        await cache_set(f"yt_meta:{h}", meta_data, ttl=3600)
+        kb = build_balance_keyboard(callback_data.owner_id, h, meta_data, i18n)
+        await safe_edit_markup(callback.message, kb)
+        await callback.answer()
+        return
+
+    elif action == "toggle_trim":
+        if not meta_data.get("is_premium"):
+            msg = i18n.get("yt-sponsor-only") if i18n else "🌟 Эта фича только для Спонсоров!"
+            await callback.answer(msg, show_alert=True)
             return
 
-        await state.update_data(trim=callback_data.trim)
-        await send_mode_selection_menu(callback_query, state, i18n, db_session)
-        await callback_query.answer()
+        current = meta_data.get("trim_active", False)
+        meta_data["trim_active"] = not current
+        await cache_set(f"yt_meta:{h}", meta_data, ttl=3600)
+        kb = build_advanced_keyboard(callback_data.owner_id, h, meta_data, i18n)
+        await safe_edit_markup(callback.message, kb)
+        await callback.answer()
+        return
 
-    elif action == "download_simple":
-        is_audio = callback_data.format == "audio"
-        data = await state.get_data()
-        url = data["url"]
-
-        await state.clear()
-        try:
-            await message.delete()
-        except Exception:
-            pass
-
-        target_msg = message.reply_to_message or message
-        from tasks.task_manager import task_manager
-        if task_manager.is_user_busy(user_id):
-            from utils.ephemeral import notify_already_downloading_if_ephemeral
-            await notify_already_downloading_if_ephemeral(target_msg, user_id, i18n)
-
-        extra_metadata = {
-            "uploader": data.get("uploader"),
-            "uploader_url": data.get("uploader_url") or data.get("channel_url"),
-            "channel_url": data.get("channel_url"),
-            "description": data.get("description"),
-            "thumbnail": data.get("thumbnail"),
-            "title": data.get("title"),
-        }
-
-        run_background_task(process_youtube_download(
-            message=target_msg,
-            url=url,
-            target_height=0,
-            is_audio_only=is_audio,
-            user_id=user_id,
-            db_session=db_session,
+    elif action == "sim_vid":
+        options = meta_data.get("options", [])
+        highest_h = max([opt.get("target_height", 0) for opt in options], default=0) if options else 0
+        matching = next((opt for opt in options if opt.get("target_height") == highest_h), {})
+        size_mb = matching.get("size_mb", 0.0)
+        await trigger_download_native(
+            callback=callback,
+            meta_data=meta_data,
+            height=highest_h,
+            is_audio=False,
+            size_mb=size_mb,
             i18n=i18n,
-            extra_metadata=extra_metadata
-        ))
-        await callback_query.answer(i18n.get('starting-download'))
+            db_session=db_session,
+        )
+        return
 
+    elif action == "sim_aud":
+        audio_only = meta_data.get("audio_only", {})
+        a_h = audio_only.get("target_height", 0) if audio_only else 0
+        a_size = audio_only.get("size_mb", 0.0) if audio_only else 0.0
+        await trigger_download_native(
+            callback=callback,
+            meta_data=meta_data,
+            height=a_h,
+            is_audio=True,
+            size_mb=a_size,
+            i18n=i18n,
+            db_session=db_session,
+        )
+        return
 
-@youtube_router.callback_query(YoutubeQualityCallback.filter(), StateFilter(YouTubeStates.choosing_mode))
-async def quality_callback_handler(
-    callback_query: CallbackQuery,
-    callback_data: YoutubeQualityCallback,
-    state: FSMContext,
-    i18n: TranslatorRunner,
-    db_session: AsyncSession
-):
-    user_id = callback_query.from_user.id
-    message = callback_query.message
+    elif action == "cont":
+        trim_active = meta_data.get("trim_active", False)
+        selected_id = meta_data.get("selected_format", "audio")
+        options = meta_data.get("options", [])
+        audio_only = meta_data.get("audio_only", {})
 
-    if message.reply_to_message and message.reply_to_message.from_user:
-        if message.reply_to_message.from_user.id != user_id:
-            await callback_query.answer(i18n.get("menu-not-yours"), show_alert=True)
+        if selected_id == "topich":
+            if not meta_data.get("is_premium"):
+                msg = i18n.get("yt-sponsor-only") if i18n else "🌟 Эта фича только для Спонсоров!"
+                await callback.answer(msg, show_alert=True)
+                return
+            is_audio = False
+            height = 0
+            size_mb = 0.0
+            is_topich = True
+        elif selected_id == "audio":
+            is_audio = True
+            height = audio_only.get("target_height", 0) if audio_only else 0
+            size_mb = audio_only.get("size_mb", 0.0) if audio_only else 0.0
+            is_topich = False
+        else:
+            is_audio = False
+            height = int(selected_id.replace("v_", ""))
+            matching = next((opt for opt in options if opt.get("target_height") == height), {})
+            size_mb = matching.get("size_mb", 0.0)
+            is_topich = False
+
+        if trim_active:
+            await state.set_state(YouTubeStates.entering_time_range)
+            await state.set_data({
+                "url": meta_data["url"],
+                "duration": meta_data.get("duration", 0),
+                "target_height": height,
+                "format": "audio" if is_audio else "video",
+                "is_audio": is_audio,
+                "is_topich": is_topich,
+                "uploader": meta_data.get("uploader"),
+                "uploader_url": meta_data.get("uploader_url"),
+                "channel_url": meta_data.get("channel_url"),
+                "description": meta_data.get("description"),
+                "thumbnail": meta_data.get("thumbnail"),
+                "title": meta_data.get("title"),
+                "menu_message_id": callback.message.message_id,
+            })
+            ask_text = i18n.get("yt-trim-ask-range") if i18n else "Введите интервал для обрезки в формате <b>hh:mm:ss-hh:mm:ss</b>:"
+            kb = build_trim_input_keyboard(callback_data.owner_id, h, i18n)
+            await callback.message.reply(ask_text, reply_markup=kb, parse_mode="HTML")
+            await callback.answer()
             return
-
-    data = await state.get_data()
-    trim = data.get("trim", False)
-    url = data["url"]
-    url_hash = data["url_hash"]
-
-    is_audio = callback_data.height == 0
-    await state.update_data(
-        target_height=callback_data.height,
-        size_mb=callback_data.size_mb,
-        label=callback_data.label,
-        format="audio" if is_audio else "video"
-    )
-
-    if trim:
-        await state.set_state(YouTubeStates.entering_time_range)
-        await message.edit_reply_markup(reply_markup=None)
-        await message.answer(i18n.get("yt-trim-ask-range"))
-        await callback_query.answer()
-    else:
-        user = await get_user(db_session, user_id)
-        is_premium = user.is_premium if user else False
-
-        if callback_data.size_mb > 100 and not is_premium:
-            from modules.payment.video import PaymentService
-            payload = f"yt_{url_hash}_{callback_data.height}_{1 if is_audio else 0}"
-
-            invoice_params = await PaymentService.create_single_download_invoice(
-                chat_id=message.chat.id,
-                payload=payload,
-                provider_token=""
+        else:
+            await trigger_download_native(
+                callback=callback,
+                meta_data=meta_data,
+                height=height,
+                is_audio=is_audio,
+                size_mb=size_mb,
+                is_topich=is_topich,
+                i18n=i18n,
+                db_session=db_session,
             )
-            invoice_params.pop('chat_id', None)
-
-            await state.clear()
-            await message.delete()
-            await message.answer_invoice(**invoice_params)
-            await callback_query.answer()
             return
 
-        extra_metadata = {
-            "uploader": data.get("uploader"),
-            "uploader_url": data.get("uploader_url") or data.get("channel_url"),
-            "channel_url": data.get("channel_url"),
-            "description": data.get("description"),
-            "thumbnail": data.get("thumbnail"),
-            "title": data.get("title"),
-        }
 
-        await state.clear()
-        try:
-            await message.delete()
-        except Exception:
-            pass
+@youtube_router.callback_query(YouTubeFormatCallback.filter())
+async def on_yt_format_callback(
+    callback: CallbackQuery,
+    callback_data: YouTubeFormatCallback,
+    i18n: TranslatorRunner,
+    db_session: AsyncSession,
+):
+    if callback.from_user.id != callback_data.owner_id:
+        not_yours = i18n.get("menu-not-yours") if i18n else "❌ Это не ваш запрос"
+        await callback.answer(not_yours, show_alert=True)
+        return
 
-        target_msg = message.reply_to_message or message
-        from tasks.task_manager import task_manager
-        if task_manager.is_user_busy(user_id):
-            from utils.ephemeral import notify_already_downloading_if_ephemeral
-            await notify_already_downloading_if_ephemeral(target_msg, user_id, i18n)
+    h = callback_data.h
+    meta_data = await cache_get(f"yt_meta:{h}")
+    if not meta_data:
+        expired = i18n.get("action-cancelled") if i18n else "⚠️ Запрос устарел, отправьте ссылку заново."
+        await callback.answer(expired, show_alert=True)
+        return
 
-        run_background_task(process_youtube_download(
-            message=target_msg,
-            url=url,
-            target_height=callback_data.height,
-            is_audio_only=is_audio,
-            user_id=user_id,
-            db_session=db_session,
-            i18n=i18n,
-            extra_metadata=extra_metadata
-        ))
-        await callback_query.answer(i18n.get('starting-download'))
+    item_id = callback_data.item_id
+    options = meta_data.get("options", [])
+    audio_only = meta_data.get("audio_only", {})
+
+    if callback_data.mode == "bal":
+        if item_id == "audio":
+            a_h = audio_only.get("target_height", 0) if audio_only else 0
+            a_size = audio_only.get("size_mb", 0.0) if audio_only else 0.0
+            await trigger_download_native(
+                callback=callback,
+                meta_data=meta_data,
+                height=a_h,
+                is_audio=True,
+                size_mb=a_size,
+                i18n=i18n,
+                db_session=db_session,
+            )
+        else:
+            height = int(item_id.replace("v_", ""))
+            matching = next((opt for opt in options if opt.get("target_height") == height), {})
+            size_mb = matching.get("size_mb", 0.0)
+            await trigger_download_native(
+                callback=callback,
+                meta_data=meta_data,
+                height=height,
+                is_audio=False,
+                size_mb=size_mb,
+                i18n=i18n,
+                db_session=db_session,
+            )
+        return
+
+    elif callback_data.mode == "adv":
+        if item_id == "topich" and not meta_data.get("is_premium"):
+            msg = i18n.get("yt-sponsor-only") if i18n else "🌟 Эта фича только для Спонсоров!"
+            await callback.answer(msg, show_alert=True)
+            return
+
+        meta_data["selected_format"] = item_id
+        await cache_set(f"yt_meta:{h}", meta_data, ttl=3600)
+        kb = build_advanced_keyboard(callback_data.owner_id, h, meta_data, i18n)
+        await safe_edit_markup(callback.message, kb)
+        await callback.answer()
+        return
 
 
 @youtube_router.message(YouTubeStates.entering_time_range)
@@ -725,7 +758,11 @@ async def time_range_message_handler(
         return
 
     data = await state.get_data()
-    url = data["url"]
+    url = data.get("url")
+    if not url:
+        await state.clear()
+        return
+
     duration = data.get("duration", 0)
     dur_str = format_duration(duration) if duration else ""
 
@@ -745,7 +782,8 @@ async def time_range_message_handler(
             return
 
     target_height = data.get("target_height", 0)
-    is_audio_only = data.get("format") == "audio"
+    is_audio_only = data.get("is_audio", False)
+    is_topich = data.get("is_topich", False)
     user_id = message.from_user.id
 
     extra_metadata = {
@@ -756,6 +794,13 @@ async def time_range_message_handler(
         "thumbnail": data.get("thumbnail"),
         "title": data.get("title"),
     }
+
+    menu_message_id = data.get("menu_message_id")
+    if menu_message_id:
+        try:
+            await message.bot.delete_message(chat_id=message.chat.id, message_id=menu_message_id)
+        except Exception:
+            pass
 
     await state.clear()
 
