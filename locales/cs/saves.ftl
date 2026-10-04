@@ -72,15 +72,7 @@ saves-mod-banned =
 saves-label-reserved = Název «<b>{ $label }</b>» je vyhrazen botem pro systémové příkazy. Zvol prosím jiný!
 saves-label-trash = Název je neplatný nebo obsahuje pouze symboly. Zadej prosím smysluplný název.
 saves-dupe-media = Tento soubor již máš uložený ve své knihovně jako «<b>{ $existing_label }</b>».
-saves-dupe-label =
-    Již máš uloženou položku s názvem «<b>{ $label }</b>».
-    Chceš nahradit staré médium tímto novým?
-saves-replace-expired = Čas pro potvrzení vypršel. Zkus příkaz /save znovu.
-saves-replaced-toast = Mediální soubor byl úspěšně nahrazen!
-saves-cancelled-toast = Nahrazení zrušeno.
-saves-replace-cancelled = Nahrazení zrušeno. Původní médium zůstává beze změny.
 saves-dupe-public = Tento soubor již existuje ve veřejné knihovně memů!
-saves-dupe-label-short = Již máš položku s tímto názvem!
 saves-rename-remoderation = Název byl změněn — odesláno k novému posouzení před zobrazením ve veřejném vyhledávání.
 
 saves-list-hint = Vyber uložení pro zobrazení a správu:
@@ -100,7 +92,6 @@ saves-btn-delete = 🗑 Smazat
 saves-btn-back = ◀️ Zpět na seznam
 saves-btn-close = ❌ Zavřít
 saves-btn-cancel = ◀️ Zrušit
-saves-btn-replace = 🔄 Nahradit média
 saves-foreign-library = ❌ Tohle není tvoje knihovna
 saves-preview-failed = Náhled se nepodařilo odeslat.
 saves-rename-prompt =

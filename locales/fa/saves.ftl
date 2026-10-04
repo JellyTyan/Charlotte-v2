@@ -72,15 +72,7 @@ saves-mod-banned =
 saves-label-reserved = نام «<b>{ $label }</b>» توسط ربات برای دستورات سیستمی رزرو شده است. لطفاً نام دیگری انتخاب کن!
 saves-label-trash = این نام نامعتبر است یا فقط از علائم تشکیل شده است. لطفاً یک نام مشخص وارد کن.
 saves-dupe-media = این فایل قبلاً در کتابخانه تو با نام «<b>{ $existing_label }</b>» ذخیره شده است.
-saves-dupe-label =
-    تو قبلاً فایلی با نام «<b>{ $label }</b>» ذخیره کردی.
-    آیا می‌خواهی رسانه قبلی رو با این رسانه جدید جایگزین کنی؟
-saves-replace-expired = زمان تأیید به پایان رسید. لطفاً دوباره از /save استفاده کن.
-saves-replaced-toast = رسانه با موفقیت جایگزین شد!
-saves-cancelled-toast = جایگزینی لغو شد.
-saves-replace-cancelled = جایگزینی لغو شد. رسانه قبلی بدون تغییر باقی ماند.
 saves-dupe-public = این فایل قبلاً در کتابخانه عمومی میم‌ها ثبت شده است!
-saves-dupe-label-short = تو قبلاً فایلی با این نام ذخیره کردی!
 saves-rename-remoderation = نام تغییر کرد — میم قبل از نمایش در جستجوی عمومی برای بررسی مجدد ارسال شد.
 
 saves-list-hint = یک مورد ذخیره‌شده را برای مشاهده و مدیریت انتخاب کن:
@@ -100,7 +92,6 @@ saves-btn-delete = 🗑 حذف
 saves-btn-back = ◀️ بازگشت به فهرست
 saves-btn-close = ❌ بستن
 saves-btn-cancel = ◀️ لغو
-saves-btn-replace = 🔄 جایگزینی رسانه
 saves-foreign-library = ❌ این کتابخانهٔ تو نیست
 saves-preview-failed = ارسال پیش‌نمایش ممکن نشد.
 saves-rename-prompt =

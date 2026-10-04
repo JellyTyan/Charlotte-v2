@@ -15,9 +15,7 @@ from keyboards.saves import (
     TYPE_EMOJIS,
     SavesItemCallback,
     SavesPageCallback,
-    SavesReplaceCallback,
     build_rename_cancel_keyboard,
-    build_replace_keyboard,
     build_save_card_keyboard,
     build_saves_list_keyboard,
     format_save_card_text,
@@ -27,19 +25,17 @@ from keyboards.saves import (
 from middlewares.button_owner import register_message_owner
 from modules.inline.handler import MUSIC_TAGS, PASTE_TRIGGERS, RECENT_TAGS, SAVED_TAGS
 from states.saves import SavesStates
-from storage.cache.redis_client import cache_delete, cache_get, cache_set
+from storage.cache.redis_client import cache_set
 from storage.db.crud import (
     check_if_user_premium,
     delete_user_save,
     get_public_save_by_file_id,
     get_save_by_file_id,
     get_save_by_id,
-    get_save_by_label,
     get_user_saves,
     get_user_saves_count,
     is_user_public_saves_banned,
     rename_user_save,
-    replace_save_media,
     save_user_media,
     toggle_save_public,
 )
@@ -62,7 +58,6 @@ _RESERVED_EXACT = frozenset(t.lower() for t in PASTE_TRIGGERS)
 # «Мусорное» название: только цифры, пунктуация, эмодзи, подчёркивания
 _TRASH_PATTERN = re.compile(r"^[\W\d_]+$")
 
-_REPLACE_TTL = 300  # сек. — сколько живёт диалог «заменить медиа?»
 _RENAME_TTL = 300  # сек. — сколько ждём новое название после «Переименовать»
 
 
@@ -163,24 +158,8 @@ async def handle_save_command(
     if dupe_media:
         return await reply(i18n.saves.dupe.media(existing_label=escape_html(dupe_media.label)))
 
-    # Такое название уже есть → предложить заменить медиа
-    dupe_label = await get_save_by_label(db_session, user_id, label)
-    if dupe_label:
-        await cache_set(
-            f"saves:replace:{user_id}:{dupe_label.id}",
-            {
-                "new_file_id": file_id,
-                "new_file_unique_id": file_unique_id,
-                "new_media_type": media_type,
-                "new_title": title,
-                "new_caption": caption,
-            },
-            ttl=_REPLACE_TTL,
-        )
-        return await reply(
-            i18n.saves.dupe.label(label=escape_html(dupe_label.label)),
-            reply_markup=build_replace_keyboard(dupe_label.id, user_id, i18n),
-        )
+    # Одинаковые названия разрешены: несколько разных картинок могут быть «Sanae Art Touhou»,
+    # всё внутри (кнопки, inline-результаты, счётчики) работает по id
 
     current_count = await get_user_saves_count(db_session, user_id)
     limit = MAX_SAVES_PREMIUM if await check_if_user_premium(db_session, user_id) else MAX_SAVES_FREE
@@ -204,64 +183,6 @@ async def handle_save_command(
     await reply(
         i18n.saves.saved(
             emoji=TYPE_EMOJIS.get(media_type, "📁"),
-            label=escape_html(save.label),
-            status=status,
-            bot_username=bot_username,
-        ),
-        reply_markup=build_save_card_keyboard(save, page=0, owner_id=user_id, i18n=i18n),
-    )
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Диалог замены медиа при конфликте названия
-# ─────────────────────────────────────────────────────────────────────────────
-
-@router.callback_query(SavesReplaceCallback.filter())
-async def handle_replace(
-    callback: CallbackQuery,
-    callback_data: SavesReplaceCallback,
-    db_session: AsyncSession,
-    i18n: TranslatorRunner,
-) -> None:
-    user_id = callback.from_user.id
-    if user_id != callback_data.owner_id:
-        await callback.answer(i18n.saves.foreign.library(), show_alert=True)
-        return
-
-    key = f"saves:replace:{user_id}:{callback_data.save_id}"
-    if not callback_data.confirm:
-        await cache_delete(key)
-        await callback.answer(i18n.saves.cancelled.toast())
-        await _safe_edit_message(callback, i18n.saves.replace.cancelled())
-        return
-
-    pending = await cache_get(key)
-    if not pending:
-        await callback.answer(i18n.saves.replace.expired(), show_alert=True)
-        return
-    await cache_delete(key)
-
-    save = await replace_save_media(
-        session=db_session,
-        save_id=callback_data.save_id,
-        user_id=user_id,
-        new_file_id=pending["new_file_id"],
-        new_media_type=pending["new_media_type"],
-        new_title=pending.get("new_title"),
-        new_caption=pending.get("new_caption"),
-        new_file_unique_id=pending.get("new_file_unique_id"),
-    )
-    if not save:
-        await callback.answer(i18n.saves.missing.toast(), show_alert=True)
-        return
-
-    await callback.answer(i18n.saves.replaced.toast())
-    status = save_status_text(save, i18n)  # до i18n.saves.saved — см. format_save_card_text
-    bot_username = await _bot_username(callback.bot)
-    await _safe_edit_message(
-        callback,
-        i18n.saves.saved(
-            emoji=TYPE_EMOJIS.get(save.media_type, "📁"),
             label=escape_html(save.label),
             status=status,
             bot_username=bot_username,
@@ -434,11 +355,6 @@ async def handle_rename_input(
 
     if error := _label_error(label, i18n):
         await message.reply(error, parse_mode="HTML")
-        return
-
-    dupe = await get_save_by_label(db_session, user_id, label)
-    if dupe and dupe.id != save_id:
-        await message.reply(i18n.saves.dupe.label.short(), parse_mode="HTML")
         return
 
     was_approved_public = False

@@ -24,12 +24,6 @@ class SavesItemCallback(CallbackData, prefix="sv_item"):
     owner_id: int
 
 
-class SavesReplaceCallback(CallbackData, prefix="sv_repl"):
-    confirm: bool
-    save_id: int
-    owner_id: int
-
-
 def save_status_text(save: UserSaves, i18n: TranslatorRunner) -> str:
     if not save.is_public:
         return i18n.saves.status.private()
@@ -126,10 +120,3 @@ def build_rename_cancel_keyboard(save_id: int, page: int, owner_id: int, i18n: T
     builder.button(text=i18n.saves.btn.cancel(), callback_data=_item("view", save_id, page, owner_id))
     return builder.as_markup()
 
-
-def build_replace_keyboard(save_id: int, owner_id: int, i18n: TranslatorRunner) -> InlineKeyboardMarkup:
-    builder = InlineKeyboardBuilder()
-    builder.button(text=i18n.saves.btn.replace(), callback_data=SavesReplaceCallback(confirm=True, save_id=save_id, owner_id=owner_id).pack())
-    builder.button(text=i18n.saves.btn.cancel(), callback_data=SavesReplaceCallback(confirm=False, save_id=save_id, owner_id=owner_id).pack())
-    builder.adjust(2)
-    return builder.as_markup()

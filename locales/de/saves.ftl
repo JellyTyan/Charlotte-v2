@@ -72,15 +72,7 @@ saves-mod-banned =
 saves-label-reserved = Der Name «<b>{ $label }</b>» ist vom Bot für Systembefehle reserviert. Bitte wähle einen anderen!
 saves-label-trash = Der Name ist ungültig oder besteht nur aus Symbolen. Bitte wähle einen aussagekräftigen Namen.
 saves-dupe-media = Diese Datei ist bereits als «<b>{ $existing_label }</b>» in deiner Mediathek gespeichert.
-saves-dupe-label =
-    Du hast bereits eine Speicherung namens «<b>{ $label }</b>».
-    Möchtest du die alte Datei durch diese neue ersetzen?
-saves-replace-expired = Der Bestätigungsdialog ist abgelaufen. Bitte versuche /save erneut.
-saves-replaced-toast = Mediendatei erfolgreich ersetzt!
-saves-cancelled-toast = Ersetzung abgebrochen.
-saves-replace-cancelled = Ersetzung abgebrochen. Die vorherige Datei bleibt unverändert.
 saves-dupe-public = Diese Datei existiert bereits in der öffentlichen Meme-Bibliothek!
-saves-dupe-label-short = Du hast bereits eine Speicherung mit diesem Namen!
 saves-rename-remoderation = Name geändert — zur erneuten Moderation eingereicht, bevor sie in der öffentlichen Suche erscheint.
 
 saves-list-hint = Wähle ein Element zum Ansehen und Verwalten:
@@ -100,7 +92,6 @@ saves-btn-delete = 🗑 Löschen
 saves-btn-back = ◀️ Zur Liste
 saves-btn-close = ❌ Schließen
 saves-btn-cancel = ◀️ Abbrechen
-saves-btn-replace = 🔄 Medien ersetzen
 saves-foreign-library = ❌ Das ist nicht deine Mediathek
 saves-preview-failed = Vorschau konnte nicht gesendet werden.
 saves-rename-prompt =

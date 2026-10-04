@@ -72,15 +72,7 @@ saves-mod-banned =
 saves-label-reserved = Назва «<b>{ $label }</b>» зарезервована ботом для системних команд. Обери іншу!
 saves-label-trash = Назва занадто коротка або містить лише символи. Вкажи зрозумілу назву.
 saves-dupe-media = Цей файл уже є у твоєму списку збережень під назвою «<b>{ $existing_label }</b>».
-saves-dupe-label =
-    У тебе вже є збереження «<b>{ $label }</b>».
-    Хочеш замінити старе медіа на нове?
-saves-replace-expired = Час дії запиту минув. Спробуй команду /save знову.
-saves-replaced-toast = Медіафайл успішно замінено!
-saves-cancelled-toast = Заміну скасовано.
-saves-replace-cancelled = Заміну скасовано. Попереднє медіа залишилося без змін.
 saves-dupe-public = Цей файл уже є у публічній бібліотеці мемів!
-saves-dupe-label-short = У тебе вже є збереження з такою назвою!
 saves-rename-remoderation = Назву змінено — мем надіслано на повторну модерацію перед показом у публічному пошуку.
 
 saves-list-hint = Обери збереження для перегляду та керування:
@@ -100,7 +92,6 @@ saves-btn-delete = 🗑 Видалити
 saves-btn-back = ◀️ До списку
 saves-btn-close = ❌ Закрити
 saves-btn-cancel = ◀️ Скасувати
-saves-btn-replace = 🔄 Замінити медіа
 saves-foreign-library = ❌ Це не твоя медіатека
 saves-preview-failed = Не вдалося надіслати прев'ю.
 saves-rename-prompt =

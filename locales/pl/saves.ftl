@@ -72,15 +72,7 @@ saves-mod-banned =
 saves-label-reserved = Nazwa «<b>{ $label }</b>» jest zarezerwowana przez bota dla komend systemowych. Wybierz inną!
 saves-label-trash = Nazwa jest nieprawidłowa lub zawiera wyłącznie symbole. Wybierz czytelną nazwę.
 saves-dupe-media = Ten plik jest już zapisany w twojej bibliotece jako «<b>{ $existing_label }</b>».
-saves-dupe-label =
-    Masz już zapis o nazwie «<b>{ $label }</b>».
-    Czy chcesz zastąpić stary plik tym nowym?
-saves-replace-expired = Czas na potwierdzenie upłynął. Spróbuj ponownie użyć /save.
-saves-replaced-toast = Plik został pomyślnie zastąpiony!
-saves-cancelled-toast = Anulowano zastąpienie.
-saves-replace-cancelled = Zastąpienie anulowane. Poprzedni plik pozostał bez zmian.
 saves-dupe-public = Ten plik znajduje się już w publicznej bibliotece memów!
-saves-dupe-label-short = Masz już zapis o takiej nazwie!
 saves-rename-remoderation = Nazwa została zmieniona — mem wysłano do ponownej moderacji przed wyświetleniem w wyszukiwaniu publicznym.
 
 saves-list-hint = Wybierz zapis, aby go wyświetlić i zarządzać nim:
@@ -100,7 +92,6 @@ saves-btn-delete = 🗑 Usuń
 saves-btn-back = ◀️ Do listy
 saves-btn-close = ❌ Zamknij
 saves-btn-cancel = ◀️ Anuluj
-saves-btn-replace = 🔄 Zamień media
 saves-foreign-library = ❌ To nie jest twoja biblioteka
 saves-preview-failed = Nie udało się wysłać podglądu.
 saves-rename-prompt =

@@ -1011,17 +1011,6 @@ async def get_save_by_file_id(
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
-async def get_save_by_label(
-    session: AsyncSession, user_id: int, label: str
-) -> UserSaves | None:
-    """Найти личную сохранёнку пользователя по названию без учёта регистра (дубль названия)."""
-    stmt = select(UserSaves).where(
-        UserSaves.user_id == user_id,
-        func.lower(UserSaves.label) == label.strip().lower(),
-    ).limit(1)
-    return (await session.execute(stmt)).scalar_one_or_none()
-
-
 async def get_public_save_by_file_id(
     session: AsyncSession,
     telegram_file_id: str,
@@ -1036,36 +1025,6 @@ async def get_public_save_by_file_id(
     if exclude_save_id is not None:
         stmt = stmt.where(UserSaves.id != exclude_save_id)
     return (await session.execute(stmt.limit(1))).scalar_one_or_none()
-
-
-async def replace_save_media(
-    session: AsyncSession,
-    save_id: int,
-    user_id: int,
-    new_file_id: str,
-    new_media_type: str,
-    new_title: str | None = None,
-    new_caption: str | None = None,
-    new_file_unique_id: str | None = None,
-) -> UserSaves | None:
-    """Заменить медиафайл в сохранёнке (при конфликте названия).
-
-    Сбрасывает is_approved в False, если сохранёнка публичная.
-    """
-    save = await get_save_by_id(session, save_id)
-    if not save or save.user_id != user_id:
-        return None
-    save.telegram_file_id = new_file_id
-    save.file_unique_id = new_file_unique_id
-    save.media_type = new_media_type
-    if new_title is not None:
-        save.title = new_title
-    if new_caption is not None:
-        save.caption = new_caption
-    if save.is_public:
-        save.is_approved = False  # сброс модерации при замене медиа
-    await session.commit()
-    return save
 
 
 async def rename_user_save(
