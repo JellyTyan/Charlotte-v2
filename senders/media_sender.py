@@ -648,9 +648,9 @@ class MediaSender:
                     is_logged=True,
                 )
             except Exception as e:
-                # If Telegram fails with IMAGE_PROCESS_FAILED, fallback to sending as documents
-                if "IMAGE_PROCESS_FAILED" in str(e) and not send_as_raw:
-                    logger.warning("IMAGE_PROCESS_FAILED encountered in media group, retrying as documents")
+                # Telegram rejects the image as a photo (broken, or too long/large) -> fallback to documents
+                if any(err in str(e) for err in ("IMAGE_PROCESS_FAILED", "PHOTO_INVALID_DIMENSIONS")) and not send_as_raw:
+                    logger.warning(f"{e} in media group, retrying as documents")
                     raw_group = MediaGroupBuilder()
                     if i == 0 and final_caption:
                         raw_group.caption = safe_truncate_html(final_caption, 1024)

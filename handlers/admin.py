@@ -731,7 +731,10 @@ async def admin_panel_get_logs(callback: CallbackQuery, state: FSMContext):
     if message is None:
         return
     if not isinstance(message, InaccessibleMessage):
-        await message.delete()
+        try:
+            await message.delete()
+        except TelegramBadRequest:
+            pass
     await message.bot.send_document(
         chat_id=message.chat.id,
         document=FSInputFile("logs/charlotte.log"),
@@ -855,7 +858,10 @@ async def send_message_safe(bot: Bot, user_id: int, text: str) -> bool:
 
 @admin_router.callback_query(lambda c: c.data == "news_spam_decline")
 async def decline_spam_news(callback: CallbackQuery, state: FSMContext) -> None:
-    await callback.message.delete()
+    try:
+        await callback.message.delete()
+    except TelegramBadRequest:
+        pass
     await state.clear()
     await callback.answer()
 

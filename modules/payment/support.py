@@ -3,6 +3,7 @@ import logging
 
 from aiogram import Router, F, Bot
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
@@ -94,7 +95,11 @@ async def view_supporters_callback(callback: CallbackQuery, bot: Bot, db_session
 @support_router.callback_query(F.data == "back_to_support")
 async def back_to_support_callback(callback: CallbackQuery):
     await callback.answer()
-    await callback.message.delete()
+    try:
+        await callback.message.delete()
+    except TelegramBadRequest:
+        # Bots can't delete messages older than 48h
+        await callback.message.edit_reply_markup(reply_markup=None)
 
 
 @support_router.callback_query(F.data.startswith("support_"))
