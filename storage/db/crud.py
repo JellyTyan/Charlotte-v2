@@ -3,7 +3,20 @@ import datetime
 import json
 from datetime import date
 
-from sqlalchemy import select, update, func, desc, or_, and_, delete, cast, case, text, literal
+from sqlalchemy import (
+    select,
+    update,
+    func,
+    desc,
+    or_,
+    and_,
+    delete,
+    cast,
+    case,
+    text,
+    literal,
+    String,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert
 
@@ -534,16 +547,35 @@ async def get_premium_and_donation_stats(session: AsyncSession) -> dict:
     now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) # fallback
     stmt = select(
         func.count().filter(or_(Users.premium_ends > now, Users.is_lifetime_premium == True)).label("premium_count"),
+        func.count().filter(Users.is_lifetime_premium == True).label("lifetime_count"),
+        func.count().filter(Users.stars_donated > 0).label("donors_count"),
         func.sum(Users.stars_donated).label("total_stars")
     )
 
     result = await session.execute(stmt)
     row = result.one()
 
+    premium_count = row.premium_count or 0
+    lifetime_count = row.lifetime_count or 0
     return {
-        "total_premium_users": row.premium_count or 0,
+        "total_premium_users": premium_count,
+        "lifetime_premium_users": lifetime_count,
+        "timed_premium_users": premium_count - lifetime_count,
+        "donors_count": row.donors_count or 0,
         "total_stars_donated": row.total_stars or 0
     }
+
+async def get_active_timed_sponsors(session: AsyncSession) -> list[Users]:
+    """Users with a non-lifetime premium that hasn't expired yet, soonest expiry first."""
+    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    stmt = (
+        select(Users)
+        .where(Users.premium_ends > now, Users.is_lifetime_premium == False)
+        .order_by(Users.premium_ends)
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
 
 async def check_if_user_premium(session: AsyncSession, user_id: int) -> bool:
     user = await get_user(session=session, user_id=user_id)
@@ -558,7 +590,7 @@ async def check_if_user_premium(session: AsyncSession, user_id: int) -> bool:
 
 async def toggle_lifetime_premium(session: AsyncSession, user_id: int) -> bool | None:
     """
-    Determines the file type by its extension.
+    Toggles lifetime premium for the user.
 
     :param user_id: User id
     :param session: AsyncSession

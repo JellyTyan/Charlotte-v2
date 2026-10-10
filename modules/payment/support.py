@@ -35,16 +35,14 @@ async def support_command(message: Message, db_session: AsyncSession, i18n: Tran
     user = await get_user(db_session, message.from_user.id)
 
     # Format dynamic status display
-    status_text = ""
-    if user:
-        progress = (user.stars_donated or 0) % 100
-        if user.is_lifetime_premium:
-            status_text = "\n\n" + i18n.support.status.lifetime()
-        elif user.is_premium and user.premium_ends:
-            date_str = user.premium_ends.strftime("%d.%m.%Y")
-            status_text = "\n\n" + i18n.support.status.active(date=date_str, progress=progress)
-        elif progress > 0:
-            status_text = "\n\n" + i18n.support.status.progress(progress=progress)
+    progress = (user.stars_donated or 0) % 100 if user else 0
+    if user and user.is_lifetime_premium:
+        status_text = "\n\n" + i18n.support.status.lifetime()
+    elif user and user.is_premium and user.premium_ends:
+        date_str = user.premium_ends.strftime("%d.%m.%Y")
+        status_text = "\n\n" + i18n.support.status.active(date=date_str, progress=progress)
+    else:
+        status_text = "\n\n" + i18n.support.status.progress(progress=progress)
 
     text = i18n.support.text(status=status_text)
 

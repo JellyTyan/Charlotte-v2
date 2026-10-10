@@ -56,10 +56,7 @@ premium-granted = Yay, you got free premium access! Download as much as you like
 
 
 # System & Payment
-sponsor-alert = 30 days of Premium for 100 Stars 🌟
-sponsor-invoice-title = Sponsor Premium (30 days)
-sponsor-invoice-desc = 30 days of premium access: ad-free with extra features.
-sponsor-success = Thank you for your support! Here is 30 days of Sponsor Premium 🌟
+service-disabled = This service is temporarily turned off, sorry. Try again a bit later.
 support-invoice-title = Donate { $amount } ⭐
 support-invoice-desc = Support Charlotte's development!
 support-success = Thank you so much for your support 🧡
@@ -135,30 +132,21 @@ yt-btn-topich = TOPICH
 yt-sponsor-only = This feature is only for Sponsors, sorry!
 
 # Sponsor & Support
-sponsor-text =
-    If you'd like to support me and this project, you can get sponsorship for 30 days.
-
-    What you get:
-      • Download large YouTube videos (up to 1 GB instead of 100 MB)
-      • Trim YouTube videos before sending
-      • Access to NSFW media (Twitter and Reddit)
-      • Your name on the supporter board in /support
-
-    Sponsorship is 100 Stars for 30 days ⭐
-
-sponsor-btn-buy = ⭐ Become a Sponsor (100 Stars)
-
 support-text =
     Charlotte is a passion project built with care. I help you save and download media without ads or restrictions.
 
     Servers cost about €12/month, paid out of pocket. The bot will always remain free and open for everyone.
 
-    <b>Sponsorship:</b>
-    Every 100 Stars gives you <b>30 days of sponsor perks</b>:
-    • Download large YouTube videos (up to 1 GB instead of 100 MB)
-    • Trim YouTube videos before sending
-    • Access to NSFW media (Twitter, Reddit, Pixiv)
-    • Your name on the supporter board{ $status }
+    <b>Sponsor perks:</b>
+    • YouTube: videos up to 1 GB instead of 100 MB
+    • YouTube: TOPICH, max quality as the original file
+    • YouTube: trim videos before sending
+    • Instagram and TikTok in the best quality
+    • NSFW media from Twitter, Reddit and Pixiv
+    • Up to 1000 saves instead of 200
+
+    <b>How Stars add up:</b>
+    Every Star you send goes into your piggy bank, even 10 or 50 at a time. Each 100 ⭐ gives 30 days of sponsorship, and if it's already active, the days are added on top. Any donation also puts your name on the supporter board.{ $status }
 
     Any support means the world to me, thank you for being here ⭐
 

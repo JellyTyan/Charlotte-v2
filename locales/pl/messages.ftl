@@ -56,10 +56,7 @@ premium-granted = Hura, masz darmowy dostęp premium! Pobieraj ile dusza zapragn
 
 
 # System & Payment
-sponsor-alert = 30 dni Premium za 100 Gwiazdek 🌟
-sponsor-invoice-title = Premium Sponsora (30 dni)
-sponsor-invoice-desc = 30 dni dostępu premium: bez reklam i z dodatkowymi funkcjami.
-sponsor-success = Dziękuję za wsparcie! Przekazuję ci 30 dni Premium Sponsora 🌟
+service-disabled = Ta usługa jest teraz tymczasowo wyłączona, przepraszam. Spróbuj trochę później.
 support-invoice-title = Wesprzyj { $amount } ⭐
 support-invoice-desc = Wesprzyj rozwój Charlotte!
 support-success = Bardzo dziękuję ci za wsparcie 🧡
@@ -135,30 +132,21 @@ yt-btn-topich = TOPICH
 yt-sponsor-only = Ta funkcja jest tylko dla Sponsorów, przepraszam!
 
 # Sponsor & Support
-sponsor-text =
-    Jeśli chcesz wesprzeć mnie i ten projekt, możesz wykupić sponsorowanie na 30 dni.
-
-    Co otrzymujesz:
-      • Pobieranie dużych filmów z YouTube (do 1 GB zamiast 100 MB)
-      • Przycinanie wideo z YouTube przed wysłaniem
-      • Dostęp do multimediów NSFW (Twitter i Reddit)
-      • Twoje imię pojawi się na tablicy podziękowań w /support
-
-    Sponsorowanie to 100 Gwiazdek na 30 dni ⭐
-
-sponsor-btn-buy = ⭐ Zostań Sponsorem (100 Gwiazdek)
-
 support-text =
     Charlotte to projekt tworzony z pasją i sercem. Pomagam zapisywać i pobierać multimedia bez reklam i ograniczeń.
 
     Serwery kosztują około 12€ miesięcznie, co opłacane jest z własnej kieszeni. Bot zawsze pozostanie darmowy i otwarty dla każdego.
 
-    <b>Sponsorowanie:</b>
-    Za każde 100 Gwiazdek zyskujesz <b>30 dni statusu sponsora</b>:
-    • Pobieranie dużych wideo z YouTube (do 1 GB zamiast 100 MB)
-    • Przycinanie wideo z YouTube przed wysłaniem
-      • Dostęp do multimediów NSFW (Twitter, Reddit, Pixiv)
-    • Twoje imię na tablicy podziękowań{ $status }
+    <b>Co daje sponsorowanie:</b>
+    • YouTube: filmy do 1 GB zamiast 100 MB
+    • YouTube: TOPICH, maksymalna jakość jako oryginalny plik
+    • YouTube: przycinanie filmów przed wysłaniem
+    • Instagram i TikTok w najlepszej jakości
+    • Multimedia NSFW z Twittera, Reddita i Pixiv
+    • Do 1000 zapisanych multimediów zamiast 200
+
+    <b>Jak zbierają się Gwiazdki:</b>
+    Wszystkie Gwiazdki, które wysyłasz, trafiają do skarbonki, nawet po 10 czy 50. Każde 100 ⭐ to 30 dni sponsorowania, a jeśli jest już aktywne, dni dodadzą się do obecnego terminu. Za każdą wpłatę twoje imię pojawi się na tablicy podziękowań.{ $status }
 
     Każde wsparcie jest dla mnie ogromnie ważne, dziękuję, że jesteś ze mną ⭐
 

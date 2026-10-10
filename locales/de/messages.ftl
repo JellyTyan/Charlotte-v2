@@ -56,10 +56,7 @@ premium-granted = Juhu, du hast kostenlosen Premium-Zugang erhalten! Lade so vie
 
 
 # System & Payment
-sponsor-alert = 30 Tage Premium für 100 Sterne 🌟
-sponsor-invoice-title = Sponsoren-Premium (30 Tage)
-sponsor-invoice-desc = 30 Tage Premium-Zugang: werbefrei und mit Zusatzfunktionen.
-sponsor-success = Danke für deine Unterstützung! Hier sind 30 Tage Sponsoren-Premium 🌟
+service-disabled = Dieser Dienst ist gerade vorübergehend deaktiviert, tut mir leid. Versuch es etwas später.
 support-invoice-title = { $amount } ⭐ spenden
 support-invoice-desc = Unterstütze Charlottes Entwicklung!
 support-success = Vielen Dank für deine Unterstützung 🧡
@@ -135,30 +132,21 @@ yt-btn-topich = TOPICH
 yt-sponsor-only = Diese Funktion ist nur für Sponsoren, tut mir leid!
 
 # Sponsor & Support
-sponsor-text =
-    Wenn du mich und dieses Projekt unterstützen möchtest, kannst du ein Sponsoring für 30 Tage aktivieren.
-
-    Deine Vorteile:
-      • Große YouTube-Videos herunterladen (bis zu 1 GB statt 100 MB)
-      • YouTube-Videos vor dem Versenden zuschneiden
-      • Zugriff auf NSFW-Medien (Twitter und Reddit)
-      • Dein Name auf der Dankestafel in /support
-
-    Sponsoring gibt es für 100 Sterne für 30 Tage ⭐
-
-sponsor-btn-buy = ⭐ Sponsor werden (100 Sterne)
-
 support-text =
     Charlotte ist ein Herzensprojekt, das mit Liebe gepflegt wird. Ich helfe dir, Medien ohne Werbung und Einschränkungen zu speichern.
 
     Die Server kosten etwa 12€ im Monat, die aus eigener Tasche bezahlt werden. Der Bot bleibt immer kostenlos und offen für alle.
 
-    <b>Sponsoring:</b>
-    Für jeweils 100 Sterne erhältst du <b>30 Tage Sponsoren-Vorteile</b>:
-    • Große YouTube-Videos herunterladen (bis zu 1 GB statt 100 MB)
-    • YouTube-Videos vor dem Versenden zuschneiden
-    • Zugriff auf NSFW-Medien (Twitter, Reddit, Pixiv)
-    • Dein Name auf der Dankestafel{ $status }
+    <b>Sponsoren-Vorteile:</b>
+    • YouTube: Videos bis 1 GB statt 100 MB
+    • YouTube: TOPICH, maximale Qualität als Originaldatei
+    • YouTube: Videos vor dem Senden zuschneiden
+    • Instagram und TikTok in bester Qualität
+    • NSFW-Medien von Twitter, Reddit und Pixiv
+    • Bis zu 1000 gespeicherte Medien statt 200
+
+    <b>So sammeln sich Sterne:</b>
+    Alle Sterne, die du schickst, landen in deiner Spardose, auch 10 oder 50 auf einmal. Je 100 ⭐ gibt es 30 Tage Sponsoring, und wenn es schon aktiv ist, werden die Tage einfach angehängt. Bei jeder Spende kommt dein Name auf die Dankestafel.{ $status }
 
     Jede Unterstützung bedeutet mir unglaublich viel, danke, dass du da bist ⭐
 

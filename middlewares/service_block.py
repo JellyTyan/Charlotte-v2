@@ -2,7 +2,7 @@ import re
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, Message
 from typing import Callable, Dict, Any, Awaitable
-from storage.db.crud import get_chat_settings
+from storage.db.crud import get_chat_settings, get_global_settings
 from models.settings import ChatSettingsJson
 
 SERVICE_PATTERNS = {
@@ -36,13 +36,20 @@ class ServiceBlockMiddleware(BaseMiddleware):
         if not isinstance(event, Message) or not event.text:
             return await handler(event, data)
         
-        if event.chat.id < 0:
-            service = detect_service(event.text)
-            if service:
-                session = data.get("db_session")
-                if session:
-                    settings = await get_chat_settings(session, event.chat.id)
-                    if isinstance(settings, ChatSettingsJson) and service in settings.profile.blocked_services:
-                        return
+        service = detect_service(event.text)
+        session = data.get("db_session")
+        if service and session:
+            # Blocked globally by the admin: tell the user, otherwise the bot looks broken
+            global_settings = await get_global_settings(session)
+            if service in global_settings.get("blocked_services", []):
+                i18n = data.get("i18n")
+                if i18n:
+                    await event.reply(i18n.get("service-disabled"))
+                return
+
+            if event.chat.id < 0:
+                settings = await get_chat_settings(session, event.chat.id)
+                if isinstance(settings, ChatSettingsJson) and service in settings.profile.blocked_services:
+                    return
         
         return await handler(event, data)

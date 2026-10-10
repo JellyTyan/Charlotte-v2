@@ -56,10 +56,7 @@ premium-granted = Hurá, máš bezplatný prémiový přístup! Stahuj, kolik ch
 
 
 # System & Payment
-sponsor-alert = 30 dní Premium za 100 Hvězd 🌟
-sponsor-invoice-title = Sponzorské Premium (30 dní)
-sponsor-invoice-desc = 30 dní prémiového přístupu: bez reklam a s dalšími funkcemi.
-sponsor-success = Děkuji za podporu! Věnuji ti 30 dní Sponzorského Premium 🌟
+service-disabled = Tato služba je teď dočasně vypnutá, promiň. Zkus to o něco později.
 support-invoice-title = Přispět { $amount } ⭐
 support-invoice-desc = Podpoř vývoj Charlotte!
 support-success = Moc ti děkuji za podporu 🧡
@@ -135,30 +132,21 @@ yt-btn-topich = TOPICH
 yt-sponsor-only = Tato funkce je pouze pro Sponzory, promiň!
 
 # Sponsor & Support
-sponsor-text =
-    Pokud chceš podpořit mě i tento projekt, můžeš si pořídit sponzorství na 30 dní.
-
-    Co tím získáš:
-      • Stahování velkých videí z YouTube (až 1 GB místo 100 MB)
-      • Ořezání videí z YouTube před odesláním
-      • Přístup k NSFW médiím (Twitter a Reddit)
-      • Tvé jméno na zdi díků v /support
-
-    Sponzorství stojí 100 Hvězd na 30 dní ⭐
-
-sponsor-btn-buy = ⭐ Stát se Sponzorem (100 Hvězd)
-
 support-text =
     Charlotte je srdcový projekt tvořený s láskou. Pomáhám ti ukládat a stahovat média bez reklam a omezení.
 
     Servery stojí okolo 12€ měsíčně a hradím je z vlastní kapsy. Bot bude vždy zdarma a otevřený pro všechny.
 
-    <b>Sponzorství:</b>
-    Za každých 100 Hvězd získáš <b>30 dní sponzorských výhod</b>:
-    • Stahování velkých videí z YouTube (až 1 GB místo 100 MB)
-    • Ořezání videí z YouTube před odesláním
-    • Přístup k NSFW médiím (Twitter, Reddit, Pixiv)
-    • Tvé jméno na zdi díků{ $status }
+    <b>Co dává sponzorství:</b>
+    • YouTube: videa až 1 GB místo 100 MB
+    • YouTube: TOPICH, maximální kvalita jako originální soubor
+    • YouTube: ořezání videa před odesláním
+    • Instagram a TikTok v nejlepší kvalitě
+    • NSFW média z Twitteru, Redditu a Pixivu
+    • Až 1000 uložených médií místo 200
+
+    <b>Jak se sbírají Hvězdy:</b>
+    Všechny Hvězdy, které pošleš, se sčítají v pokladničce, i po 10 nebo 50. Každých 100 ⭐ dá 30 dní sponzorství, a pokud už je aktivní, dny se přičtou k aktuálnímu termínu. Za jakýkoli dar se tvé jméno objeví na zdi díků.{ $status }
 
     Každá podpora pro mě moc znamená, děkuji, že jsi se mnou ⭐
 

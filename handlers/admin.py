@@ -26,6 +26,10 @@ from storage.db.crud import (
     get_status_stats,
     toggle_lifetime_premium,
     get_premium_and_donation_stats,
+    get_active_timed_sponsors,
+    get_user,
+    get_user_saves_count,
+    is_user_public_saves_banned,
     ban_user,
     unban_user,
     list_of_banned_users,
@@ -53,6 +57,8 @@ from utils.effects import send_message_with_effect, EFFECT_FIREWORKS
 
 from aiogram import Router
 from middlewares.admin_check import AdminMiddleware
+from middlewares.service_block import SERVICE_PATTERNS
+from storage.cache.redis_client import cache_delete
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +73,7 @@ class AdminStates(StatesGroup):
     waiting_for_user_id_grant_month = State()
     waiting_for_user_id_saves_ban = State()
     waiting_for_user_id_saves_unban = State()
+    waiting_for_user_id_info = State()
 
 # === Keyboards ===
 statistic_kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -103,8 +110,24 @@ panel_kb = InlineKeyboardMarkup(inline_keyboard=[
     ],
     [
         InlineKeyboardButton(text="🛑 Бан предложки мемов", callback_data="admin_panel_saves_bans"),
+        InlineKeyboardButton(text="🔎 User info", callback_data="admin_panel_user_info"),
     ],
 ])
+
+
+async def show(callback: CallbackQuery, text: str, reply_markup: Optional[InlineKeyboardMarkup] = None) -> None:
+    """Edits the panel message in place, or sends a new one if it can't be edited."""
+    message = callback.message
+    if message is None or isinstance(message, InaccessibleMessage):
+        if callback.bot:
+            await callback.bot.send_message(callback.from_user.id, text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+        return
+    try:
+        await message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+    except TelegramBadRequest as e:
+        # Re-tapping the same screen with unchanged data
+        if "message is not modified" not in str(e):
+            raise
 
 
 async def show_pending_save(message: types.Message, db_session: AsyncSession) -> None:
@@ -215,7 +238,7 @@ async def moderate_save_callback(
 # === Main page ===
 @admin_router.message(Command("admin_panel"))
 async def admin_panel(message: types.Message, state: FSMContext) -> None:
-    await state.update_data(current_admin_screen=None)
+    await state.clear()
 
     await message.answer(
         (
@@ -227,33 +250,15 @@ async def admin_panel(message: types.Message, state: FSMContext) -> None:
 
 @admin_router.callback_query(lambda c: c.data == "admin_panel_back")
 async def settings_back(callback: CallbackQuery, state: FSMContext):
-    await state.update_data(current_admin_screen="main")
-
+    await state.clear()
     text = ("Hey, Jelly! Here's your buttons to play with\n")
 
-    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
-        if callback.bot is None:
-            return
-        await callback.bot.send_message(callback.from_user.id, text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=panel_kb,)
-    else:
-        await callback.message.edit_text(text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=panel_kb,
-        )
+    await show(callback, text, panel_kb)
     await callback.answer()
 
 # === Statistic ===
 @admin_router.callback_query(lambda c: c.data == "admin_panel_statistic")
 async def admin_panel_stats(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession):
-    data = await state.get_data()
-    if data.get("current_admin_screen") == "statistics":
-        await callback.answer("Nothing happened!", cache_time=1)
-        return
-
-    await state.update_data(current_admin_screen="statistics")
-
     user_count = await get_user_counts(db_session)
     status_stats = await get_status_stats(db_session)
     db_overview = await get_db_overview_stats(db_session)
@@ -284,28 +289,11 @@ async def admin_panel_stats(callback: CallbackQuery, state: FSMContext, db_sessi
         f"  📦 Total cached: <b>{db_overview.get('total_cached', 0):,}</b> files\n"
     ).format(total=total_requests)
 
-    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
-        if callback.bot is None:
-            return
-        await callback.bot.send_message(callback.from_user.id, text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=statistic_kb,)
-    else:
-        await callback.message.edit_text(text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=statistic_kb,
-        )
+    await show(callback, text, statistic_kb)
     await callback.answer()
 
 @admin_router.callback_query(lambda c: c.data == "statistic_top_services")
 async def admin_panel_top_services(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession):
-    data = await state.get_data()
-    if data.get("current_admin_screen") == "top_services":
-        await callback.answer("Nothing happened!", cache_time=1)
-        return
-
-    await state.update_data(current_admin_screen="top_services")
-
     text = "🏆 <b>Top Services (All Time)</b>\n\n"
     top_services = await get_top_services(db_session)
 
@@ -314,46 +302,34 @@ async def admin_panel_top_services(callback: CallbackQuery, state: FSMContext, d
         medal = medals[idx] if idx < 3 else f"{idx + 1}."
         text += f"{medal} <b>{service}</b>: {count}\n"
 
-    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
-        if callback.bot is None:
-            return
-        await callback.bot.send_message(callback.from_user.id, text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=statistic_kb,)
-    else:
-        await callback.message.edit_text(text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=statistic_kb,
-        )
+    await show(callback, text, statistic_kb)
     await callback.answer()
 
 @admin_router.callback_query(lambda c: c.data == "statistic_premium_stats")
 async def admin_panel_prem_stats(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession):
-    data = await state.get_data()
-    if data.get("current_admin_screen") == "premium_stats":
-        await callback.answer("Nothing happened!", cache_time=1)
-        return
-
-    await state.update_data(current_admin_screen="premium_stats")
-
     stats = await get_premium_and_donation_stats(db_session)
     text = (
         "⭐ <b>Premium Statistics</b>\n\n"
         f"👑 Total premium users: {stats['total_premium_users']}\n"
+        f"  ├ Lifetime: {stats['lifetime_premium_users']}\n"
+        f"  └ Timed (sponsors / granted): {stats['timed_premium_users']}\n"
+        f"💝 Donors: {stats['donors_count']}\n"
         f"⭐ Total stars donated: {stats['total_stars_donated']}\n"
     )
 
-    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
-        if callback.bot is None:
-            return
-        await callback.bot.send_message(callback.from_user.id, text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=statistic_kb,)
-    else:
-        await callback.message.edit_text(text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=statistic_kb,
-        )
+    sponsors = await get_active_timed_sponsors(db_session)
+    if sponsors:
+        # premium_ends is a DATE column in prod and DateTime in the model; compare as dates
+        soon = datetime.date.today() + datetime.timedelta(days=7)
+        text += "\n<b>Active timed sponsors:</b>\n"
+        for u in sponsors[:30]:
+            ends = u.premium_ends.date() if isinstance(u.premium_ends, datetime.datetime) else u.premium_ends
+            mark = " ⏳" if ends <= soon else ""
+            text += f"• <code>{u.user_id}</code> until {u.premium_ends:%d.%m.%Y} · {u.stars_donated or 0}⭐{mark}\n"
+        if len(sponsors) > 30:
+            text += f"…and {len(sponsors) - 30} more\n"
+
+    await show(callback, text, statistic_kb)
     await callback.answer()
 
 # === Premium panel ===
@@ -361,8 +337,8 @@ async def admin_panel_prem_stats(callback: CallbackQuery, state: FSMContext, db_
 async def admin_panel_premium(callback: CallbackQuery, state: FSMContext):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="🦐 Toggle premium", callback_data="admin_panel_toggle_premium"),
-            InlineKeyboardButton(text="🍄 Toggle whom lifetime", callback_data="admin_panel_toggle_lifetime_premium"),
+            InlineKeyboardButton(text="🦐 Toggle MY lifetime", callback_data="admin_panel_toggle_premium"),
+            InlineKeyboardButton(text="🍄 Toggle lifetime by ID", callback_data="admin_panel_toggle_lifetime_premium"),
         ],
         [
             InlineKeyboardButton(text="📅 Grant 1 Month", callback_data="admin_panel_grant_month_premium"),
@@ -372,19 +348,9 @@ async def admin_panel_premium(callback: CallbackQuery, state: FSMContext):
         ]
     ])
 
-    text = ("Premium. When Charlotte turned paid?")
+    text = "✡ <b>Premium</b>\n\nTip: 🔎 User info shows a user's status and has the same actions."
 
-    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
-        if callback.bot is None:
-            return
-        await callback.bot.send_message(callback.from_user.id, text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb,)
-    else:
-        await callback.message.edit_text(text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb,
-        )
+    await show(callback, text, kb)
     await callback.answer()
 
 @admin_router.callback_query(lambda c: c.data == "admin_panel_toggle_premium")
@@ -397,35 +363,16 @@ async def admin_toggle_premium(callback: CallbackQuery, state: FSMContext, db_se
 
     premium_status = await toggle_lifetime_premium(session=db_session, user_id=callback.from_user.id)
 
-    text = (f"Changed premium status to `{premium_status}`")
+    text = (f"Changed premium status to <code>{premium_status}</code>")
 
-    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
-        if callback.bot is None:
-            return
-        await callback.bot.send_message(callback.from_user.id, text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb,)
-    else:
-        await callback.message.edit_text(text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb,
-        )
+    await show(callback, text, kb)
     await callback.answer()
 
 @admin_router.callback_query(lambda c: c.data == "admin_panel_toggle_lifetime_premium")
 async def handle_toggle_lifetime_premium_callback(callback: CallbackQuery, state: FSMContext):
     text = ("🆔 Please send the user ID:")
 
-    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
-        if callback.bot is None:
-            return
-        await callback.bot.send_message(callback.from_user.id, text,
-            parse_mode=ParseMode.HTML,
-        )
-    else:
-        await callback.message.edit_text(text,
-            parse_mode=ParseMode.HTML,
-        )
+    await show(callback, text)
     await state.set_state(AdminStates.waiting_for_user_id)
     await callback.answer()
 
@@ -446,22 +393,13 @@ async def process_user_id(message: types.Message, state: FSMContext, db_session:
 
     await message.answer(
         (
-            f"Changed premium status to `{premium_status}`"
+            f"Changed premium status to <code>{premium_status}</code>"
         ),
         parse_mode=ParseMode.HTML,
     )
 
-    # Send notification to user if premium was granted
-    if premium_status and message.bot:
-        try:
-            await send_message_with_effect(
-                message.bot,
-                user_id,
-                i18n.get("premium-granted"),
-                effect_id=EFFECT_FIREWORKS
-            )
-        except Exception as e:
-            logger.error(f"Failed to send premium notification to user {user_id}: {e}")
+    if premium_status:
+        await notify_premium_granted(message.bot, user_id, i18n)
 
     await state.clear()
 
@@ -469,12 +407,7 @@ async def process_user_id(message: types.Message, state: FSMContext, db_session:
 async def handle_grant_month_premium_callback(callback: CallbackQuery, state: FSMContext):
     text = ("📅 Please send the user ID to grant 30 days of premium:")
 
-    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
-        if callback.bot is None:
-            return
-        await callback.bot.send_message(callback.from_user.id, text)
-    else:
-        await callback.message.edit_text(text)
+    await show(callback, text)
     await state.set_state(AdminStates.waiting_for_user_id_grant_month)
     await callback.answer()
 
@@ -496,24 +429,121 @@ async def process_grant_month_premium(message: types.Message, state: FSMContext,
 
     await message.answer(
         (
-            f"✅ Granted 30 days of premium to user ID: `{user_id}`"
+            f"✅ Granted 30 days of premium to user ID: <code>{user_id}</code>"
         ),
         parse_mode=ParseMode.HTML,
     )
 
-    # Send notification to user
-    if message.bot:
-        try:
-            await send_message_with_effect(
-                message.bot,
-                user_id,
-                i18n.get("premium-granted"),
-                effect_id=EFFECT_FIREWORKS
-            )
-        except Exception as e:
-            logger.error(f"Failed to send premium notification to user {user_id}: {e}")
+    await notify_premium_granted(message.bot, user_id, i18n)
 
     await state.clear()
+
+# === User info card ===
+async def notify_premium_granted(bot: Optional[Bot], user_id: int, i18n: TranslatorRunner) -> None:
+    if bot is None:
+        return
+    try:
+        await send_message_with_effect(bot, user_id, i18n.get("premium-granted"), effect_id=EFFECT_FIREWORKS)
+    except Exception as e:
+        logger.error(f"Failed to send premium notification to user {user_id}: {e}")
+
+
+async def render_user_card(db_session: AsyncSession, user_id: int) -> tuple[str, InlineKeyboardMarkup]:
+    user = await get_user(db_session, user_id)
+    back = [InlineKeyboardButton(text="🔙 Back", callback_data="admin_panel_back")]
+    if not user:
+        return f"🔎 User <code>{user_id}</code> not found in DB.", InlineKeyboardMarkup(inline_keyboard=[back])
+
+    saves_banned = await is_user_public_saves_banned(db_session, user_id)
+    saves_count = await get_user_saves_count(db_session, user_id)
+    stars = user.stars_donated or 0
+
+    if user.is_lifetime_premium:
+        premium = "♾ lifetime"
+    elif user.is_premium:
+        premium = f"✅ until {user.premium_ends:%d.%m.%Y}"
+    elif user.premium_ends:
+        premium = f"❌ expired {user.premium_ends:%d.%m.%Y}"
+    else:
+        premium = "❌ never"
+    last_used = f"{user.last_used:%d.%m.%Y}" if user.last_used else "—"
+
+    text = (
+        f"🔎 <b>User</b> <code>{user_id}</code>\n\n"
+        f"👑 Premium: {premium}\n"
+        f"⭐ Stars donated: {stars} (piggy bank {stars % 100}/100)\n"
+        f"🚫 Banned: {'yes' if user.is_banned else 'no'}\n"
+        f"🛑 Public saves ban: {'yes' if saves_banned else 'no'}\n"
+        f"💾 Saves: {saves_count}\n"
+        f"🕐 Last used: {last_used}"
+    )
+
+    def btn(label: str, action: str) -> InlineKeyboardButton:
+        return InlineKeyboardButton(text=label, callback_data=f"admin_user:{action}:{user_id}")
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [btn("📅 +30 days", "grant30"), btn("♾ Lifetime off" if user.is_lifetime_premium else "♾ Lifetime on", "lifetime")],
+        [btn("🤭 Unban" if user.is_banned else "🚫 Ban", "ban"), btn("🛑 Saves unban" if saves_banned else "🛑 Saves ban", "saves_ban")],
+        [btn("🔄 Refresh", "refresh"), *back],
+    ])
+    return text, kb
+
+
+@admin_router.callback_query(lambda c: c.data == "admin_panel_user_info")
+async def handle_user_info_callback(callback: CallbackQuery, state: FSMContext):
+    await show(callback, "🆔 Please send the user ID:")
+    await state.set_state(AdminStates.waiting_for_user_id_info)
+    await callback.answer()
+
+
+@admin_router.message(AdminStates.waiting_for_user_id_info)
+async def process_user_info(message: types.Message, state: FSMContext, db_session: AsyncSession):
+    raw = (message.text or "").strip()
+    if not raw.isdigit():
+        await message.answer("❌ Invalid user ID. Please send only numbers.")
+        return
+    await state.clear()
+    text, kb = await render_user_card(db_session, int(raw))
+    await message.answer(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+
+
+@admin_router.callback_query(lambda c: c.data and c.data.startswith("admin_user:"))
+async def user_card_action(callback: CallbackQuery, db_session: AsyncSession, i18n: TranslatorRunner):
+    _, action, raw_id = callback.data.split(":")
+    user_id = int(raw_id)
+    toast = None
+
+    if action == "grant30":
+        await grant_sponsorship(session=db_session, user_id=user_id, days=30)
+        await notify_premium_granted(callback.bot, user_id, i18n)
+        toast = "+30 days granted"
+    elif action == "lifetime":
+        status = await toggle_lifetime_premium(session=db_session, user_id=user_id)
+        if status:
+            await notify_premium_granted(callback.bot, user_id, i18n)
+        toast = f"Lifetime: {status}"
+    elif action == "ban":
+        user = await get_user(db_session, user_id)
+        if user and user.is_banned:
+            await unban_user(session=db_session, user_id=user_id)
+            toast = "Unbanned"
+        else:
+            await ban_user(session=db_session, user_id=user_id)
+            toast = "Banned"
+    elif action == "saves_ban":
+        if await is_user_public_saves_banned(db_session, user_id):
+            await unban_user_from_public_saves(db_session, user_id)
+            toast = "Saves unbanned"
+        else:
+            await ban_user_from_public_saves(db_session, user_id)
+            toast = "Saves banned"
+
+    # Commit before re-reading so the card (and the user cache) shows the new state
+    await db_session.commit()
+    text, kb = await render_user_card(db_session, user_id)
+    await show(callback, text, kb)
+    await callback.answer(toast)
+
 
 # === Ban panel ===
 @admin_router.callback_query(lambda c: c.data == "admin_panel_banlist")
@@ -531,17 +561,7 @@ async def admin_panel_banlist(callback: CallbackQuery, state: FSMContext):
 
     text = "🚫 Ban Management Panel\n\nChoose what to do:"
 
-    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
-        if callback.bot is None:
-            return
-        await callback.bot.send_message(callback.from_user.id, text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb,)
-    else:
-        await callback.message.edit_text(text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb,
-        )
+    await show(callback, text, kb)
     await callback.answer()
 
 @admin_router.callback_query(lambda c: c.data == "ban_panel_list")
@@ -552,34 +572,20 @@ async def ban_panel_list(callback: CallbackQuery, state: FSMContext, db_session:
         ]
     ])
 
-    text = "Banned users:\n"
     banned_users = await list_of_banned_users(db_session)
-    for user in banned_users:
-        text += f"{user.user_id}\n"
-
-    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
-        if callback.bot is None:
-            return
-        await callback.bot.send_message(callback.from_user.id, text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb,)
+    if banned_users:
+        text = "🐒 <b>Banned users:</b>\n\n" + "\n".join(f"• <code>{u.user_id}</code>" for u in banned_users)
     else:
-        await callback.message.edit_text(text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb,
-        )
+        text = "🐒 Nobody is banned."
+
+    await show(callback, text, kb)
     await callback.answer()
 
 @admin_router.callback_query(lambda c: c.data == "ban_panel_ban_user")
 async def handle_ban_user_callback(callback: CallbackQuery, state: FSMContext):
     text = ("🆔 Please send the user ID:")
 
-    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
-        if callback.bot is None:
-            return
-        await callback.bot.send_message(callback.from_user.id, text)
-    else:
-        await callback.message.edit_text(text)
+    await show(callback, text)
     await state.set_state(AdminStates.waiting_for_user_id_ban)
     await callback.answer()
 
@@ -587,12 +593,7 @@ async def handle_ban_user_callback(callback: CallbackQuery, state: FSMContext):
 async def handle_pardon_user_callback(callback: CallbackQuery, state: FSMContext):
     text = ("🆔 Please send the user ID:")
 
-    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
-        if callback.bot is None:
-            return
-        await callback.bot.send_message(callback.from_user.id, text)
-    else:
-        await callback.message.edit_text(text)
+    await show(callback, text)
     await state.set_state(AdminStates.waiting_for_user_id_pardon)
     await callback.answer()
 
@@ -613,7 +614,7 @@ async def process_ban(message: types.Message, state: FSMContext, db_session: Asy
 
     await message.answer(
         (
-            f"Banned user ID: `{user_id}`"
+            f"Banned user ID: <code>{user_id}</code>"
         ),
         parse_mode=ParseMode.HTML,
     )
@@ -636,7 +637,7 @@ async def process_pardon(message: types.Message, state: FSMContext, db_session: 
 
     await message.answer(
         (
-            f"Pardon user ID: `{user_id}`"
+            f"Pardon user ID: <code>{user_id}</code>"
         ),
         parse_mode=ParseMode.HTML,
     )
@@ -657,21 +658,7 @@ async def admin_panel_saves_bans(callback: CallbackQuery, state: FSMContext):
     ])
     text = "🛑 <b>Управление блокировкой предложки мемов</b>\n\nВыберите действие:"
 
-    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
-        if callback.bot is None:
-            return
-        await callback.bot.send_message(
-            callback.from_user.id,
-            text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb,
-        )
-    else:
-        await callback.message.edit_text(
-            text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb,
-        )
+    await show(callback, text, kb)
     await callback.answer()
 
 
@@ -686,22 +673,14 @@ async def saves_ban_list(callback: CallbackQuery, db_session: AsyncSession):
     else:
         text = "🛑 <b>Заблокированные от предложки пользователи:</b>\n\n" + "\n".join(f"• <code>{uid}</code>" for uid in banned)
 
-    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
-        if callback.bot:
-            await callback.bot.send_message(callback.from_user.id, text, parse_mode=ParseMode.HTML, reply_markup=kb)
-    else:
-        await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+    await show(callback, text, kb)
     await callback.answer()
 
 
 @admin_router.callback_query(lambda c: c.data == "saves_ban_user")
 async def handle_saves_ban_callback(callback: CallbackQuery, state: FSMContext):
     text = "🆔 Введите Telegram ID пользователя для блокировки предложки:"
-    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
-        if callback.bot:
-            await callback.bot.send_message(callback.from_user.id, text)
-    else:
-        await callback.message.edit_text(text)
+    await show(callback, text)
     await state.set_state(AdminStates.waiting_for_user_id_saves_ban)
     await callback.answer()
 
@@ -724,11 +703,7 @@ async def process_saves_ban(message: types.Message, state: FSMContext, db_sessio
 @admin_router.callback_query(lambda c: c.data == "saves_unban_user")
 async def handle_saves_unban_callback(callback: CallbackQuery, state: FSMContext):
     text = "🆔 Введите Telegram ID пользователя для разблокировки предложки:"
-    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
-        if callback.bot:
-            await callback.bot.send_message(callback.from_user.id, text)
-    else:
-        await callback.message.edit_text(text)
+    await show(callback, text)
     await state.set_state(AdminStates.waiting_for_user_id_saves_unban)
     await callback.answer()
 
@@ -770,12 +745,7 @@ async def admin_panel_news(callback: CallbackQuery, state: FSMContext):
     await state.set_state(NewsSpamGroup.news_spam)
     text = "Send a message with the news"
 
-    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
-        if callback.bot is None:
-            return
-        await callback.bot.send_message(callback.from_user.id, text)
-    else:
-        await callback.message.edit_text(text)
+    await show(callback, text)
 
 @admin_router.message(NewsSpamGroup.news_spam)
 async def proccess_spam_news(message: types.Message, state: FSMContext) -> None:
@@ -905,69 +875,57 @@ async def admin_panel_bot_settings(callback: CallbackQuery, state: FSMContext):
         ]
     ])
 
-    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
-        if callback.bot is None:
-            return
-        await callback.bot.send_message(callback.from_user.id, text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb,)
-    else:
-        await callback.message.edit_text(text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb,
-        )
+    await show(callback, text, kb)
     await callback.answer()
 
-# @dp.callback_query(lambda c: c.data == "settings_panel_block_services")
-# async def blocked_services_menu(callback: CallbackQuery):
-#     settings = await get_global_settings()
-#     blocked_services = settings.get("blocked_services", [])
-
-#     available_services = list(SERVICES.keys())
-#     keyboards = []
-
-#     for service in available_services:
-#         is_blocked = service.lower() in blocked_services
-#         icon = "🚫" if is_blocked else "✅"
-#         keyboards.append([
-#             InlineKeyboardButton(
-#                 text=f"{icon} {service}",
-#                 callback_data=f"global_service_toggle_{service}"
-#             )
-#         ])
-
-#     keyboards.append([InlineKeyboardButton(text="🔙 Back", callback_data="admin_panel_back")])
-
-#     kb = InlineKeyboardMarkup(inline_keyboard=keyboards)
-#     blocked_count = len(blocked_services)
-
-#     text = (
-#         f"**Blocked Services Management**\n\n"
-#         f"Currently blocked: {blocked_count} services\n\n"
-#         f"Tap a service to toggle its status."
-#     )
-
-#     await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=kb)
-#     await callback.answer()
+async def render_blocked_services(db_session: AsyncSession) -> tuple[str, InlineKeyboardMarkup]:
+    settings = await get_global_settings(db_session)
+    blocked = settings.get("blocked_services", [])
+    rows = [
+        [InlineKeyboardButton(
+            text=f"{'🚫' if service in blocked else '✅'} {service}",
+            callback_data=f"global_service_toggle_{service}",
+        )]
+        for service in SERVICE_PATTERNS
+    ]
+    rows.append([InlineKeyboardButton(text="🔙 Back", callback_data="admin_panel_bot_settings")])
+    text = (
+        "🚫 <b>Blocked Services</b> (everywhere: private chats and groups)\n\n"
+        f"Currently blocked: {len(blocked)}\n"
+        "Tap a service to toggle it."
+    )
+    return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-@admin_router.callback_query(lambda c: c.data.startswith("global_service_toggle_"))
+@admin_router.callback_query(lambda c: c.data == "settings_panel_block_services")
+async def blocked_services_menu(callback: CallbackQuery, db_session: AsyncSession):
+    text, kb = await render_blocked_services(db_session)
+    await show(callback, text, kb)
+    await callback.answer()
+
+
+@admin_router.callback_query(lambda c: c.data and c.data.startswith("global_service_toggle_"))
 async def toggle_service(callback: CallbackQuery, db_session: AsyncSession):
-    data = callback.data
-    if data is None:
+    service = callback.data.removeprefix("global_service_toggle_").lower()
+    if service not in SERVICE_PATTERNS:
+        await callback.answer("Unknown service", show_alert=True)
         return
-    service = data.replace("global_service_toggle_", "")
-    service = service.lower()
+
     settings = await get_global_settings(db_session)
     blocked_services = settings.get("blocked_services", [])
-
     if service in blocked_services:
         blocked_services.remove(service)
     else:
         blocked_services.append(service)
 
-    await update_global_settings(db_session,"blocked_services", blocked_services)
-    # await blocked_services_menu(callback)
+    await update_global_settings(db_session, "blocked_services", blocked_services)
+    await db_session.commit()
+    # update_global_settings drops the cache before commit; drop again so nobody re-caches the old value
+    await cache_delete("global_settings")
+
+    text, kb = await render_blocked_services(db_session)
+    await show(callback, text, kb)
+    await callback.answer()
 
 
 # === Service Statistics ===
@@ -1028,11 +986,7 @@ async def admin_panel_service_usage(callback: CallbackQuery, state: FSMContext, 
     text += f"<b>Total Downloads:</b> {total_all}\n"
     text += f"<b>Overall Success Rate:</b> {overall_rate:.1f}%"
 
-    if isinstance(callback.message, InaccessibleMessage) or callback.message is None:
-        if callback.bot:
-            await callback.bot.send_message(callback.from_user.id, text, parse_mode=ParseMode.HTML, reply_markup=statistic_kb)
-    else:
-        await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=statistic_kb)
+    await show(callback, text, statistic_kb)
     await callback.answer()
 
 
@@ -1051,11 +1005,7 @@ async def admin_panel_clean_stats(callback: CallbackQuery, state: FSMContext):
 
     text = "⚠️ <b>Clean Old Statistics</b>\n\nSelect period to clean:"
 
-    if isinstance(callback.message, InaccessibleMessage) or callback.message is None:
-        if callback.bot:
-            await callback.bot.send_message(callback.from_user.id, text, parse_mode=ParseMode.HTML, reply_markup=kb)
-    else:
-        await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+    await show(callback, text, kb)
     await callback.answer()
 
 
@@ -1076,11 +1026,7 @@ async def admin_clean_stats_confirm(callback: CallbackQuery, state: FSMContext, 
 
     text = f"✅ Cleaned {deleted} records older than {days} days"
 
-    if isinstance(callback.message, InaccessibleMessage) or callback.message is None:
-        if callback.bot:
-            await callback.bot.send_message(callback.from_user.id, text, parse_mode=ParseMode.HTML, reply_markup=statistic_kb)
-    else:
-        await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=statistic_kb)
+    await show(callback, text, statistic_kb)
     await callback.answer()
 
 
@@ -1091,12 +1037,7 @@ async def admin_panel_clear_db_cache_handler(callback: CallbackQuery, state: FSM
     
     text = f"✅ Кеш успешно сброшен!\nУдалено записей: <b>{cleared_count}</b>"
     
-    if isinstance(callback.message, types.InaccessibleMessage) or callback.message is None:
-        if callback.bot is None:
-            return
-        await callback.bot.send_message(callback.from_user.id, text, parse_mode=ParseMode.HTML, reply_markup=panel_kb)
-    else:
-        await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=panel_kb)
+    await show(callback, text, panel_kb)
     await callback.answer()
 
 

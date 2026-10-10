@@ -1,4 +1,3 @@
-import hashlib
 import logging
 import re
 from pathlib import Path
@@ -12,8 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.media import MediaContent, MediaType
 from models.service_list import Services
+from modules.services._shared import build_media_items, cache_check, make_cache_key
 from senders.media_sender import MediaSender
-from storage.db.crud import get_media_cache
+from storage.db.crud import check_if_user_premium
 from tasks.task_manager import task_manager
 from utils import build_caption, escape_html, format_author_link, extract_url
 
@@ -62,14 +62,16 @@ async def tiktok_handler(message: Message, db_session: AsyncSession, http_client
     from utils.effects import react_safe
     await react_safe(message, "👀")
 
+    sponsor = await check_if_user_premium(db_session, user_id)
+
     async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=message.chat.id):
         send_manager = MediaSender()
         resolved_url = await resolve_tiktok_url(url)
-        cache_key = get_cache_key(resolved_url)
+        cache_key = get_cache_key(resolved_url, sponsor)
 
         cached = await cache_check(db_session, cache_key)
         if not cached and resolved_url != url:
-            fallback_cache_key = get_cache_key(url)
+            fallback_cache_key = get_cache_key(url, sponsor)
             cached = await cache_check(db_session, fallback_cache_key)
 
         if cached:
@@ -80,7 +82,7 @@ async def tiktok_handler(message: Message, db_session: AsyncSession, http_client
         payload = {
             "user_id": user_id,
             "url": resolved_url,
-            "sponsor": False,
+            "sponsor": sponsor,
             "nsfw": False,
         }
         metadata = await task_manager.run_media_download(
@@ -104,24 +106,7 @@ async def tiktok_handler(message: Message, db_session: AsyncSession, http_client
         is_nsfw = bool(metadata.get('is_nsfw') or metadata.get('is_sensitive'))
         is_blurred = bool(metadata.get('is_blurred') or is_nsfw)
 
-        media_content = []
-        for media in metadata.get('items', []):
-            cover_str = media.get('cover_path') or media.get('cover') or media.get('thumbnail')
-            cover_path = Path(cover_str) if cover_str and Path(cover_str).exists() else None
-            media_content.append(
-                MediaContent(
-                    type=MediaType.PHOTO if media.get('type') == 'photo' else MediaType.VIDEO,
-                    path=Path(media.get('path')) if media.get('path') else None,
-                    optimized_path=Path(media.get('optimized_path')) if media.get('optimized_path') else None,
-                    title=caption,
-                    width=media.get('width', None),
-                    height=media.get('height', None),
-                    duration=media.get('duration', None),
-                    cover=cover_path,
-                    is_blurred=is_blurred,
-                    is_nsfw=is_nsfw,
-                )
-            )
+        media_content = build_media_items(metadata.get('items', []), caption, is_blurred, is_nsfw)
 
         music_info = metadata.get('audio') or metadata.get('music_info') or {}
         if music_info and music_info.get('path'):
@@ -142,56 +127,5 @@ async def tiktok_handler(message: Message, db_session: AsyncSession, http_client
         await send_manager.send(message, media_content, service="tiktok", cache_key=cache_key, db_session=db_session)
 
 
-def get_cache_key(url: str) -> str:
-    match = re.search(r"/(?:video|photo)/(\d+)", url)
-    if match:
-        return f"tt:{match.group(1)}"
-
-    clean_url = url.split('?')[0].rstrip('/')
-    hashed = hashlib.md5(clean_url.encode('utf-8')).hexdigest()
-    return f"tt:{hashed}"
-
-
-async def cache_check(db_session: AsyncSession, key: str) -> list[MediaContent] | None:
-    cached = await get_media_cache(db_session, key)
-    if not cached:
-        return None
-
-    if cached.media_type == "gallery":
-        results = []
-        for c_item in cached.data.items:
-            t_type = MediaType(c_item.media_type) if c_item.media_type else MediaType.PHOTO
-            results.append(MediaContent(
-                type=t_type,
-                telegram_file_id=c_item.file_id,
-                telegram_document_file_id=c_item.raw_file_id,
-                cover_file_id=c_item.cover,
-                full_cover_file_id=cached.data.full_cover,
-                title=cached.data.title,
-                performer=cached.data.author,
-                duration=c_item.duration or cached.data.duration,
-                width=c_item.width or cached.data.width,
-                height=c_item.height or cached.data.height,
-                is_blurred=c_item.is_blurred if c_item.is_blurred is not None else cached.data.is_blurred
-            ))
-        return results
-
-    try:
-        media_type = MediaType(cached.media_type)
-    except ValueError:
-        media_type = MediaType.VIDEO if cached.data.width else MediaType.PHOTO
-
-    return [MediaContent(
-        type=media_type,
-        telegram_file_id=cached.telegram_file_id,
-        telegram_document_file_id=cached.telegram_document_file_id,
-        cover_file_id=cached.data.cover,
-        full_cover_file_id=cached.data.full_cover,
-        title=cached.data.title,
-        performer=cached.data.author,
-        duration=cached.data.duration,
-        width=cached.data.width,
-        height=cached.data.height,
-        is_blurred=cached.data.is_blurred
-    )]
-
+def get_cache_key(url: str, sponsor: bool) -> str:
+    return make_cache_key("tt", url, r"/(?:video|photo)/(\d+)", ":sponsor" if sponsor else "")

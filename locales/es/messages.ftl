@@ -56,10 +56,7 @@ premium-granted = ¡Genial, te dieron acceso premium gratis! Descarga cuanto qui
 
 
 # System & Payment
-sponsor-alert = 30 días de Premium por 100 Estrellas 🌟
-sponsor-invoice-title = Premium de Patrocinador (30 días)
-sponsor-invoice-desc = 30 días de acceso premium: sin anuncios y con funciones extra.
-sponsor-success = ¡Gracias por tu apoyo! Te doy 30 días de Premium de Patrocinador 🌟
+service-disabled = Este servicio está desactivado temporalmente, perdona. Prueba un poco más tarde.
 support-invoice-title = Donar { $amount } ⭐
 support-invoice-desc = ¡Apoya el desarrollo de Charlotte!
 support-success = Muchísimas gracias por tu apoyo 🧡
@@ -135,30 +132,21 @@ yt-btn-topich = TOPICH
 yt-sponsor-only = Esta función es solo para Patrocinadores, ¡lo siento!
 
 # Sponsor & Support
-sponsor-text =
-    Si quieres apoyarme a mí y a este proyecto, puedes patrocinar durante 30 días.
-
-    Lo que obtienes:
-      • Descarga de vídeos grandes de YouTube (hasta 1 GB en vez de 100 MB)
-      • Recorte de vídeos de YouTube antes de enviarlos
-      • Acceso a multimedia NSFW (Twitter y Reddit)
-      • Tu nombre en el muro de agradecimientos en /support
-
-    El patrocinio cuesta 100 Estrellas por 30 días ⭐
-
-sponsor-btn-buy = ⭐ Hacerse Patrocinador (100 Estrellas)
-
 support-text =
     Charlotte es un proyecto hecho con mucho cariño y dedicación. Te ayudo a guardar y descargar multimedia sin anuncios ni limitaciones.
 
     Los servidores cuestan unos 12€ al mes y se pagan de mi propio bolsillo. El bot siempre será gratuito y abierto para todos.
 
-    <b>Patrocinio:</b>
-    Por cada 100 Estrellas recibes <b>30 días de ventajas de patrocinio</b>:
-    • Descarga de vídeos grandes de YouTube (hasta 1 GB en vez de 100 MB)
-    • Recorte de vídeos de YouTube antes de enviarlos
-    • Acceso a multimedia NSFW (Twitter, Reddit, Pixiv)
-    • Tu nombre en el muro de agradecimientos{ $status }
+    <b>Ventajas del patrocinio:</b>
+    • YouTube: vídeos de hasta 1 GB en vez de 100 MB
+    • YouTube: TOPICH, máxima calidad como archivo original
+    • YouTube: recortar vídeos antes de enviarlos
+    • Instagram y TikTok en la mejor calidad
+    • Multimedia NSFW de Twitter, Reddit y Pixiv
+    • Hasta 1000 guardados en vez de 200
+
+    <b>Cómo se suman las Estrellas:</b>
+    Todas las Estrellas que envías van a tu hucha, aunque sean 10 o 50. Cada 100 ⭐ dan 30 días de patrocinio, y si ya está activo, los días se suman a tu plazo actual. Con cualquier donación tu nombre aparece en el muro de agradecimientos.{ $status }
 
     Cualquier apoyo significa muchísimo para mí, gracias por estar aquí ⭐
 
