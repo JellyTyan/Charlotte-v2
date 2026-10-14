@@ -81,9 +81,7 @@ btn-close = ✕ Cerrar
 
 # YouTube Trim
 yt-trim-sponsor-only = El recorte de vídeo solo está disponible para Patrocinadores.
-yt-trim-ask-range = Envía el rango de tiempo a recortar, por ejemplo <code>01:20-02:45</code> o <code>90-165</code>:
-yt-trim-invalid-range = No entendí ese formato, perdona. Usa INICIO-FIN, por ejemplo <code>1:30-2:45</code>. ¿Otra vez?
-yt-trim-end-before-start = El final debe ser posterior al inicio. ¿Lo intentas de nuevo?
+yt-trim-ask-range = Envía el rango de tiempo a recortar, por ejemplo <code>1:20-2:45</code> o <code>90-165</code>. ¿Necesitas precisión de milisegundos? Añádelos tras una coma: <code>1:20,250-1:22,5</code>
 yt-trim-processing = Recortando el clip, espera un momentito...
 yt-trim-out-of-bounds = Ese rango se pasa de la duración del vídeo ({ $duration }). ¿Pruebas otra vez?
 yt-btn-full = 🎬 Vídeo completo
@@ -201,4 +199,4 @@ report-reply-required = Responde con <code>/report</code> al mensaje mío con el
 report-not-bot-message = Este comando solo funciona respondiendo a mis mensajes 🐾
 report-success = ¡Gracias por avisarme! Le pasé todo al desarrollador y lo revisaremos pronto 🧡
 error-send-failed = ❌ No se pudo enviar el archivo a Telegram. El archivo podría estar dañado o rechazado.
-yt-trim-invalid-format = No reconocí ese formato. Usa INICIO-FIN, como <code>1:30-2:45</code>. ¿Quieres intentarlo de nuevo?
+yt-trim-invalid-format = No reconocí ese formato. Usa INICIO-FIN, como <code>1:30-2:45</code>, y los milisegundos tras una coma: <code>1:30,250-2:45</code>. ¿Quieres intentarlo de nuevo?

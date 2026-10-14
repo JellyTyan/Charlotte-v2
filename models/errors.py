@@ -15,6 +15,7 @@ class ErrorCode(Enum):
     PRIVATE_CONTENT = "E008"      # Приватный контент (требуется авторизация)
     REGION_RESTRICTED = "E009"    # Ограничено по региону (geoblock)
     SEND_ERROR = "E010"           # Ошибка отправки медиа в Telegram
+    AUTH_EXPIRED = "E011"         # Сгорели куки/аккаунты сервиса — нужна замена админом
     PREVIEW_ONLY = "PREVIEW_ONLY" # Скачалось только превью (30 сек)
 
 

@@ -12,73 +12,80 @@ logger = logging.getLogger(__name__)
 YOUTUBE_ID_REGEX = re.compile(r"https?://(?:www\.)?(?:m\.)?(?:youtu\.be/|youtube\.com/(?:shorts/|watch\?v=))([\w-]+)")
 
 
-def format_seconds_to_hhmmss(seconds: int) -> str:
-    h = seconds // 3600
-    m = (seconds % 3600) // 60
-    s = seconds % 60
-    return f"{h:02d}:{m:02d}:{s:02d}"
+def format_ms_to_hhmmss(ms: int) -> str:
+    """90500 -> '00:01:30.500'; whole seconds stay 'HH:MM:SS' as before."""
+    seconds, millis = divmod(ms, 1000)
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    base = f"{h:02d}:{m:02d}:{s:02d}"
+    return f"{base}.{millis:03d}" if millis else base
 
 
-def parse_time_range(time_range_str: str) -> Optional[Tuple[str, str, int, int]]:
+TIME_PART_REGEX = re.compile(r"([\d:]+)(?:[.,](\d{1,3}))?")
+
+
+def parse_time_range(time_range_str: str) -> Optional[Tuple[str, str, float, float]]:
     """
-    Parse a range string like '01:20-02:45', '1:30 - 2:45', '90-165' or '1:20 - inf'.
+    Parse a range string like '01:20-02:45', '1:30 - 2:45', '90-165', '1:20 - inf'
+    or with milliseconds after a comma/dot: '1:20,5-1:22,250' (',5' = 500 ms).
 
     Returns:
         tuple: (start_time_str, end_time_str, start_seconds, end_seconds) or None if invalid.
+        end_seconds is -1 for an open end.
     """
     time_range_str = time_range_str.strip()
-    parts = re.split(r"\s*to\s*|\s*-\s*", time_range_str, maxsplit=1)
+    parts = re.split(r"\s*to\s*|\s*[-–—]\s*", time_range_str, maxsplit=1)
     if len(parts) != 2:
         return None
 
     start_part, end_part = parts[0].strip(), parts[1].strip()
 
     def parse_part(part: str) -> Optional[int]:
+        """Returns milliseconds, -1 for an open end, None if invalid."""
         part = part.lower()
-        if part == "inf" or part == "infinity" or part == "end":
+        if part in ("inf", "infinity", "end"):
             return -1
 
-        # Check if digit-only seconds
-        if part.isdigit():
-            return int(part)
+        match = TIME_PART_REGEX.fullmatch(part)
+        if not match:
+            return None
+        clock, fraction = match.groups()
+        millis = int(fraction.ljust(3, "0")) if fraction else 0
 
-        # Check MM:SS or HH:MM:SS
-        p_parts = part.split(":")
         try:
-            int_parts = [int(p) for p in p_parts]
+            int_parts = [int(p) for p in clock.split(":")]
         except ValueError:
             return None
 
-        if len(int_parts) == 1:
-            return int_parts[0]
+        if len(int_parts) == 1:  # SS
+            seconds = int_parts[0]
         elif len(int_parts) == 2:  # MM:SS
             m, s = int_parts
-            if s < 0 or s >= 60 or m < 0:
+            if s >= 60:
                 return None
-            return m * 60 + s
+            seconds = m * 60 + s
         elif len(int_parts) == 3:  # HH:MM:SS
             h, m, s = int_parts
-            if s < 0 or s >= 60 or m < 0 or m >= 60 or h < 0:
+            if s >= 60 or m >= 60:
                 return None
-            return h * 3600 + m * 60 + s
+            seconds = h * 3600 + m * 60 + s
+        else:
+            return None
+        return seconds * 1000 + millis
+
+    start_ms = parse_part(start_part)
+    end_ms = parse_part(end_part)
+
+    if start_ms is None or end_ms is None or start_ms < 0:
         return None
 
-    start_seconds = parse_part(start_part)
-    end_seconds = parse_part(end_part)
-
-    if start_seconds is None or end_seconds is None:
+    if end_ms != -1 and start_ms >= end_ms:
         return None
 
-    if start_seconds < 0:
-        return None
+    start_formatted = format_ms_to_hhmmss(start_ms)
+    end_formatted = "inf" if end_ms == -1 else format_ms_to_hhmmss(end_ms)
 
-    if end_seconds != -1 and start_seconds >= end_seconds:
-        return None
-
-    start_formatted = format_seconds_to_hhmmss(start_seconds)
-    end_formatted = "inf" if end_seconds == -1 else format_seconds_to_hhmmss(end_seconds)
-
-    return start_formatted, end_formatted, start_seconds, end_seconds
+    return start_formatted, end_formatted, start_ms / 1000, -1 if end_ms == -1 else end_ms / 1000
 
 
 def get_cache_key(url: str, height: int | str = 0, is_audio_only: bool = False, is_topich: bool = False) -> str:

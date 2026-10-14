@@ -81,9 +81,7 @@ btn-close = ✕ Close
 
 # YouTube Trim
 yt-trim-sponsor-only = Trimming video is only available to Sponsors.
-yt-trim-ask-range = Send the time range to trim, like <code>01:20-02:45</code> or <code>90-165</code>:
-yt-trim-invalid-range = Didn't catch that format, sorry. Use START-END, like <code>1:30-2:45</code>. Try again?
-yt-trim-end-before-start = End time must be after start time. Want to try again?
+yt-trim-ask-range = Send the time range to trim, like <code>1:20-2:45</code> or <code>90-165</code>. Need millisecond precision? Add them after a comma: <code>1:20,250-1:22,5</code>
 yt-trim-processing = Trimming your clip, hold on a moment...
 yt-trim-out-of-bounds = That range goes beyond video duration ({ $duration }). Try again?
 yt-btn-full = 🎬 Full video
@@ -201,4 +199,4 @@ report-reply-required = Reply with <code>/report</code> to the message from me t
 report-not-bot-message = This command only works in reply to my messages 🐾
 report-success = Thanks for letting me know! I passed the details to the developer, we'll sort it out soon 🧡
 error-send-failed = ❌ Failed to send media to Telegram. The file might be corrupted or Telegram rejected it.
-yt-trim-invalid-format = Didn't catch that format, sorry. Use START-END, like <code>1:30-2:45</code>. Try again?
+yt-trim-invalid-format = Didn't catch that format, sorry. Use START-END, like <code>1:30-2:45</code>, with milliseconds after a comma: <code>1:30,250-2:45</code>. Try again?

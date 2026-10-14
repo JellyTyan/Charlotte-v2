@@ -23,7 +23,8 @@ def get_i18n_error_message(code: ErrorCode, i18n: TranslatorRunner) -> str | Non
             return i18n.get("error-large-file")
         case ErrorCode.NOT_ALLOWED:
             return i18n.get("error-not-allowed")
-        case ErrorCode.INTERNAL_ERROR:
+        case ErrorCode.INTERNAL_ERROR | ErrorCode.AUTH_EXPIRED:
+            # Пользователю сгоревшие куки — обычная внутренняя ошибка; подробности идут админу.
             return i18n.get("error-internal")
         case ErrorCode.NOT_FOUND:
             return i18n.get("error-not-found")

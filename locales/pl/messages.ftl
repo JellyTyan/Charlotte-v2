@@ -81,9 +81,7 @@ btn-close = ✕ Zamknij
 
 # YouTube Trim
 yt-trim-sponsor-only = Przycinanie wideo jest dostępne tylko dla Sponsorów.
-yt-trim-ask-range = Podaj zakres do przycięcia, np. <code>01:20-02:45</code> lub <code>90-165</code>:
-yt-trim-invalid-range = Nie zrozumiałam formatu, przepraszam. Użyj POCZĄTEK-KONIEC, np. <code>1:30-2:45</code>. Jeszcze raz?
-yt-trim-end-before-start = Koniec musi być później niż początek. Spróbujesz znowu?
+yt-trim-ask-range = Podaj zakres do przycięcia, np. <code>1:20-2:45</code> lub <code>90-165</code>. Potrzebujesz dokładności do milisekund? Dopisz je po przecinku: <code>1:20,250-1:22,5</code>
 yt-trim-processing = Przycinam klip, poczekaj chwileczkę...
 yt-trim-out-of-bounds = Ten zakres wykracza poza czas trwania wideo ({ $duration }). Spróbujesz jeszcze raz?
 yt-btn-full = 🎬 Pełne wideo
@@ -201,4 +199,4 @@ report-reply-required = Odpowiedz komendą <code>/report</code> na moją wiadomo
 report-not-bot-message = Ta komenda działa tylko w odpowiedzi na moje wiadomości 🐾
 report-success = Dzięki za zgłoszenie! Przekazałam wszystko programiście, zaraz się temu przyjrzymy 🧡
 error-send-failed = ❌ Nie udało się wysłać pliku do Telegrama. Plik może być uszkodzony lub odrzucony.
-yt-trim-invalid-format = Nie rozpoznaję tego formatu. Podaj POCZĄTEK-KONIEC, np. <code>1:30-2:45</code>. Spróbujesz ponownie?
+yt-trim-invalid-format = Nie rozpoznaję tego formatu. Podaj POCZĄTEK-KONIEC, np. <code>1:30-2:45</code>, a milisekundy po przecinku: <code>1:30,250-2:45</code>. Spróbujesz ponownie?

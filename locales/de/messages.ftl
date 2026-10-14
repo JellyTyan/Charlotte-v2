@@ -81,9 +81,7 @@ btn-close = ✕ Schließen
 
 # YouTube Trim
 yt-trim-sponsor-only = Videos zuschneiden ist nur für Sponsoren verfügbar.
-yt-trim-ask-range = Sende den Zeitbereich zum Zuschneiden, z. B. <code>01:20-02:45</code> oder <code>90-165</code>:
-yt-trim-invalid-range = Das Format habe ich nicht verstanden, sorry. Verwende START-ENDE, z. B. <code>1:30-2:45</code>. Nochmal?
-yt-trim-end-before-start = Endzeit muss nach der Startzeit liegen. Nochmal versuchen?
+yt-trim-ask-range = Sende den Zeitbereich zum Zuschneiden, z. B. <code>1:20-2:45</code> oder <code>90-165</code>. Millisekundengenau? Hänge sie mit Komma an: <code>1:20,250-1:22,5</code>
 yt-trim-processing = Schneide Clip zu, warte bitte einen Moment...
 yt-trim-out-of-bounds = Dieser Bereich liegt außerhalb der Videodauer ({ $duration }). Nochmal versuchen?
 yt-btn-full = 🎬 Ganzes Video
@@ -201,4 +199,4 @@ report-reply-required = Antworte mit <code>/report</code> auf meine Nachricht, b
 report-not-bot-message = Dieser Befehl funktioniert nur als Antwort auf meine Nachrichten 🐾
 report-success = Danke fürs Melden! Ich habe alles an den Entwickler weitergeleitet, wir kümmern uns darum 🧡
 error-send-failed = ❌ Fehler beim Senden der Medien an Telegram. Die Datei ist möglicherweise beschädigt oder wurde abgelehnt.
-yt-trim-invalid-format = Konnte das Format leider nicht erkennen. Verwende START-ENDE, z. B. <code>1:30-2:45</code>. Noch einmal versuchen?
+yt-trim-invalid-format = Konnte das Format leider nicht erkennen. Verwende START-ENDE, z. B. <code>1:30-2:45</code>, Millisekunden mit Komma: <code>1:30,250-2:45</code>. Noch einmal versuchen?

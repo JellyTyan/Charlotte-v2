@@ -27,6 +27,7 @@ MEDIA_CORE_ERROR_MAP: dict[str, ErrorCode] = {
     "download_failed": ErrorCode.INTERNAL_ERROR,
     "rate_limited": ErrorCode.INTERNAL_ERROR,
     "internal_error": ErrorCode.INTERNAL_ERROR,
+    "auth_expired": ErrorCode.AUTH_EXPIRED,
 }
 
 
@@ -35,8 +36,10 @@ def raise_media_core_error(err_data: dict, url: str, service: Services) -> None:
     err_code_str = err_data.get("error", "internal_error")
     code = MEDIA_CORE_ERROR_MAP.get(err_code_str, ErrorCode.INTERNAL_ERROR)
     msg = err_data.get("message") or f"Download error: {err_code_str}"
-    is_critical = err_code_str in ("internal_error", "download_failed", "rate_limited")
-    is_logged = err_code_str in ("internal_error", "not_found", "media_too_large", "download_failed", "rate_limited")
+    is_critical = err_code_str in ("internal_error", "download_failed", "rate_limited", "auth_expired")
+    is_logged = err_code_str in ("internal_error", "not_found", "media_too_large", "download_failed", "rate_limited", "auth_expired")
+    if err_code_str == "auth_expired":
+        msg = f"🔑 Сгорели куки/аккаунты сервиса — замените их. {msg}"
 
     raise BotError(
         code=code,

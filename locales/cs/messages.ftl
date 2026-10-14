@@ -81,9 +81,7 @@ btn-close = ✕ Zavřít
 
 # YouTube Trim
 yt-trim-sponsor-only = Ořezání videa je dostupné pouze pro Sponzory.
-yt-trim-ask-range = Pošli časový rozsah k ořezání, např. <code>01:20-02:45</code> nebo <code>90-165</code>:
-yt-trim-invalid-range = Nerozuměla jsem formátu, promiň. Použij ZAČÁTEK-KONEC, např. <code>1:30-2:45</code>. Znovu?
-yt-trim-end-before-start = Konec musí být později než začátek. Zkusíš to ještě jednou?
+yt-trim-ask-range = Pošli časový rozsah k ořezání, např. <code>1:20-2:45</code> nebo <code>90-165</code>. Potřebuješ přesnost na milisekundy? Přidej je za čárku: <code>1:20,250-1:22,5</code>
 yt-trim-processing = Ořezávám klip, chvilku počkej...
 yt-trim-out-of-bounds = Tento rozsah přesahuje délku videa ({ $duration }). Zkusíš to znovu?
 yt-btn-full = 🎬 Celé video
@@ -201,4 +199,4 @@ report-reply-required = Odpověz příkazem <code>/report</code> na mou zprávu,
 report-not-bot-message = Tento příkaz funguje jen jako odpověď na moje zprávy 🐾
 report-success = Děkuju za nahlášení! Všechno jsem předala vývojáři, brzy to vyřešíme 🧡
 error-send-failed = ❌ Odeslání médií do Telegramu se nezdařilo. Soubor může být poškozen nebo odmítnut.
-yt-trim-invalid-format = Tento formát se nepodařilo rozpoznat. Použij ZAČÁTEK-KONEC, např. <code>1:30-2:45</code>. Zkusit znovu?
+yt-trim-invalid-format = Tento formát se nepodařilo rozpoznat. Použij ZAČÁTEK-KONEC, např. <code>1:30-2:45</code>, milisekundy za čárkou: <code>1:30,250-2:45</code>. Zkusit znovu?

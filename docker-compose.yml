@@ -66,6 +66,7 @@ services:
 
   lossless-core:
     image: ghcr.io/jellytyan/lossless-core:latest
+    pull_policy: always
     container_name: charlotte_lossless_core
     restart: always
     volumes:
@@ -88,7 +89,7 @@ services:
 
   media-core:
     image: ghcr.io/jellytyan/media-core:latest
-    pull_policy: never
+    pull_policy: always
     container_name: charlotte_media_core
     restart: always
     volumes:

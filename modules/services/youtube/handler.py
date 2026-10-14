@@ -526,6 +526,17 @@ async def youtube_handler(
     await register_message_owner(menu_msg, user_id)
 
 
+async def delete_trim_prompts(bot, chat_id: int, state_data: dict) -> None:
+    """Removes trim service messages (range prompt, format errors) so they don't clutter the chat."""
+    message_ids = state_data.get("service_message_ids") or []
+    if not message_ids:
+        return
+    try:
+        await bot.delete_messages(chat_id=chat_id, message_ids=message_ids)
+    except Exception:
+        pass
+
+
 @youtube_router.callback_query(YouTubeActionCallback.filter())
 async def on_yt_action_callback(
     callback: CallbackQuery,
@@ -549,6 +560,8 @@ async def on_yt_action_callback(
     action = callback_data.action
 
     if action == "cancel":
+        if await state.get_state() == YouTubeStates.entering_time_range:
+            await delete_trim_prompts(callback.bot, callback.message.chat.id, await state.get_data())
         await state.clear()
         try:
             await callback.message.delete()
@@ -559,6 +572,9 @@ async def on_yt_action_callback(
         return
 
     elif action == "to_adv":
+        if await state.get_state() == YouTubeStates.entering_time_range:
+            await delete_trim_prompts(callback.bot, callback.message.chat.id, await state.get_data())
+            await state.clear()
         meta_data["ui_mode"] = "advanced"
         await cache_set(f"yt_meta:{h}", meta_data, ttl=3600)
         kb = build_advanced_keyboard(callback_data.owner_id, h, meta_data, i18n)
@@ -665,7 +681,8 @@ async def on_yt_action_callback(
             })
             ask_text = i18n.get("yt-trim-ask-range") if i18n else "Введите интервал для обрезки в формате <b>hh:mm:ss-hh:mm:ss</b>:"
             kb = build_trim_input_keyboard(callback_data.owner_id, h, i18n)
-            await callback.message.reply(ask_text, reply_markup=kb, parse_mode="HTML")
+            ask_msg = await callback.message.reply(ask_text, reply_markup=kb, parse_mode="HTML")
+            await state.update_data(service_message_ids=[ask_msg.message_id])
             await callback.answer()
             return
         else:
@@ -766,19 +783,21 @@ async def time_range_message_handler(
     duration = data.get("duration", 0)
     dur_str = format_duration(duration) if duration else ""
 
+    async def reject(text: str) -> None:
+        reply = await message.reply(text)
+        await state.update_data(service_message_ids=data.get("service_message_ids", []) + [reply.message_id])
+
     parsed = parse_time_range(message.text)
     if not parsed:
-        await message.reply(i18n.get("yt-trim-invalid-format"))
+        await reject(i18n.get("yt-trim-invalid-format"))
         return
 
     start_formatted, end_formatted, start_seconds, end_seconds = parsed
 
+    # duration is whole seconds, so 3:25,500 still fits a 3:25 video
     if duration > 0:
-        if start_seconds >= duration:
-            await message.reply(i18n.get("yt-trim-out-of-bounds", duration=dur_str))
-            return
-        if end_seconds != -1 and end_seconds > duration:
-            await message.reply(i18n.get("yt-trim-out-of-bounds", duration=dur_str))
+        if int(start_seconds) >= duration or (end_seconds != -1 and int(end_seconds) > duration):
+            await reject(i18n.get("yt-trim-out-of-bounds", duration=dur_str))
             return
 
     target_height = data.get("target_height", 0)
@@ -797,10 +816,8 @@ async def time_range_message_handler(
 
     menu_message_id = data.get("menu_message_id")
     if menu_message_id:
-        try:
-            await message.bot.delete_message(chat_id=message.chat.id, message_id=menu_message_id)
-        except Exception:
-            pass
+        data["service_message_ids"] = data.get("service_message_ids", []) + [menu_message_id]
+    await delete_trim_prompts(message.bot, message.chat.id, data)
 
     await state.clear()
 
