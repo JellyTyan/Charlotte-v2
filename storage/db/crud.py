@@ -1115,33 +1115,9 @@ MUSIC_PLATFORMS = (
 )
 
 
-def _calc_music_fuzzy_score(query: str, author: str, title: str) -> float:
-    """
-    Вычисляет коэффициент схожести (0.0 - 1.0) между поисковым запросом и треком (автор/название).
-    Учитывает как прямую схожесть строки, так и пословное совпадение.
-    """
-    from difflib import SequenceMatcher
-
-    q = query.lower().strip()
-    full1 = f"{author} {title}".lower().strip()
-    full2 = f"{title} {author}".lower().strip()
-
-    score1 = SequenceMatcher(None, q, full1).ratio()
-    score2 = SequenceMatcher(None, q, full2).ratio()
-    best_direct = max(score1, score2)
-
-    q_words = q.split()
-    t_words = full1.split()
-    if q_words and t_words:
-        word_scores = []
-        for qw in q_words:
-            best_w = max(SequenceMatcher(None, qw, tw).ratio() for tw in t_words)
-            word_scores.append(best_w)
-        token_score = sum(word_scores) / len(word_scores)
-    else:
-        token_score = 0.0
-
-    return max(best_direct, token_score)
+# Порог word_similarity для нечёткого поиска музыки. «kai endzhel»→«Kai Angel» = 0.33,
+# «teylor svift»→«Taylor Swift» = 0.38 (транслит кириллицы), «ken karson»→«Ken Carson» = 0.62.
+MUSIC_FUZZY_THRESHOLD = 0.33
 
 
 async def search_cached_music(
@@ -1151,11 +1127,13 @@ async def search_cached_music(
     platforms: tuple[str, ...] | None = MUSIC_PLATFORMS,
 ) -> list[MediaCacheDTO]:
     """
-    Поиск по кэшированной музыке с поддержкой:
-    1. Всех музыкальных сервисов + YouTube audio
-    2. Регистронезависимой проверки платформ
-    3. Мульти-словного поиска (Артист + Название в любом порядке)
-    4. Fuzzy / опечаточного fallback-поиска по похожести (если точных совпадений мало)
+    Поиск по кэшированной музыке (все музыкальные сервисы + YouTube audio).
+
+    1. Все слова запроса есть в артисте или названии (в любом порядке).
+       Сначала треки, где запрос — это артист целиком, потом начало артиста/названия, потом остальное.
+    2. Если мало — нечёткий pg_trgm по «артист + название»: опечатки («arctic monkys»)
+       и артист кириллицей («кен карсон» → «Ken Carson»).
+    Ошибочная раскладка и транслит учитываются в обоих шагах (query_variants).
     """
     stmt = (
         select(MediaCache)
@@ -1174,78 +1152,54 @@ async def search_cached_music(
         lower_platforms = [p.lower() for p in platforms if p.lower() != "tiktok"]
         stmt = stmt.where(func.lower(MediaCache.platform).in_(lower_platforms))
 
-    clean_query = query.strip()
-    if not clean_query:
+    if not query.strip():
         # Без запроса — последние добавленные треки
         stmt = stmt.order_by(MediaCache.created_at.desc()).limit(limit)
         result = await session.execute(stmt)
         rows = result.scalars().all()
         return [MediaCacheDTO.model_validate(row, from_attributes=True) for row in rows]
 
-    words = [w for w in clean_query.split() if w]
-    found_rows: list[MediaCache] = []
-    seen_ids: set[int] = set()
+    variants = query_variants(query)
+    author = func.trim(func.coalesce(MediaCache.data["author"].as_string(), ""))
+    title = func.coalesce(MediaCache.data["title"].as_string(), "")
 
+    def like(col, pattern: str):
+        return col.ilike(pattern, escape="\\")
+
+    # 1. Все слова есть в артисте или названии — хотя бы для одного варианта запроса
+    all_words = or_(*[
+        and_(*[
+            or_(like(title, f"%{escape_ilike(w)}%"), like(author, f"%{escape_ilike(w)}%"))
+            for w in v.split()
+        ])
+        for v in variants
+    ])
+    escaped = [escape_ilike(v) for v in variants]
     relevance_rank = case(
-        (MediaCache.data["title"].as_string().ilike(clean_query), 1),
-        (MediaCache.data["title"].as_string().ilike(f"{clean_query}%"), 2),
-        (MediaCache.data["title"].as_string().ilike(f"%{clean_query}%"), 3),
+        (or_(*[like(author, e) for e in escaped]), 0),
+        (or_(*[or_(like(author, f"{e}%"), like(title, e)) for e in escaped]), 1),
+        (or_(*[or_(like(title, f"{e}%"), like(author, f"%{e}%")) for e in escaped]), 2),
+        (or_(*[like(title, f"%{e}%") for e in escaped]), 3),
         else_=4,
     )
-
-    # 1. Поиск: ВСЕ слова присутствуют (в названии или авторе)
-    word_filters = [
-        or_(
-            MediaCache.data["title"].as_string().ilike(f"%{w}%"),
-            MediaCache.data["author"].as_string().ilike(f"%{w}%"),
-        )
-        for w in words
-    ]
-    and_stmt = (
-        stmt.where(and_(*word_filters))
-        .order_by(relevance_rank, MediaCache.created_at.desc())
-        .limit(limit)
+    res = await session.execute(
+        stmt.where(all_words).order_by(relevance_rank, MediaCache.created_at.desc()).limit(limit)
     )
-    res = await session.execute(and_stmt)
-    for row in res.scalars().all():
-        if row.media_id not in seen_ids:
-            seen_ids.add(row.media_id)
-            found_rows.append(row)
+    found_rows = list(res.scalars().all())
 
-    # 2. Если результатов мало и слов больше одного — ищем совпадение хотя бы одного слова
-    if len(found_rows) < limit and len(words) > 1:
-        or_stmt = stmt.where(or_(*word_filters))
-        if seen_ids:
-            or_stmt = or_stmt.where(~MediaCache.media_id.in_(seen_ids))
-        or_stmt = or_stmt.order_by(relevance_rank, MediaCache.created_at.desc()).limit(limit - len(found_rows))
-        res = await session.execute(or_stmt)
-        for row in res.scalars().all():
-            if row.media_id not in seen_ids:
-                seen_ids.add(row.media_id)
-                found_rows.append(row)
-
-    # 3. Fuzzy / опечаточный поиск (если точных совпадений нет или меньше лимита)
+    # 2. Нечёткий поиск, если точных совпадений меньше лимита
     if len(found_rows) < limit:
-        cand_stmt = stmt
-        if seen_ids:
-            cand_stmt = cand_stmt.where(~MediaCache.media_id.in_(seen_ids))
-        cand_stmt = cand_stmt.order_by(MediaCache.created_at.desc()).limit(200)
-        candidates = (await session.execute(cand_stmt)).scalars().all()
-
-        scored_candidates = []
-        for cand in candidates:
-            data = cand.data or {}
-            c_title = data.get("title") if isinstance(data, dict) else getattr(data, "title", None)
-            c_author = data.get("author") if isinstance(data, dict) else getattr(data, "author", None)
-            score = _calc_music_fuzzy_score(clean_query, c_author or "", c_title or "")
-            if score >= 0.55:
-                scored_candidates.append((score, cand))
-
-        scored_candidates.sort(key=lambda x: x[0], reverse=True)
-        for _, cand in scored_candidates[: limit - len(found_rows)]:
-            if cand.media_id not in seen_ids:
-                seen_ids.add(cand.media_id)
-                found_rows.append(cand)
+        doc = func.concat(author, " ", title)
+        score = func.greatest(*[func.word_similarity(v, doc) for v in variants])
+        # Похожесть на артиста целиком поднимает его треки над случайным словом в названии
+        author_score = func.greatest(*[func.similarity(v, author) for v in variants])
+        fuzzy_stmt = stmt.where(score >= MUSIC_FUZZY_THRESHOLD)
+        if found_rows:
+            fuzzy_stmt = fuzzy_stmt.where(~MediaCache.media_id.in_([r.media_id for r in found_rows]))
+        res = await session.execute(
+            fuzzy_stmt.order_by((score + author_score).desc(), MediaCache.created_at.desc()).limit(limit - len(found_rows))
+        )
+        found_rows += res.scalars().all()
 
     return [MediaCacheDTO.model_validate(row, from_attributes=True) for row in found_rows]
 
