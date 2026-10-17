@@ -79,6 +79,8 @@ services:
       - YOUTUBE_PROXY=socks5://warp:1080
       - YOUTUBE_FALLBACK_PROXY=${YOUTUBE_FALLBACK_PROXY:-}
       - REDIS_ADDR=${REDIS_ADDR}
+      - YOUTUBE_ENGINE=${YOUTUBE_ENGINE}
+      - YOUTUBE_IMPERSONATE=${YOUTUBE_IMPERSONATE}
     networks:
       - charlotte-net
     deploy:

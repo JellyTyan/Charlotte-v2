@@ -129,7 +129,7 @@ async def get_youtube_metadata(http_client: httpx.AsyncClient, url: str) -> dict
         res = await http_client.post(
             "http://media-core:9546/youtube/metadata",
             json=payload,
-            timeout=30.0
+            timeout=90.0
         )
     except Exception as e:
         logger.error(f"Failed to fetch YouTube metadata from media-core: {e}")
