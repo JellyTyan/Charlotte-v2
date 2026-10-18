@@ -20,7 +20,7 @@ twitter_router = Router(name="twitter")
 
 logger = logging.getLogger(__name__)
 
-TWITTER_REGEX = r"https?://(?:twitter|x)\.com/\w+/status/\d+"
+TWITTER_REGEX = r"https?://(?:www\.|mobile\.)?(?:twitter|x)\.com/(?:[\w-]+/){1,2}status/\d+"
 
 
 @twitter_router.message(F.text.regexp(TWITTER_REGEX))
@@ -85,20 +85,57 @@ async def twitter_handler(
 
         ensure_nsfw_allowed(is_nsfw, sponsor, allow_nsfw, url, Services.TWITTER)
 
-        author_data = metadata.get('author') if isinstance(metadata.get('author'), dict) else {}
-        author_username = author_data.get('username') or metadata.get('author_username')
-        author_name = author_data.get('name')
-        author_url = author_data.get('url') or (f"https://x.com/{author_username}" if author_username else "")
-        author_display = author_name or author_username
-        author_link = format_author_link(author_display, author_url, icon="👤")
+        parent = (metadata.get('children') or [None])[0]
+        description = _tweet_text(metadata)
+        media_content = build_media_items(
+            metadata.get('items', []),
+            build_caption(header=_author_link(metadata, "👤"), description=description),
+            is_blurred,
+            is_nsfw,
+        )
 
-        description = escape_html((metadata.get('caption') or metadata.get('title') or "").strip())
-        caption = build_caption(header=author_link, description=description)
-
-        media_content = build_media_items(metadata.get('items', []), caption, is_blurred, is_nsfw)
+        parent_content = []
+        if parent:
+            if media_content:
+                parent_caption = build_caption(header=_author_link(parent, "↩️"), description=_tweet_text(parent))
+            else:
+                reply = f"{description}\n\n" if description else ""
+                parent_caption = build_caption(
+                    header=_author_link(metadata, "👤"),
+                    description=f"{reply}{_author_link(parent, '↩️')}\n{_tweet_text(parent)}",
+                )
+            parent_nsfw = bool(parent.get('is_nsfw') or parent.get('is_sensitive'))
+            parent_content = build_media_items(
+                parent.get('items', []),
+                parent_caption,
+                bool(parent.get('is_blurred') or parent_nsfw),
+                parent_nsfw,
+            )
 
     if media_content:
         await send_manager.send(message, media_content, service="twitter", cache_key=cache_key, db_session=db_session)
+        if parent_content:
+            await send_manager.send(
+                message,
+                parent_content,
+                service="twitter",
+                db_session=db_session,
+                skip_reaction=True,
+                skip_notification=True,
+            )
+    elif parent_content:
+        await send_manager.send(message, parent_content, service="twitter", cache_key=cache_key, db_session=db_session)
+
+
+def _author_link(data: dict, icon: str) -> str:
+    author = data.get('author') if isinstance(data.get('author'), dict) else {}
+    username = author.get('username') or data.get('author_username')
+    url = author.get('url') or (f"https://x.com/{username}" if username else "")
+    return format_author_link(author.get('name') or username, url, icon=icon)
+
+
+def _tweet_text(data: dict) -> str:
+    return escape_html((data.get('caption') or data.get('title') or "").strip())
 
 
 def get_cache_key(url: str) -> str:
