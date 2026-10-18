@@ -359,6 +359,7 @@ class MediaSender:
                             document=media_document,
                             thumbnail=thumb,
                             disable_notification=True,
+                            disable_content_type_detection=True,
                         )
                         if msg.document:
                             item.telegram_document_file_id = msg.document.file_id
