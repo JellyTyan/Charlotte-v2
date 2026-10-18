@@ -27,6 +27,7 @@ msg-help =
     <b>Video:</b>
       • YouTube (videa, shortsy, audio do 100 MB, ⭐ 1 GB pro Sponzory)
       • TikTok (videa a fotky)
+      • Douyin (videa a fotky)
       • Instagram (reels a příspěvky)
       • Twitter / X (videa a obrázky)
       • Reddit (všechna média z příspěvků)

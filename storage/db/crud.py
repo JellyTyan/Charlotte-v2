@@ -1140,7 +1140,7 @@ async def search_cached_music(
         .where(
             MediaCache.media_type == "audio",
             MediaCache.telegram_file_id.isnot(None),
-            func.lower(MediaCache.platform) != "tiktok",
+            func.lower(MediaCache.platform).notin_(("tiktok", "douyin")),
             ~MediaCache.cache_key.like("%:lossless%"),
             or_(
                 MediaCache.telegram_document_file_id.is_(None),
@@ -1149,7 +1149,7 @@ async def search_cached_music(
         )
     )
     if platforms:
-        lower_platforms = [p.lower() for p in platforms if p.lower() != "tiktok"]
+        lower_platforms = [p.lower() for p in platforms if p.lower() not in ("tiktok", "douyin")]
         stmt = stmt.where(func.lower(MediaCache.platform).in_(lower_platforms))
 
     if not query.strip():

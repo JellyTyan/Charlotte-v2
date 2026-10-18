@@ -929,6 +929,7 @@ class MediaSender:
             "ytmusic": Services.YTMUSIC,
             "reddit": Services.REDDIT,
             "tiktok": Services.TIKTOK,
+            "douyin": Services.DOUYIN,
             "instagram": Services.INSTAGRAM,
             "pinterest": Services.PINTEREST,
             "twitter": Services.TWITTER,

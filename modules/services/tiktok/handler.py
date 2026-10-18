@@ -1,6 +1,5 @@
 import logging
 import re
-from pathlib import Path
 
 from curl_cffi.requests import AsyncSession as CurlAsyncSession
 import httpx
@@ -9,13 +8,12 @@ from aiogram.types import Message
 from aiogram.utils.chat_action import ChatActionSender
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.media import MediaContent, MediaType
 from models.service_list import Services
-from modules.services._shared import build_media_items, cache_check, make_cache_key
+from modules.services._shared import build_post_media, cache_check, make_cache_key
 from senders.media_sender import MediaSender
 from storage.db.crud import check_if_user_premium
 from tasks.task_manager import task_manager
-from utils import build_caption, escape_html, format_author_link, extract_url
+from utils import format_author_link, extract_url
 
 tiktok_router = Router(name="tiktok")
 
@@ -99,29 +97,7 @@ async def tiktok_handler(message: Message, db_session: AsyncSession, http_client
         author_url = author_data.get('url') or (f"https://www.tiktok.com/@{author_username}/" if author_username else "")
         author_display = author_username or author_name
         author_link = format_author_link(author_display, author_url, icon="👤")
-
-        description = escape_html((metadata.get('caption') or metadata.get('title') or "").strip())
-        caption = build_caption(header=author_link, description=description)
-
-        is_nsfw = bool(metadata.get('is_nsfw') or metadata.get('is_sensitive'))
-        is_blurred = bool(metadata.get('is_blurred') or is_nsfw)
-
-        media_content = build_media_items(metadata.get('items', []), caption, is_blurred, is_nsfw)
-
-        music_info = metadata.get('audio') or metadata.get('music_info') or {}
-        if music_info and music_info.get('path'):
-            audio_cover_str = music_info.get('cover') or music_info.get('cover_path')
-            audio_cover = Path(audio_cover_str) if audio_cover_str and Path(audio_cover_str).exists() else None
-            media_content.append(
-                MediaContent(
-                    type=MediaType.AUDIO,
-                    path=Path(music_info.get('path')),
-                    title=music_info.get('title'),
-                    performer=music_info.get('author'),
-                    cover=audio_cover,
-                    duration=music_info.get('duration'),
-                )
-            )
+        media_content = build_post_media(metadata, author_link)
 
     if media_content:
         await send_manager.send(message, media_content, service="tiktok", cache_key=cache_key, db_session=db_session)
@@ -129,3 +105,4 @@ async def tiktok_handler(message: Message, db_session: AsyncSession, http_client
 
 def get_cache_key(url: str, sponsor: bool) -> str:
     return make_cache_key("tt", url, r"/(?:video|photo)/(\d+)", ":sponsor" if sponsor else "")
+

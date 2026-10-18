@@ -27,6 +27,7 @@ msg-help =
     <b>Video:</b>
       • YouTube (videos, shorts, audio up to 100 MB, ⭐ 1 GB for Sponsors)
       • TikTok (videos and photos)
+      • Douyin (videos and photos)
       • Instagram (reels and posts)
       • Twitter / X (videos and images)
       • Reddit (all media from posts)

@@ -1,4 +1,4 @@
-"""Shared helpers for media services (tiktok, instagram, twitter, reddit, pixiv, pinterest)."""
+"""Shared helpers for media services (tiktok, douyin, instagram, twitter, reddit, pixiv, pinterest)."""
 import hashlib
 import re
 from pathlib import Path
@@ -9,6 +9,7 @@ from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.service_list import Services
 from storage.db.crud import get_media_cache
+from utils import build_caption, escape_html
 
 
 def make_cache_key(prefix: str, url: str, id_regex: str, suffix: str = "") -> str:
@@ -95,6 +96,33 @@ def build_media_items(items: list[dict], caption: str, is_blurred: bool, is_nsfw
                 cover=cover_path,
                 is_blurred=is_blurred,
                 is_nsfw=is_nsfw,
+            )
+        )
+    return media_content
+
+
+def build_post_media(metadata: dict, author_link: str) -> list[MediaContent]:
+    """Caption + items + background music of a media-core result (tiktok, douyin)."""
+    description = escape_html((metadata.get('caption') or metadata.get('title') or "").strip())
+    caption = build_caption(header=author_link, description=description)
+
+    is_nsfw = bool(metadata.get('is_nsfw') or metadata.get('is_sensitive'))
+    is_blurred = bool(metadata.get('is_blurred') or is_nsfw)
+
+    media_content = build_media_items(metadata.get('items', []), caption, is_blurred, is_nsfw)
+
+    music_info = metadata.get('audio') or metadata.get('music_info') or {}
+    if music_info and music_info.get('path'):
+        audio_cover_str = music_info.get('cover') or music_info.get('cover_path')
+        audio_cover = Path(audio_cover_str) if audio_cover_str and Path(audio_cover_str).exists() else None
+        media_content.append(
+            MediaContent(
+                type=MediaType.AUDIO,
+                path=Path(music_info.get('path')),
+                title=music_info.get('title'),
+                performer=music_info.get('author'),
+                cover=audio_cover,
+                duration=music_info.get('duration'),
             )
         )
     return media_content

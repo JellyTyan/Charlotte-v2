@@ -23,6 +23,7 @@
 ## <img src="https://cdn.discordapp.com/emojis/1119261362632278068.webp?size=240" width="20px" height="20px"> Available Services
 - [x] Youtube / Shorts
 - [x] TikTok
+- [x] Douyin
 - [x] Youtube Music
 - [x] SoundCloud
 - [x] Spotify

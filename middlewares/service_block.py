@@ -7,6 +7,7 @@ from models.settings import ChatSettingsJson
 
 SERVICE_PATTERNS = {
     "applemusic": r"https?://music\.apple\.com/",
+    "douyin": r"https?://(?:(?:www\.|v\.)?douyin\.com|(?:www\.)?iesdouyin\.com)/",
     "deezer": r"https?:\/\/(?:www\.|link\.)?deezer\.com/",
     "instagram": r"https?://(?:www\.)?instagram\.com/",
     "pinterest": r"https?://(?:www\.)?pinterest\.com/",

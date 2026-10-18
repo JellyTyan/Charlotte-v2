@@ -35,6 +35,7 @@ class YoutubeSettings(MediaSettings):
 class ServicesSettings(BaseModel):
     youtube: YoutubeSettings = YoutubeSettings()
     tiktok: MediaSettings = MediaSettings()
+    douyin: MediaSettings = MediaSettings()
     instagram: MediaSettings = MediaSettings()
     twitter: MediaSettingsExtra = MediaSettingsExtra()
     pinterest: MediaSettingsExtra = MediaSettingsExtra()
@@ -80,6 +81,7 @@ class ChatServicesSettings(BaseModel):
 
     youtube: MediaSettings = MediaSettings()
     tiktok: MediaSettings = MediaSettings()
+    douyin: MediaSettings = MediaSettings()
     instagram: MediaSettings = MediaSettings()
     twitter: MediaSettingsExtra = MediaSettingsExtra()
     pinterest: MediaSettingsExtra = MediaSettingsExtra()

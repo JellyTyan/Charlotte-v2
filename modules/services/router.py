@@ -6,6 +6,7 @@ from .youtube.handler import youtube_router
 from .ytmusic.handler import ytmusic_router
 from .twitter.handler import twitter_router
 from .tiktok.handler import tiktok_router
+from .douyin.handler import douyin_router
 from .spotify.handler import spotify_router
 from .soundcloud.handler import soundcloud_router
 from .reddit.handler import reddit_router
@@ -24,6 +25,7 @@ service_router.include_router(youtube_router)
 service_router.include_router(ytmusic_router)
 service_router.include_router(twitter_router)
 service_router.include_router(tiktok_router)
+service_router.include_router(douyin_router)
 service_router.include_router(spotify_router)
 service_router.include_router(soundcloud_router)
 service_router.include_router(reddit_router)

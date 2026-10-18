@@ -5,6 +5,7 @@ class Services(Enum):
     YTMUSIC = "YTMusic"
     REDDIT = "Reddit"
     TIKTOK = "TikTok"
+    DOUYIN = "Douyin"
     INSTAGRAM = "Instagram"
     PINTEREST = "Pinterest"
     TWITTER = "Twitter"
