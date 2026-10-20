@@ -12,6 +12,7 @@ from aiogram.types import ReactionTypeEmoji
 from aiogram.exceptions import (
     TelegramEntityTooLarge,
     TelegramRetryAfter,
+    TelegramBadRequest,
     TelegramNetworkError,
     TelegramAPIError,
 )
@@ -672,6 +673,9 @@ class MediaSender:
                     except Exception as raw_e:
                         e = raw_e
 
+                from core.error_handler import _is_ignorable_tg_error
+                if isinstance(e, TelegramBadRequest) and _is_ignorable_tg_error(e):
+                    raise
                 raise BotError(
                     code=ErrorCode.SEND_ERROR,
                     message=f"Failed to send media group: {e}",
