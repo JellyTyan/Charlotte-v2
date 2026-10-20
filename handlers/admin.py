@@ -13,8 +13,7 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
     CallbackQuery,
-    FSInputFile,
-    ReplyKeyboardRemove
+    FSInputFile
 )
 from aiogram.exceptions import TelegramRetryAfter, TelegramForbiddenError, TelegramBadRequest
 from fluentogram import TranslatorHub, TranslatorRunner
@@ -1068,13 +1067,13 @@ async def admin_purge_cache_handler(callback: CallbackQuery, db_session: AsyncSe
             await redis_client.delete(cache_key)
             await redis_client.delete(f"mediacache:{cache_key}")
         except Exception:
-            pass
+            logger.debug("best-effort call failed", exc_info=True)
     if media_redis_client:
         try:
             await media_redis_client.delete(cache_key)
             await media_redis_client.delete(f"mediacache:{cache_key}")
         except Exception:
-            pass
+            logger.debug("best-effort call failed", exc_info=True)
 
     await callback.answer(f"Кэш для {cache_key} удалён!", show_alert=True)
 
@@ -1092,7 +1091,7 @@ async def admin_purge_cache_handler(callback: CallbackQuery, db_session: AsyncSe
         try:
             await callback.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(inline_keyboard=new_keyboard))
         except Exception:
-            pass
+            logger.debug("best-effort call failed", exc_info=True)
 
 
 @admin_router.callback_query(lambda c: c.data == "noop")

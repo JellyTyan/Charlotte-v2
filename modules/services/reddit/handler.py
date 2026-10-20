@@ -11,7 +11,7 @@ from models.service_list import Services
 from modules.services._shared import build_media_items, cache_check, ensure_nsfw_allowed, make_cache_key
 from senders.media_sender import MediaSender
 from storage.db.crud import check_if_user_premium, get_chat_settings
-from tasks.task_manager import task_manager
+from tasks.task_manager import resolve_url, task_manager
 from utils import escape_html, build_caption, format_author_link, extract_url
 
 reddit_router = Router(name="reddit")
@@ -40,11 +40,7 @@ async def reddit_handler(
     await react_safe(message, "👀")
 
     if "/s/" in url:
-        try:
-            res = await http_client.head(url, follow_redirects=True, timeout=5.0)
-            url = str(res.url)
-        except Exception:
-            pass
+        url = await resolve_url(http_client, url)
 
     sponsor = await check_if_user_premium(db_session, user_id)
 

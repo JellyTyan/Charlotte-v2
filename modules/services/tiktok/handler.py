@@ -1,7 +1,5 @@
 import logging
-import re
 
-from curl_cffi.requests import AsyncSession as CurlAsyncSession
 import httpx
 from aiogram import F, Router
 from aiogram.types import Message
@@ -12,7 +10,7 @@ from models.service_list import Services
 from modules.services._shared import build_post_media, cache_check, make_cache_key
 from senders.media_sender import MediaSender
 from storage.db.crud import check_if_user_premium
-from tasks.task_manager import task_manager
+from tasks.task_manager import resolve_url, task_manager
 from utils import format_author_link, extract_url
 
 tiktok_router = Router(name="tiktok")
@@ -20,25 +18,6 @@ tiktok_router = Router(name="tiktok")
 logger = logging.getLogger(__name__)
 
 TIKTOK_REGEX = r"https?://(?:(?:www\.|m\.)?tiktok\.com/\S+|(?:vm|vt)\.tiktok\.com/\S+|(?:www\.)?tt\.site/\S+)"
-
-
-async def resolve_tiktok_url(url: str) -> str:
-    """
-    Resolves short or redirecting TikTok URLs (e.g. tt.site/t/..., vm.tiktok.com/..., vt.tiktok.com/...)
-    to canonical tiktok.com/@user/video/... or tiktok.com/@user/photo/... URL
-    using curl_cffi with Chrome browser impersonation.
-    """
-    if re.search(r"tiktok\.com/.+/(?:video|photo)/\d+", url):
-        return url
-
-    try:
-        async with CurlAsyncSession(impersonate="chrome") as session:
-            res = await session.get(url, allow_redirects=True, timeout=10.0)
-            final_url = str(res.url)
-            return final_url.split("#")[0]
-    except Exception as e:
-        logger.warning(f"Failed to resolve TikTok URL {url} with curl_cffi: {e}")
-        return url
 
 
 @tiktok_router.message(F.text.regexp(TIKTOK_REGEX))
@@ -64,7 +43,7 @@ async def tiktok_handler(message: Message, db_session: AsyncSession, http_client
 
     async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=message.chat.id):
         send_manager = MediaSender()
-        resolved_url = await resolve_tiktok_url(url)
+        resolved_url = url if "/video/" in url or "/photo/" in url else (await resolve_url(http_client, url)).split("#")[0]
         cache_key = get_cache_key(resolved_url, sponsor)
 
         cached = await cache_check(db_session, cache_key)

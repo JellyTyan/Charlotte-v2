@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
 from aiogram import types, Bot
-from aiogram.types import ReactionTypeEmoji
 from aiogram.exceptions import (
     TelegramEntityTooLarge,
     TelegramRetryAfter,
@@ -20,11 +19,10 @@ from aiogram.utils.chat_action import ChatActionSender
 from aiogram.utils.media_group import MediaGroupBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from utils import delete_files, truncate_string, translate_text, safe_truncate_html
+from utils import delete_files, translate_text, safe_truncate_html
 from models.media import MediaContent, MediaType
 from models.errors import BotError, ErrorCode
 from storage.db.crud import (
-    get_user,
     get_user_settings,
     get_chat_settings,
     upsert_media_cache,
@@ -39,7 +37,7 @@ from core.config import Config
 
 logger = logging.getLogger(__name__)
 
-_IS_LOCAL_API = bool(os.getenv("TELEGRAM_LOCAL") or os.getenv("TELEGRAM_BOT_API_URL"))
+_IS_LOCAL_API = Config.instance().TELEGRAM_LOCAL
 AD_TEXT = "<a href='https://t.me/CharlotteFox_Bot'>Charlotte 🧡</a>"
 
 REACTION_EMOJIS = [
@@ -127,9 +125,8 @@ def with_retry(max_retries: int = 5):
         @wraps(func)
         async def wrapper(*args, **kwargs):
             # Локальный импорт Redis, чтобы избежать циклических зависимостей при старте
-            from storage.cache.redis_client import redis_client
 
-            for attempt in range(max_retries):
+            for _ in range(max_retries):
                 try:
                     client = _redis_module.redis_client
                     if client:
@@ -232,9 +229,7 @@ class MediaSender:
             1024 * 1024
         )
 
-        max_size_mb = (
-            (4000 if _IS_LOCAL_API else 2000) if is_audio else (2000 if _IS_LOCAL_API else 50)
-        )
+        max_size_mb = 2000 if _IS_LOCAL_API else 50
 
         if size_mb > max_size_mb:
             filename = path_to_check.name if path_to_check else (item.filename or "unknown")
@@ -528,7 +523,7 @@ class MediaSender:
                     try:
                         await message.react([])
                     except Exception:
-                        pass
+                        logger.debug("best-effort call failed", exc_info=True)
 
             # 8. Если дамп упал, но юзеру доставили (сгенерировался file_id), сохраняем кэш постфактум
             if not dump_success and cache_key and db_session and service:
@@ -631,7 +626,7 @@ class MediaSender:
                 # Кэшируем новые file_id, если их не было
                 if isinstance(sent_messages, list):
                     all_sent.extend(sent_messages)
-                    for item, sent_msg in zip(group_items, sent_messages):
+                    for item, sent_msg in zip(group_items, sent_messages, strict=False):
                         if sent_msg.photo:
                             item.telegram_file_id = sent_msg.photo[-1].file_id
                         elif sent_msg.video:
@@ -648,7 +643,7 @@ class MediaSender:
                     message="File is too large for Telegram",
                     service=self._get_service_enum(service) if service else None,
                     is_logged=True,
-                )
+                ) from None
             except Exception as e:
                 # Telegram rejects the image as a photo (broken, or too long/large) -> fallback to documents
                 if any(err in str(e) for err in ("IMAGE_PROCESS_FAILED", "PHOTO_INVALID_DIMENSIONS")) and not send_as_raw:
@@ -682,7 +677,7 @@ class MediaSender:
                     service=self._get_service_enum(service) if service else None,
                     is_logged=True,
                     critical=True,
-                )
+                ) from e
 
         return all_sent
 
@@ -724,14 +719,14 @@ class MediaSender:
                 code=ErrorCode.LARGE_FILE,
                 message="Audio file is too large for Telegram",
                 is_logged=True,
-            )
+            ) from None
         except (TelegramNetworkError, TelegramAPIError) as e:
             raise BotError(
                 code=ErrorCode.SEND_ERROR,
                 message=f"Failed to send audio via Telegram: {e}",
                 is_logged=True,
                 critical=True,
-            )
+            ) from e
 
         # Отправка обложки отдельным документом, если включено в настройках
         service_settings = (

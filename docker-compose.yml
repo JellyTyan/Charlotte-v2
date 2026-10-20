@@ -53,6 +53,7 @@ services:
 
   warp:
     image: dublok/cloudflare-warp:latest
+    pull_policy: always
     container_name: charlotte_warp
     restart: always
     cap_add:
@@ -135,6 +136,7 @@ services:
 
   telegram-bot-api:
     image: aiogram/telegram-bot-api:latest
+    pull_policy: always
     container_name: telegram-bot-api
     restart: always
     profiles:
@@ -226,6 +228,8 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
     volumes:
       - grafana-data:/var/lib/grafana
     networks:

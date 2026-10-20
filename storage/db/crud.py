@@ -1,7 +1,6 @@
 import logging
 import datetime
 import json
-from datetime import date
 
 from sqlalchemy import (
     select,
@@ -25,6 +24,8 @@ from storage.cache.redis_client import cache_get, cache_set, cache_delete, orm_t
 from models.settings import UserSettingsJson, ChatSettingsJson
 from models.media_cache import MediaCacheDTO
 from utils.search_utils import escape_ilike, query_variants
+
+logger = logging.getLogger(__name__)
 
 
 async def get_user(session: AsyncSession, user_id: int) -> Users | None:
@@ -422,7 +423,8 @@ async def create_usage_log(session: AsyncSession, user_id: int, service_name: st
 
 
 async def create_payment_log(session: AsyncSession, user_id: int, amount: int, currency: str, payload: str,
-                            telegram_payment_charge_id: str, provider_payment_charge_id: str = None):
+                            telegram_payment_charge_id: str, provider_payment_charge_id: str = None,
+                            status: str = "completed"):
     from .models import Payment
     payment = Payment(
         user_id=user_id,
@@ -430,7 +432,8 @@ async def create_payment_log(session: AsyncSession, user_id: int, amount: int, c
         currency=currency,
         payload=payload,
         telegram_payment_charge_id=telegram_payment_charge_id,
-        provider_payment_charge_id=provider_payment_charge_id
+        provider_payment_charge_id=provider_payment_charge_id,
+        status=status,
     )
     session.add(payment)
     return payment
@@ -443,6 +446,15 @@ async def update_payment_status(session: AsyncSession, telegram_payment_charge_i
         .where(Payment.telegram_payment_charge_id == telegram_payment_charge_id)
         .values(status=status)
     )
+
+
+async def get_pending_video_payments(session: AsyncSession):
+    """Оплаты за тяжёлые загрузки (yt_*), по которым скачивание не завершилось (status=pending)."""
+    from .models import Payment
+    result = await session.execute(
+        select(Payment).where(Payment.status == "pending", Payment.payload.like("yt_%"))
+    )
+    return result.scalars().all()
 
 
 async def get_last_payment(session: AsyncSession, user_id: int):
@@ -802,7 +814,7 @@ async def get_media_cache_entry_by_file_id(
         if db_obj:
             return db_obj.media_id, MediaCacheDTO.model_validate(db_obj, from_attributes=True)
     except Exception:
-        pass
+        logger.debug("best-effort call failed", exc_info=True)
 
     return None
 

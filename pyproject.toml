@@ -13,8 +13,7 @@ requires-python = ">=3.11"
 
 # Core
 dependencies = [
-    "aiofiles",
-    "curl_cffi==0.15.0"
+    "aiofiles"
 ]
 
 [project.optional-dependencies]
@@ -28,7 +27,8 @@ bot = [
     "redis~=8.0.1",
     "alembic==1.18.5",
     "translators~=6.0.1",
-    "pydantic-settings"
+    "pydantic-settings",
+    "httpx"
 ]
 
 # Dev
@@ -37,3 +37,17 @@ dev = [
     "ruff",
     "mypy",
 ]
+
+[tool.ruff]
+extend-exclude = ["alembic", "tests"]
+
+[tool.ruff.lint]
+select = ["F", "B", "ASYNC", "S"]
+ignore = [
+    "ASYNC109",  # timeout is passed through to httpx/aiogram, not an asyncio.timeout replacement
+    "S311",      # random.choice for reactions, not cryptography
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]               # re-exports
+"utils/search_utils.py" = ["S101"]     # asserts in the __main__ self-check

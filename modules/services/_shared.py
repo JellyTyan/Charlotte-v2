@@ -19,7 +19,7 @@ def make_cache_key(prefix: str, url: str, id_regex: str, suffix: str = "") -> st
         key = match.group(1)
     else:
         clean_url = url.split('?')[0].rstrip('/')
-        key = hashlib.md5(clean_url.encode('utf-8')).hexdigest()
+        key = hashlib.md5(clean_url.encode('utf-8'), usedforsecurity=False).hexdigest()
     return f"{prefix}:{key}{suffix}"
 
 

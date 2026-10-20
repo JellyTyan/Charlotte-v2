@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import logging
 from contextlib import asynccontextmanager
@@ -207,6 +208,41 @@ async def wait_for_media_task(
                 logger.error(f"Error checking status for {task_id}: {e}")
 
 
+RESOLVE_TTL = 3600
+
+
+async def resolve_url(http_client: httpx.AsyncClient, url: str, timeout: float = 5.0) -> str:
+    """Раскрывает короткую ссылку через media-core (POST /resolve), успех кэшируется в Redis на час.
+    При любой ошибке возвращает исходный URL (неудачи не кэшируются)."""
+    from storage.cache.redis_client import redis_client
+
+    key = f"resolve:{hashlib.sha1(url.encode(), usedforsecurity=False).hexdigest()}"
+    try:
+        if redis_client and (cached := await redis_client.get(key)):
+            return cached
+    except Exception as e:
+        logger.warning(f"resolve cache read failed: {e}")
+
+    try:
+        res = await http_client.post(
+            f"{settings.MEDIA_CORE_URL.rstrip('/')}/resolve", json={"url": url}, timeout=timeout
+        )
+        res.raise_for_status()
+        resolved = res.json().get("url")
+    except Exception as e:
+        logger.warning(f"resolve_url failed for {url}: {e}")
+        return url
+    if not resolved:
+        return url
+
+    try:
+        if redis_client:
+            await redis_client.setex(key, RESOLVE_TTL, resolved)
+    except Exception as e:
+        logger.warning(f"resolve cache write failed: {e}")
+    return resolved
+
+
 class TaskManager:
     def __init__(self):
         self._user_locks: dict[int, tuple[asyncio.Semaphore, int]] = {}
@@ -275,7 +311,7 @@ class TaskManager:
                         message=f"Failed to connect to backend: {e}",
                         is_logged=True,
                         critical=True,
-                    )
+                    ) from e
 
                 if res.status_code not in (200, 202):
                     err_text = res.text
@@ -331,7 +367,7 @@ class TaskManager:
                 try:
                     return await task
                 except asyncio.CancelledError:
-                    raise BotError(code=ErrorCode.DOWNLOAD_CANCELLED, message="Загрузка отменена пользователем.")
+                    raise BotError(code=ErrorCode.DOWNLOAD_CANCELLED, message="Загрузка отменена пользователем.") from None
                 finally:
                     self._active_tasks.pop(user_id, None)
 

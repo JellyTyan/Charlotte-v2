@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.service_list import Services
 from modules.services._shared import build_media_items, cache_check
 from senders.media_sender import MediaSender
-from tasks.task_manager import task_manager
+from tasks.task_manager import resolve_url, task_manager
 from utils import escape_html, build_caption, format_author_link, extract_url
 
 pinterest_router = Router(name="pinterest")
@@ -19,19 +19,6 @@ pinterest_router = Router(name="pinterest")
 logger = logging.getLogger(__name__)
 
 PINTEREST_REGEX = r"https?://(?:www\.)?(?:pinterest\.com/[\w/-]+|pin\.it/[A-Za-z0-9]+)"
-
-
-async def resolve_pinterest_url(url: str) -> str:
-    try:
-        async with httpx.AsyncClient() as client:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            }
-            res = await client.get(url, headers=headers, follow_redirects=True, timeout=10)
-            return str(res.url)
-    except Exception as e:
-        logger.warning(f"Failed to resolve Pinterest URL {url}: {e}")
-        return url
 
 
 @pinterest_router.message(F.text.regexp(PINTEREST_REGEX))
@@ -49,7 +36,7 @@ async def pinterest_handler(message: Message, db_session: AsyncSession, http_cli
 
     async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=message.chat.id):
         send_manager = MediaSender()
-        resolved_url = await resolve_pinterest_url(url)
+        resolved_url = await resolve_url(http_client, url) if "pin.it/" in url else url
         pin_id = None
         match = re.search(r"/pin/(\d+)", resolved_url)
         if match:

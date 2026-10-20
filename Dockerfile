@@ -9,9 +9,10 @@ RUN pip install --no-cache-dir uv
 
 WORKDIR /build
 
-COPY pyproject.toml .
+COPY pyproject.toml uv.lock ./
 
-RUN uv pip install --system --no-cache ".[bot]"
+RUN uv export --frozen --no-dev --no-emit-project --extra bot -o requirements.txt \
+ && uv pip install --system --no-cache -r requirements.txt
 
 # ── Stage 2: runtime ──────────────────────────────────────────────────────────
 FROM python:3.13-slim

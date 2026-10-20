@@ -2,12 +2,11 @@
 import asyncio
 import datetime
 import logging
-import os
 import time
 from pathlib import Path
 
 from aiogram import Bot
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete
 
 from utils.url_cache import cleanup_expired as cleanup_expired_urls
 
@@ -37,28 +36,31 @@ async def cleanup_old_statistics():
             logger.error(f"Failed to clean old statistics: {e}")
 
 
+def _delete_old_files(temp_dir: Path, max_age: float) -> int:
+    """Blocking part of the cleanup: removes files older than max_age seconds and empty subdirs."""
+    if not temp_dir.exists():
+        return 0
+    cutoff_time = time.time() - max_age
+    deleted_count = 0
+    for file_path in temp_dir.rglob("*"):
+        try:
+            if file_path.is_file() and file_path.stat().st_mtime < cutoff_time:
+                file_path.unlink()
+                deleted_count += 1
+            elif file_path.is_dir() and not any(file_path.iterdir()):
+                file_path.rmdir()
+        except Exception:
+            logger.debug("best-effort call failed", exc_info=True)
+    return deleted_count
+
+
 async def cleanup_old_downloads():
     """Clean old download files - runs every 6 hours"""
     while True:
         try:
             await asyncio.sleep(21600)  # 6 hours
 
-            temp_dir = Path("storage/temp")
-            if not temp_dir.exists():
-                continue
-
-            cutoff_time = time.time() - 86400  # 24 hours ago
-            deleted_count = 0
-
-            for file_path in temp_dir.rglob("*"):
-                try:
-                    if file_path.is_file() and file_path.stat().st_mtime < cutoff_time:
-                        file_path.unlink()
-                        deleted_count += 1
-                    elif file_path.is_dir() and not any(file_path.iterdir()):
-                        file_path.rmdir()
-                except Exception:
-                    pass
+            deleted_count = await asyncio.to_thread(_delete_old_files, Path("storage/temp"), 86400)  # 24 hours
 
             if deleted_count > 0:
                 logger.info(f"Cleaned {deleted_count} old files from storage/temp (>24 hours)")

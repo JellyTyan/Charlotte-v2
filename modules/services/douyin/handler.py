@@ -10,7 +10,7 @@ from models.service_list import Services
 from modules.services._shared import build_post_media, cache_check, make_cache_key
 from senders.media_sender import MediaSender
 from storage.db.crud import check_if_user_premium
-from tasks.task_manager import task_manager
+from tasks.task_manager import resolve_url, task_manager
 from utils import format_author_link, extract_url
 
 douyin_router = Router(name="douyin")
@@ -46,6 +46,8 @@ async def douyin_handler(message: Message, db_session: AsyncSession, http_client
 
     async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=message.chat.id):
         send_manager = MediaSender()
+        if "v.douyin.com/" in url:
+            url = (await resolve_url(http_client, url)).split("#")[0]
         cache_key = get_cache_key(url, sponsor)
 
         cached = await cache_check(db_session, cache_key)

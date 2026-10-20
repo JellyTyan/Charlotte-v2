@@ -99,7 +99,7 @@ def get_cache_key(url: str, height: int | str = 0, is_audio_only: bool = False, 
         format_type = "audio" if is_audio_only else f"{height}p"
 
     base_str = f"{video_id}:{format_type}"
-    hashed = hashlib.md5(base_str.encode('utf-8')).hexdigest()
+    hashed = hashlib.md5(base_str.encode('utf-8'), usedforsecurity=False).hexdigest()
     
     return f"youtube:{hashed}:topich" if is_topich else f"youtube:{hashed}"
 

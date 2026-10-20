@@ -1,5 +1,4 @@
 import logging
-import re
 import httpx
 import asyncio
 from pathlib import Path
@@ -8,9 +7,8 @@ from typing import Any
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, FSInputFile, Message, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup
 from aiogram.utils.chat_action import ChatActionSender
-from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters import StateFilter
 from fluentogram import TranslatorRunner
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,9 +20,9 @@ from senders.media_sender import MediaSender
 from states.youtube import YouTubeStates
 from storage.db.crud import get_user
 from tasks.task_manager import task_manager
-from utils import format_duration, truncate_string, escape_html, build_caption, format_author_link, safe_truncate_html, extract_url
+from utils import format_duration, escape_html, build_caption, format_author_link, extract_url
 from utils.statistics_helper import log_download_event
-from storage.cache.redis_client import cache_set, cache_get, cache_delete
+from storage.cache.redis_client import cache_set, cache_get
 from middlewares.button_owner import register_message_owner
 
 from .keyboards import (
@@ -140,7 +138,7 @@ async def get_youtube_metadata(http_client: httpx.AsyncClient, url: str) -> dict
             message=f"Failed to connect to media-core: {e}",
             is_logged=True,
             critical=True
-        )
+        ) from e
 
     handle_youtube_api_errors(res, url)
 
@@ -375,14 +373,14 @@ async def trigger_download_native(
         try:
             await callback.message.delete()
         except Exception:
-            pass
+            logger.debug("best-effort call failed", exc_info=True)
         await callback.answer()
         return
 
     try:
         await callback.message.delete()
     except Exception:
-        pass
+        logger.debug("best-effort call failed", exc_info=True)
 
     from tasks.task_manager import task_manager
     if task_manager.is_user_busy(user_id):
@@ -534,7 +532,7 @@ async def delete_trim_prompts(bot, chat_id: int, state_data: dict) -> None:
     try:
         await bot.delete_messages(chat_id=chat_id, message_ids=message_ids)
     except Exception:
-        pass
+        logger.debug("best-effort call failed", exc_info=True)
 
 
 @youtube_router.callback_query(YouTubeActionCallback.filter())
@@ -566,7 +564,7 @@ async def on_yt_action_callback(
         try:
             await callback.message.delete()
         except Exception:
-            pass
+            logger.debug("best-effort call failed", exc_info=True)
         canceled_text = i18n.get("action-cancelled") if i18n else "Отменено"
         await callback.answer(canceled_text)
         return
@@ -802,7 +800,6 @@ async def time_range_message_handler(
 
     target_height = data.get("target_height", 0)
     is_audio_only = data.get("is_audio", False)
-    is_topich = data.get("is_topich", False)
     user_id = message.from_user.id
 
     extra_metadata = {
@@ -872,7 +869,7 @@ async def process_youtube_download(
                         lang = settings.profile.language if settings else "en"
                         i18n = hub.get_translator_by_locale(lang)
                 except Exception:
-                    pass
+                    logger.debug("best-effort call failed", exc_info=True)
 
             user = await get_user(db_session, user_id)
             is_premium = (user.is_premium if user else False) or (payment_charge_id is not None)
@@ -887,6 +884,9 @@ async def process_youtube_download(
                         await send_manager.send(message, cached, service="youtube", db_session=db_session)
                 else:
                     await send_manager.send(message, cached, service="youtube", db_session=db_session)
+                if payment_charge_id:
+                    from storage.db.crud import update_payment_status
+                    await update_payment_status(db_session, payment_charge_id, "completed")
                 await db_session.commit()
                 return
 
@@ -937,6 +937,9 @@ async def process_youtube_download(
                             db_session=db_session,
                         )
 
+                if payment_charge_id:
+                    from storage.db.crud import update_payment_status
+                    await update_payment_status(db_session, payment_charge_id, "completed")
                 await db_session.commit()
 
             except Exception as e:
@@ -1030,7 +1033,7 @@ async def process_clip_download(
                         lang = settings.profile.language if settings else "en"
                         i18n = hub.get_translator_by_locale(lang)
                 except Exception:
-                    pass
+                    logger.debug("best-effort call failed", exc_info=True)
 
             user = await get_user(db_session, user_id)
             is_premium = user.is_premium if user else False
@@ -1070,7 +1073,7 @@ async def process_clip_download(
                 try:
                     await process_message.delete()
                 except Exception:
-                    pass
+                    logger.debug("best-effort call failed", exc_info=True)
 
                 if media_content:
                     if message.bot:
@@ -1098,7 +1101,7 @@ async def process_clip_download(
                 try:
                     await process_message.delete()
                 except Exception:
-                    pass
+                    logger.debug("best-effort call failed", exc_info=True)
 
                 bot_err = e if isinstance(e, BotError) else BotError(code=ErrorCode.INTERNAL_ERROR, message=str(e), service=Services.YOUTUBE, is_logged=True)
                 await log_download_event(db_session, user_id, Services.YOUTUBE, 'failed_download', error_code=bot_err.code)

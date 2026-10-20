@@ -1,11 +1,10 @@
 import logging
-import asyncio
 
 from aiogram import Router, F, Bot
 from aiogram.types import LabeledPrice, Message, PreCheckoutQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from storage.db.crud import create_payment_log, update_payment_status
+from storage.db.crud import create_payment_log, get_pending_video_payments, update_payment_status
 from utils.url_cache import get_url
 
 video_payment_router = Router(name="payment_video")
@@ -53,8 +52,11 @@ async def video_successful_payment(message: Message, bot: Bot, db_session: Async
         currency=payment.currency,
         payload=payload,
         telegram_payment_charge_id=payment.telegram_payment_charge_id,
-        provider_payment_charge_id=payment.provider_payment_charge_id
+        provider_payment_charge_id=payment.provider_payment_charge_id,
+        status="pending",  # станет completed после доставки файла, иначе refunded
     )
+    # Фоновая задача открывает свою сессию: строка должна быть закоммичена до её старта
+    await db_session.commit()
 
     try:
         parts = payload.split("_")
@@ -95,9 +97,9 @@ async def video_successful_payment(message: Message, bot: Bot, db_session: Async
 
         await message.answer("✅ Thank you for supporting Charlotte! Starting download...")
 
-        from modules.services.youtube.handler import process_youtube_download
+        from modules.services.youtube.handler import process_youtube_download, run_background_task
         
-        asyncio.create_task(process_youtube_download(
+        run_background_task(process_youtube_download(
             message=message,
             url=url,
             target_height=target_height,
@@ -118,3 +120,24 @@ async def video_successful_payment(message: Message, bot: Bot, db_session: Async
             await update_payment_status(db_session, payment.telegram_payment_charge_id, "refunded")
         except Exception as refund_error:
             logger.error(f"Refund failed: {refund_error}")
+
+
+async def refund_orphaned_video_payments(bot: Bot, session_factory) -> int:
+    """На старте: оплаты со статусом pending остались от прерванных рестартом загрузок, возвращаем Stars."""
+    refunded = 0
+    async with session_factory() as session:
+        for p in await get_pending_video_payments(session):
+            try:
+                await bot.refund_star_payment(p.user_id, telegram_payment_charge_id=p.telegram_payment_charge_id)
+            except Exception as e:
+                if "ALREADY_REFUNDED" not in str(e):
+                    logger.error(f"Refund of orphaned payment {p.telegram_payment_charge_id} failed: {e}")
+                    continue
+            await update_payment_status(session, p.telegram_payment_charge_id, "refunded")
+            await session.commit()
+            refunded += 1
+            try:
+                await bot.send_message(p.user_id, "❌ The download was interrupted by a bot restart. Your payment has been refunded.")
+            except Exception:
+                logger.debug("best-effort call failed", exc_info=True)
+    return refunded

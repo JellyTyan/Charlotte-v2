@@ -67,7 +67,7 @@ async def send_admin_alert(
     # Generate a unique key for deduplication if not explicitly provided
     if not alert_key:
         key_content = f"{title}:{message}"
-        alert_key = hashlib.md5(key_content.encode()).hexdigest()[:16]
+        alert_key = hashlib.md5(key_content.encode(), usedforsecurity=False).hexdigest()[:16]
 
     client = r_module.redis_client
     if client:

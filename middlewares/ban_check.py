@@ -1,7 +1,11 @@
+import logging
+
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, InlineQuery, Update
 
 from storage.db.crud import get_user, get_chat_settings
+
+logger = logging.getLogger(__name__)
 
 
 class BanCheckMiddleware(BaseMiddleware):
@@ -30,12 +34,12 @@ class BanCheckMiddleware(BaseMiddleware):
                     try:
                         await target_event.answer(alert_text, show_alert=True)
                     except Exception:
-                        pass
+                        logger.debug("best-effort call failed", exc_info=True)
                 elif isinstance(target_event, InlineQuery):
                     try:
                         await target_event.answer([], cache_time=1, is_personal=True)
                     except Exception:
-                        pass
+                        logger.debug("best-effort call failed", exc_info=True)
                 return
 
             # 2. Chat / Group ban check
@@ -48,7 +52,7 @@ class BanCheckMiddleware(BaseMiddleware):
                         try:
                             await target_event.answer(alert_text, show_alert=True)
                         except Exception:
-                            pass
+                            logger.debug("best-effort call failed", exc_info=True)
                     return
 
             try:

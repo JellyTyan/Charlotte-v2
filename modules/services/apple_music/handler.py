@@ -1,5 +1,4 @@
 import logging
-import re
 from pathlib import Path
 
 import httpx
@@ -14,9 +13,8 @@ from core.config import Config, settings
 from models.errors import BotError, ErrorCode
 from models.media import MediaContent, MediaType
 from models.service_list import Services
-from models.media_cache import MediaCacheDTO, CacheMetadata
 from senders.media_sender import MediaSender
-from storage.db.crud import get_chat_settings, get_user_settings, get_media_cache, upsert_media_cache
+from storage.db.crud import get_chat_settings, get_user_settings, get_media_cache
 from tasks.task_manager import task_manager
 from utils import delete_files, handle_lossless_response, extract_url
 from utils.statistics_helper import log_download_event

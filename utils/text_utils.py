@@ -186,8 +186,13 @@ def translate_sync(text: str, target_language: str) -> str:
                 if data and isinstance(data, list) and data[0]:
                     return "".join(part[0] for part in data[0] if part and part[0])
     except Exception as e:
-        logger.error(f"Translation failed for text: {text}: {e}")
+        logger.error(f"Translation failed ({len(text)} chars): {e}")
     return text
+
+
+def _translate_escaped(text: str, target_language: str) -> str:
+    """Переводит HTML-экранированный текст как plain text и экранирует результат заново (переводчик ломает &amp;/&lt;)."""
+    return html.escape(translate_sync(html.unescape(text), target_language), quote=False)
 
 
 async def translate_text(text: str, target_language: str = "en") -> str:
@@ -206,7 +211,7 @@ async def translate_text(text: str, target_language: str = "en") -> str:
     if bq_match:
         prefix, bq_open, inner_desc, bq_close, suffix = bq_match.groups()
         try:
-            translated_inner = await loop.run_in_executor(None, translate_sync, inner_desc, target_language)
+            translated_inner = await loop.run_in_executor(None, _translate_escaped, inner_desc, target_language)
             # Budget check so translated description doesn't cause caption overflow
             max_inner_len = 950 - len(prefix) - len(bq_open) - len(bq_close) - len(suffix)
             if max_inner_len > 10 and len(translated_inner) > max_inner_len:
@@ -217,7 +222,7 @@ async def translate_text(text: str, target_language: str = "en") -> str:
             return text
 
     try:
-        translated = await loop.run_in_executor(None, translate_sync, text, target_language)
+        translated = await loop.run_in_executor(None, _translate_escaped if not re.search(r"</?[a-z]", text) else translate_sync, text, target_language)
         if len(translated) > 950:
             translated = safe_truncate_html(translated, 950)
         return translated

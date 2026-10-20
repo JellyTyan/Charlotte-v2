@@ -1,6 +1,5 @@
 import time
 import logging
-from typing import Optional, Dict
 from .hash_utils import url_hash
 from storage.cache import redis_client as redis_module
 

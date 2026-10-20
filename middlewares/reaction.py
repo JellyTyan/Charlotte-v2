@@ -1,9 +1,8 @@
-from typing import Any, Awaitable, Callable, Dict
 
 from aiogram import BaseMiddleware
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, ReactionTypeEmoji, TelegramObject
+from aiogram.types import Message, ReactionTypeEmoji
 
 
 class ReactionMiddleware(BaseMiddleware):

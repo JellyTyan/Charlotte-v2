@@ -253,7 +253,7 @@ async def handle_saves_item(
             try:
                 await callback.message.delete()
             except Exception:
-                pass
+                logger.debug("best-effort call failed", exc_info=True)
         await callback.answer()
         return
 

@@ -1,6 +1,9 @@
+import logging
 import httpx
 from models.errors import BotError, ErrorCode
 from models.service_list import Services
+
+logger = logging.getLogger(__name__)
 
 
 def handle_lossless_response(response: httpx.Response, url: str, service: Services) -> dict:
@@ -12,7 +15,7 @@ def handle_lossless_response(response: httpx.Response, url: str, service: Servic
     try:
         data = response.json()
     except Exception:
-        pass
+        logger.debug("best-effort call failed", exc_info=True)
 
     is_error = False
     error_code_str = None

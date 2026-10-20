@@ -290,7 +290,7 @@ async def safe_edit_text(callback: CallbackQuery, text: str, reply_markup: Inlin
         try:
             await callback.answer(f"⏳ Please wait {e.retry_after} seconds.", show_alert=True)
         except Exception:
-            pass
+            logger.debug("best-effort call failed", exc_info=True)
     except TelegramBadRequest as e:
         if "message is not modified" in str(e).lower():
             pass
@@ -609,9 +609,9 @@ async def apply_service_uimode(callback: CallbackQuery, i18n: TranslatorRunner, 
     chat_id = callback.message.chat.id
     settings, is_group = await get_settings_obj(db_session, chat_id, callback.from_user.id)
     svc_settings = getattr(settings.services, target_service)
-    setattr(svc_settings, "ui_mode", new_mode)
+    svc_settings.ui_mode = new_mode
     if hasattr(svc_settings, "simple"):
-        setattr(svc_settings, "simple", new_mode == "simple")
+        svc_settings.simple = new_mode == "simple"
     await save_settings_obj(db_session, chat_id, callback.from_user.id, settings)
 
     mode_title = f"{i18n.get(f'yt-ui-mode-{new_mode}')} 🟢"

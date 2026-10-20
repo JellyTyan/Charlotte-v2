@@ -62,10 +62,18 @@ async def main():
     bot_info = await bot.get_me()
     logger.info(f"✅ Bot initialized: @{bot_info.username} ({bot_info.first_name})")
 
+    from modules.payment.video import refund_orphaned_video_payments
+    try:
+        n = await refund_orphaned_video_payments(bot, database_manager.async_session)
+        if n:
+            logger.info(f"💸 Refunded interrupted paid downloads: {n}")
+    except Exception as e:
+        logger.error(f"⚠️ Failed to refund orphaned payments: {e}")
+
     logger.info("⚙️ Setting up workflow data...")
     core_client = httpx.AsyncClient(
         base_url=settings.LOSSLESS_CORE_URL,
-        timeout=None,
+        timeout=None,  # noqa: S113 long-polling downloads, core has its own deadlines
     )
     dp.workflow_data.update(
         http_client=core_client,

@@ -165,7 +165,10 @@ storage/cookies/*
 storage/temp/*
 tests
 /backups
-uv.lock
 /.agents
 /graphify-out
 /.claude
+
+# Аудиты (локальные)
+/audits
+CLAUDE.md

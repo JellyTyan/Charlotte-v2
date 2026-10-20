@@ -70,7 +70,7 @@ def _build_recent_inline_result(item: dict, idx: int):
 
     raw_title = item.get("title") or "Недавнее"
     title = f"🕒 {raw_title}"
-    res_id = f"recent_{idx}_{hashlib.md5(file_id.encode()).hexdigest()[:8]}"
+    res_id = f"recent_{idx}_{hashlib.md5(file_id.encode(), usedforsecurity=False).hexdigest()[:8]}"
 
     if m_type == "video":
         return InlineQueryResultCachedVideo(id=res_id, title=title, video_file_id=file_id, caption=None)
@@ -95,7 +95,7 @@ async def _safe_answer_inline(
         try:
             return await inline_query.answer([], cache_time=1, is_personal=True)
         except Exception:
-            pass
+            logger.debug("best-effort call failed", exc_info=True)
 
 
 @inline_router.inline_query()
@@ -161,7 +161,7 @@ async def inline_main_handler(
         for idx, track in enumerate(tracks):
             if not track.telegram_file_id or ":lossless" in track.cache_key:
                 continue
-            key_hash = hashlib.md5(track.cache_key.encode()).hexdigest()[:8]
+            key_hash = hashlib.md5(track.cache_key.encode(), usedforsecurity=False).hexdigest()[:8]
             results.append(
                 InlineQueryResultCachedAudio(
                     id=f"music_{idx}_{key_hash}",
