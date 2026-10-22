@@ -1,3 +1,4 @@
+import re
 from aiogram import Dispatcher, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart, CommandObject
@@ -9,6 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from storage.cache.redis_client import cache_get, cache_delete
 from storage.db.crud import create_user, create_chat, get_user_settings, update_user_settings
+
+
+def _md_escape(text: str) -> str:
+    """Escape legacy Markdown control chars in user-provided text (first name) so Telegram can parse the entity."""
+    return re.sub(r"([_*`\[])", r"\\\1", text)
+
 
 router = Router()
 
@@ -78,7 +85,7 @@ async def start_command(
         builder.adjust(1)
 
         await message.answer(
-            i18n.msg.hello(name=message.from_user.first_name),
+            i18n.msg.hello(name=_md_escape(message.from_user.first_name)),
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=builder.as_markup()
         )
@@ -90,7 +97,7 @@ async def start_command(
         from utils.ephemeral import send_smart_message
         await send_smart_message(
             message,
-            i18n.msg.hello(name=message.from_user.first_name),
+            i18n.msg.hello(name=_md_escape(message.from_user.first_name)),
             parse_mode=ParseMode.MARKDOWN,
         )
     return None
