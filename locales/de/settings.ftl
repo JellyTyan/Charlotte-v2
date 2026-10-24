@@ -109,6 +109,12 @@ btn-bot-sign = { $is_enabled ->
 }
 desc-bot-sign = Signatur „Charlotte 🧡“ zu Medien hinzufügen. Deaktivieren ist kostenlos.
 
+btn-detect-links-anywhere = { $is_enabled ->
+    [true] 🟢 Links im Text
+    *[false] ⚪ Links im Text
+}
+desc-detect-links-anywhere = Auf Links innerhalb einer Nachricht reagieren. Wenn ausgeschaltet, antworte ich nur auf Nachrichten, die nur aus einem Link bestehen.
+
 btn-simple-mode = { $is_enabled ->
     [true] 🟢 Einfacher Modus
     *[false] ⚪ Einfacher Modus

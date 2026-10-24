@@ -109,6 +109,12 @@ btn-bot-sign = { $is_enabled ->
 }
 desc-bot-sign = Додавати підпис «Charlotte 🧡» до медіа. Вимкнути можна безкоштовно.
 
+btn-detect-links-anywhere = { $is_enabled ->
+    [true] 🟢 Посилання в тексті
+    *[false] ⚪ Посилання в тексті
+}
+desc-detect-links-anywhere = Реагувати на посилання всередині повідомлення. Якщо вимкнути, я відповідатиму лише на повідомлення, де одне посилання і більше нічого.
+
 btn-simple-mode = { $is_enabled ->
     [true] 🟢 Простий режим
     *[false] ⚪ Простий режим

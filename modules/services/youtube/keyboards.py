@@ -36,9 +36,17 @@ def get_reliable_thumbnail(url: str, thumbnail: str | None) -> str | None:
     return None
 
 
+def _size(size_mb: float) -> str:
+    return f" (~{size_mb:.1f} MB)" if size_mb else ""
+
+
 def build_yt_header(meta_data: dict[str, Any], i18n: TranslatorRunner | None = None) -> str:
     title = escape_html(str(meta_data.get("title") or "YouTube Media"))
+    if meta_data.get("url"):
+        title = f'<a href="{escape_html(meta_data["url"])}">{title}</a>'
     uploader = escape_html(str(meta_data.get("uploader") or ""))
+    if uploader and meta_data.get("uploader_url"):
+        uploader = f'<a href="{escape_html(meta_data["uploader_url"])}">{uploader}</a>'
     duration = meta_data.get("duration") or 0
     dur_str = format_duration(duration) if duration else ""
 
@@ -91,6 +99,7 @@ def build_balance_keyboard(
     options = meta_data.get("options", [])
     audio_only = meta_data.get("audio_only", {})
     is_premium = meta_data.get("is_premium", False)
+    cached = meta_data.get("cached", [])
 
     sorted_opts = sorted(options, key=lambda x: x.get("target_height", 0), reverse=True)
     for opt in sorted_opts:
@@ -98,7 +107,8 @@ def build_balance_keyboard(
         lbl = opt.get("label", f"{height}p")
         size_mb = opt.get("size_mb", 0.0)
         star = "★ " if (size_mb > 100 and not is_premium) else ""
-        text = f"{star}{lbl} (~{size_mb:.1f} MB)"
+        bolt = "⚡ " if f"v_{height}" in cached else ""
+        text = f"{bolt}{star}{lbl}{_size(size_mb)}"
         builder.button(
             text=text,
             callback_data=YouTubeFormatCallback(owner_id=owner_id, h=h, item_id=f"v_{height}", mode="bal").pack(),
@@ -108,7 +118,7 @@ def build_balance_keyboard(
         a_lbl = audio_only.get("label", "Audio")
         a_size = audio_only.get("size_mb", 0.0)
         builder.button(
-            text=f"{a_lbl} (~{a_size:.1f} MB)",
+            text=f"{'⚡' if 'audio' in cached else '🎵'} {a_lbl}{_size(a_size)}",
             callback_data=YouTubeFormatCallback(owner_id=owner_id, h=h, item_id="audio", mode="bal").pack(),
         )
 
@@ -144,6 +154,7 @@ def build_advanced_keyboard(
     options = meta_data.get("options", [])
     audio_only = meta_data.get("audio_only", {})
     is_premium = meta_data.get("is_premium", False)
+    cached = meta_data.get("cached", [])
     selected_id = meta_data.get("selected_format", "")
     trim_active = meta_data.get("trim_active", False)
 
@@ -155,7 +166,8 @@ def build_advanced_keyboard(
         item_id = f"v_{height}"
         check = "✓ " if item_id == selected_id else ""
         star = "★ " if (size_mb > 100 and not is_premium) else ""
-        text = f"{check}{star}{lbl} (~{size_mb:.1f} MB)"
+        bolt = "⚡ " if item_id in cached else ""
+        text = f"{check}{bolt}{star}{lbl}{_size(size_mb)}"
         builder.button(
             text=text,
             callback_data=YouTubeFormatCallback(owner_id=owner_id, h=h, item_id=item_id, mode="adv").pack(),
@@ -166,7 +178,7 @@ def build_advanced_keyboard(
         a_size = audio_only.get("size_mb", 0.0)
         item_id = "audio"
         check = "✓ " if item_id == selected_id else ""
-        text = f"{check}{a_lbl} (~{a_size:.1f} MB)"
+        text = f"{check}{'⚡' if 'audio' in cached else '🎵'} {a_lbl}{_size(a_size)}"
         builder.button(
             text=text,
             callback_data=YouTubeFormatCallback(owner_id=owner_id, h=h, item_id=item_id, mode="adv").pack(),

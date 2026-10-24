@@ -425,7 +425,15 @@ class MediaSender:
             media_items, audio_items, gif_items, caption = self._parse_media(content)
 
             # 3. Дамп в кэш-канал
-            dump_success = await self._dump_media_to_cache_channel(message.bot, content)
+            # the dump can take tens of seconds, keep the "uploading" indicator alive meanwhile
+            if audio_items and not media_items:
+                dump_action = "upload_voice"
+            elif any(getattr(m, "type", None) == MediaType.VIDEO for m in media_items + gif_items):
+                dump_action = "upload_video"
+            else:
+                dump_action = "upload_photo"
+            async with ChatActionSender(bot=message.bot, chat_id=message.chat.id, action=dump_action):
+                dump_success = await self._dump_media_to_cache_channel(message.bot, content)
 
             # 4. Сохранение в БД (до отправки, если дамп успешен)
             if dump_success and cache_key and db_session and service:

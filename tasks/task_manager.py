@@ -10,6 +10,7 @@ import httpx
 from core.config import settings
 from models.errors import BotError, ErrorCode
 from models.service_list import Services
+from utils.progress import StatusMessage
 
 logger = logging.getLogger(__name__)
 
@@ -22,11 +23,11 @@ MEDIA_CORE_ERROR_MAP: dict[str, ErrorCode] = {
     "country_blocked": ErrorCode.REGION_RESTRICTED,
     "members_only": ErrorCode.PRIVATE_CONTENT,
     "invalid_url": ErrorCode.INVALID_URL,
-    "not_supported": ErrorCode.NOT_ALLOWED,
+    "not_supported": ErrorCode.NOT_SUPPORTED,
     "preview_only": ErrorCode.PREVIEW_ONLY,
     "track_not_found": ErrorCode.NOT_FOUND,
     "download_failed": ErrorCode.INTERNAL_ERROR,
-    "rate_limited": ErrorCode.INTERNAL_ERROR,
+    "rate_limited": ErrorCode.RATE_LIMITED,
     "internal_error": ErrorCode.INTERNAL_ERROR,
     "auth_expired": ErrorCode.AUTH_EXPIRED,
 }
@@ -93,6 +94,7 @@ async def wait_for_media_task(
     result_prefix: str = "media:result:",
     max_wait: float = 1800.0,
     max_status_failures: int = 20,
+    progress=None,
 ) -> dict:
     """
     Wait for media-core or lossless-core task completion.
@@ -176,6 +178,8 @@ async def wait_for_media_task(
                 if res.status_code == 200:
                     status_data = res.json()
                     task_status = status_data.get("status")
+                    if progress:
+                        await progress.update(status_data.get("stage"), status_data.get("attempt"), status_data.get("reason"))
 
                     # If still in queue or active or retry -> keep waiting
                     if task_status in ("pending", "active", "retry"):
@@ -338,6 +342,7 @@ class TaskManager:
                     )
 
                 self._active_media_tasks[user_id] = (task_id, target_url)
+                progress = StatusMessage.from_context()
 
                 try:
                     # 2. Wait for result
@@ -349,9 +354,12 @@ class TaskManager:
                         http_client=http_client,
                         base_url=target_url,
                         result_prefix=result_prefix,
+                        progress=progress,
                     )
                     return data
                 finally:
+                    if progress:
+                        await progress.close()
                     self._active_media_tasks.pop(user_id, None)
                     self._cancelled_users.discard(user_id)
 

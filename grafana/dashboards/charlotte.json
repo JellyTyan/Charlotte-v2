@@ -1,0 +1,269 @@
+{
+ "uid": "charlotte-errors",
+ "title": "Charlotte errors",
+ "schemaVersion": 39,
+ "version": 1,
+ "refresh": "1m",
+ "time": {
+  "from": "now-24h",
+  "to": "now"
+ },
+ "timezone": "browser",
+ "panels": [
+  {
+   "id": 1,
+   "title": "Errors over time (ERROR level)",
+   "type": "timeseries",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 12,
+    "h": 7
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum(count_over_time({container=\"charlotte_bot\"} | json | level=\"ERROR\" [$__interval]))",
+     "queryType": "range"
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "title": "BotError by service",
+   "type": "timeseries",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 0,
+    "w": 12,
+    "h": 7
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (service) (count_over_time({container=\"charlotte_bot\"} |= \"BotError\" | regexp \"BotError (?P<code>E\\\\d+) service=(?P<service>\\\\S+) user=(?P<user>\\\\S+)\" [$__interval]))",
+     "queryType": "range"
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "title": "BotError by code (range)",
+   "type": "bargauge",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 7,
+    "w": 8,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (code) (count_over_time({container=\"charlotte_bot\"} |= \"BotError\" | regexp \"BotError (?P<code>E\\\\d+) service=(?P<service>\\\\S+) user=(?P<user>\\\\S+)\" [$__range]))",
+     "queryType": "range"
+    }
+   ],
+   "options": {
+    "displayMode": "gradient",
+    "orientation": "horizontal"
+   },
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": []
+   }
+  },
+  {
+   "id": 4,
+   "title": "BotError by service (range)",
+   "type": "bargauge",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 8,
+    "y": 7,
+    "w": 8,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (service) (count_over_time({container=\"charlotte_bot\"} |= \"BotError\" | regexp \"BotError (?P<code>E\\\\d+) service=(?P<service>\\\\S+) user=(?P<user>\\\\S+)\" [$__range]))",
+     "queryType": "range"
+    }
+   ],
+   "options": {
+    "displayMode": "gradient",
+    "orientation": "horizontal"
+   },
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": []
+   }
+  },
+  {
+   "id": 5,
+   "title": "Top users by errors (range)",
+   "type": "bargauge",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 16,
+    "y": 7,
+    "w": 8,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "topk(10, sum by (user) (count_over_time({container=\"charlotte_bot\"} |= \"BotError\" | regexp \"BotError (?P<code>E\\\\d+) service=(?P<service>\\\\S+) user=(?P<user>\\\\S+)\" [$__range])))",
+     "queryType": "range"
+    }
+   ],
+   "options": {
+    "displayMode": "gradient",
+    "orientation": "horizontal"
+   },
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": []
+   }
+  },
+  {
+   "id": 6,
+   "title": "Instagram not found (E004)",
+   "type": "logs",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 15,
+    "w": 12,
+    "h": 10
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "{container=\"charlotte_bot\"} |= \"BotError E004 service=Instagram\""
+    }
+   ],
+   "options": {
+    "sortOrder": "Descending",
+    "wrapLogMessage": true
+   }
+  },
+  {
+   "id": 7,
+   "title": "Errors for user $user",
+   "type": "logs",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 15,
+    "w": 12,
+    "h": 10
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "{container=\"charlotte_bot\"} |~ \"user=$user( |$)\" |~ \"BotError|ERROR\""
+    }
+   ],
+   "options": {
+    "sortOrder": "Descending",
+    "wrapLogMessage": true
+   }
+  },
+  {
+   "id": 8,
+   "title": "Recent ERROR / CRITICAL",
+   "type": "logs",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 25,
+    "w": 24,
+    "h": 12
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "{container=\"charlotte_bot\"} | json | level=~\"ERROR|CRITICAL\""
+    }
+   ],
+   "options": {
+    "sortOrder": "Descending",
+    "wrapLogMessage": true
+   }
+  }
+ ],
+ "templating": {
+  "list": [
+   {
+    "name": "user",
+    "type": "textbox",
+    "label": "User ID",
+    "query": ".*",
+    "current": {
+     "text": ".*",
+     "value": ".*"
+    }
+   }
+  ]
+ }
+}

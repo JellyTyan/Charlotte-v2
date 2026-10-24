@@ -109,6 +109,12 @@ btn-bot-sign = { $is_enabled ->
 }
 desc-bot-sign = Añadir la firma «Charlotte 🧡» a los archivos. Desactivarlo es totalmente gratis.
 
+btn-detect-links-anywhere = { $is_enabled ->
+    [true] 🟢 Enlaces en el texto
+    *[false] ⚪ Enlaces en el texto
+}
+desc-detect-links-anywhere = Reaccionar a enlaces dentro del mensaje. Si lo desactivas, solo respondo a mensajes que son únicamente un enlace.
+
 btn-simple-mode = { $is_enabled ->
     [true] 🟢 Modo simple
     *[false] ⚪ Modo simple

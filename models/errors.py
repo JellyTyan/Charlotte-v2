@@ -16,6 +16,8 @@ class ErrorCode(Enum):
     REGION_RESTRICTED = "E009"    # Ограничено по региону (geoblock)
     SEND_ERROR = "E010"           # Ошибка отправки медиа в Telegram
     AUTH_EXPIRED = "E011"         # Сгорели куки/аккаунты сервиса — нужна замена админом
+    NOT_SUPPORTED = "E012"        # Ссылка распознана, но этот тип контента не поддерживается
+    RATE_LIMITED = "E013"         # Сервис просит подождать (лимиты)
     PREVIEW_ONLY = "PREVIEW_ONLY" # Скачалось только превью (30 сек)
 
 

@@ -10,6 +10,7 @@ class ProfileSettings(BaseModel):
     negativity: bool = False
     news_spam: bool = False
     bot_sign: bool = True
+    detect_links_anywhere: bool = True
 
 
 
@@ -73,6 +74,7 @@ class ChatProfileSettings(BaseModel):
     banned_users: set[int] = Field(default_factory=set)
     news_spam: bool = False
     bot_sign: bool = True
+    detect_links_anywhere: bool = True
 
 
 class ChatServicesSettings(BaseModel):

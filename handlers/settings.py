@@ -129,7 +129,11 @@ def build_main_keyboard(settings, i18n: TranslatorRunner, is_group: bool = False
             InlineKeyboardButton(
                 text=i18n.btn.bot.sign(is_enabled='true' if settings.profile.bot_sign else 'false'),
                 callback_data="menu_profile_bot_sign"
-            )
+            ),
+            InlineKeyboardButton(
+                text=i18n.get("btn-detect-links-anywhere", is_enabled='true' if settings.profile.detect_links_anywhere else 'false'),
+                callback_data="menu_profile_detect_links_anywhere"
+            ),
         ],
         [
             InlineKeyboardButton(text=i18n.btn.configure.services(), callback_data="settings_services")

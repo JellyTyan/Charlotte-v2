@@ -3,7 +3,9 @@ import hashlib
 import re
 from typing import List, Optional, Tuple
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from storage.db.models import MediaCache
 from storage.db.crud import get_media_cache
 from models.media import MediaContent, MediaType
 
@@ -125,3 +127,44 @@ async def cache_check(db_session: AsyncSession, key: str) -> List[MediaContent] 
         height=cached.data.height,
         is_blurred=cached.data.is_blurred
     )]
+
+
+async def cached_items(db_session: AsyncSession, url: str, options: list, has_audio: bool) -> list[str]:
+    """item_ids (v_1080, audio) already in media cache, i.e. sendable instantly."""
+    keys = {get_cache_key(url, o.get("target_height", 0)): f"v_{o.get('target_height', 0)}" for o in options}
+    if has_audio:
+        keys[get_cache_key(url, 0, True)] = "audio"
+    rows = await db_session.execute(select(MediaCache.cache_key).where(MediaCache.cache_key.in_(keys)))
+    return [keys[k] for k in rows.scalars()]
+
+
+_FALLBACK_HEIGHTS = (144, 240, 360, 480, 720, 1080, 1440, 2160)
+
+
+async def metadata_from_cache(db_session: AsyncSession, url: str) -> dict | None:
+    """Rebuild a minimal metadata dict from already-downloaded formats when media-core is down.
+
+    Cache keys are hashes, so we probe a fixed height ladder instead of listing by video id.
+    Sizes are unknown (0) and the keyboards hide them; only cached formats are offered.
+    """
+    keys = {get_cache_key(url, h): h for h in _FALLBACK_HEIGHTS}
+    audio_key = get_cache_key(url, 0, True)
+    keys[audio_key] = "audio"
+    rows = (await db_session.execute(select(MediaCache).where(MediaCache.cache_key.in_(keys)))).scalars().all()
+    if not rows:
+        return None
+    by_key = {r.cache_key: r for r in rows}
+    meta_row = by_key.get(audio_key) or rows[0]
+    data = meta_row.data or {}
+    # video rows store the HTML caption as title, so strip tags and keep the first line
+    title = re.sub(r"<[^>]+>", "", data.get("title") or "").strip().split("\n")[0]
+    return {
+        "title": title or None,
+        "uploader": data.get("author"),
+        "duration": data.get("duration"),
+        "options": [
+            {"target_height": h, "label": f"{h}p", "size_mb": 0.0}
+            for h in _FALLBACK_HEIGHTS if get_cache_key(url, h) in by_key
+        ][::-1],
+        "audio_only": {"label": "Audio", "size_mb": 0.0} if audio_key in by_key else {},
+    }

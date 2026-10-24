@@ -26,6 +26,10 @@ def get_i18n_error_message(code: ErrorCode, i18n: TranslatorRunner) -> str | Non
         case ErrorCode.INTERNAL_ERROR | ErrorCode.AUTH_EXPIRED:
             # Пользователю сгоревшие куки — обычная внутренняя ошибка; подробности идут админу.
             return i18n.get("error-internal")
+        case ErrorCode.NOT_SUPPORTED:
+            return i18n.get("error-not-supported")
+        case ErrorCode.RATE_LIMITED:
+            return i18n.get("error-rate-limited")
         case ErrorCode.NOT_FOUND:
             return i18n.get("error-not-found")
         case ErrorCode.REGION_RESTRICTED:

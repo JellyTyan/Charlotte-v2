@@ -21,6 +21,7 @@ async def log_download_event(
         ErrorCode.NOT_FOUND,
         ErrorCode.INVALID_URL,
         ErrorCode.NOT_ALLOWED,
+        ErrorCode.NOT_SUPPORTED,
         ErrorCode.LARGE_FILE,
         ErrorCode.AGE_RESTRICTED,
         ErrorCode.PRIVATE_CONTENT,

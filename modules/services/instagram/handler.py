@@ -7,6 +7,7 @@ from aiogram.types import Message
 from aiogram.utils.chat_action import ChatActionSender
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from models.errors import BotError, ErrorCode
 from models.service_list import Services
 from modules.services._shared import build_media_items, cache_check, make_cache_key
 from senders.media_sender import MediaSender
@@ -29,6 +30,10 @@ async def instagram_handler(message: Message, db_session: AsyncSession, http_cli
     if not url:
         return
     user_id = message.from_user.id
+
+    # real shortcodes are 10-11 chars; longer ones are mangled pastes core can never resolve
+    if len(url.rstrip("/").rsplit("/", 1)[-1]) > 15:
+        raise BotError(code=ErrorCode.INVALID_URL, url=url, service=Services.INSTAGRAM, message="Invalid shortcode length")
 
     if task_manager.is_user_busy(user_id):
         from utils.ephemeral import notify_already_downloading_if_ephemeral

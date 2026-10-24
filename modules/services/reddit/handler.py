@@ -40,7 +40,7 @@ async def reddit_handler(
     await react_safe(message, "👀")
 
     if "/s/" in url:
-        url = await resolve_url(http_client, url)
+        url = (await resolve_url(http_client, url)).split("?")[0]  # drop ?share_id=… that core rejects
 
     sponsor = await check_if_user_premium(db_session, user_id)
 

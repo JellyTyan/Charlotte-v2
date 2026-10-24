@@ -109,6 +109,12 @@ btn-bot-sign = { $is_enabled ->
 }
 desc-bot-sign = افزودن امضای «Charlotte 🧡» به رسانه‌ها. غیرفعال کردنش کاملاً رایگانه.
 
+btn-detect-links-anywhere = { $is_enabled ->
+    [true] 🟢 لینک در متن
+    *[false] ⚪ لینک در متن
+}
+desc-detect-links-anywhere = به لینک‌های داخل پیام واکنش نشون بده. اگه خاموشش کنی، فقط به پیام‌هایی جواب می‌دم که فقط یک لینک باشن.
+
 btn-simple-mode = { $is_enabled ->
     [true] 🟢 حالت ساده
     *[false] ⚪ حالت ساده

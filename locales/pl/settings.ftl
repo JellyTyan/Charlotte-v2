@@ -109,6 +109,12 @@ btn-bot-sign = { $is_enabled ->
 }
 desc-bot-sign = Dodawaj podpis „Charlotte 🧡” do multimediów. Wyłączenie jest całkowicie darmowe.
 
+btn-detect-links-anywhere = { $is_enabled ->
+    [true] 🟢 Linki w tekście
+    *[false] ⚪ Linki w tekście
+}
+desc-detect-links-anywhere = Reaguj na linki wewnątrz wiadomości. Po wyłączeniu odpowiem tylko na wiadomości, które są samym linkiem.
+
 btn-simple-mode = { $is_enabled ->
     [true] 🟢 Tryb prosty
     *[false] ⚪ Tryb prosty

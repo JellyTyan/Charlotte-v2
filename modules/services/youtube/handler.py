@@ -35,7 +35,8 @@ from .keyboards import (
     build_advanced_keyboard,
     build_trim_input_keyboard,
 )
-from .utils import get_cache_key, cache_check, parse_time_range
+from utils.progress import current_context
+from .utils import get_cache_key, cache_check, cached_items, metadata_from_cache, parse_time_range
 
 youtube_router = Router(name="youtube")
 logger = logging.getLogger(__name__)
@@ -439,7 +440,14 @@ async def youtube_handler(
         await notify_already_downloading_if_ephemeral(message, message.from_user.id, i18n)
 
     async with ChatActionSender.choose_sticker(bot=message.bot, chat_id=chat_id):
-        metadata = await get_youtube_metadata(http_client, url)
+        try:
+            metadata = await get_youtube_metadata(http_client, url)
+        except BotError as e:
+            # media-core unreachable / 5xx: offer the formats we already have in cache
+            metadata = e.code == ErrorCode.INTERNAL_ERROR and await metadata_from_cache(db_session, url)
+            if not metadata:
+                raise
+            logger.warning("media-core metadata failed, using cached formats for %s", url)
 
     from utils.url_cache import store_url, url_hash
     await store_url(url)
@@ -488,6 +496,7 @@ async def youtube_handler(
         "selected_format": default_selected,
         "trim_active": False,
         "ui_mode": ui_mode,
+        "cached": await cached_items(db_session, url, options, bool(audio_only)),
     }
     await cache_set(f"yt_meta:{h}", meta_data, ttl=3600)
 
@@ -875,6 +884,7 @@ async def process_youtube_download(
             is_premium = (user.is_premium if user else False) or (payment_charge_id is not None)
 
             _action = ChatActionSender.upload_voice if is_audio_only else ChatActionSender.upload_video
+            _dl_action = ChatActionSender.record_voice if is_audio_only else ChatActionSender.record_video
 
             cache_key = get_cache_key(url, target_height, is_audio_only, is_topich)
             cached = await cache_check(db_session, cache_key)
@@ -893,9 +903,11 @@ async def process_youtube_download(
             await db_session.commit()
 
             client = http_client or httpx.AsyncClient()
+            if i18n:
+                current_context.set((message, i18n))
             try:
                 if message.bot:
-                    async with _action(bot=message.bot, chat_id=message.chat.id):
+                    async with _dl_action(bot=message.bot, chat_id=message.chat.id):
                         media_content = await download_youtube_full(
                             http_client=client,
                             url=url,
@@ -1041,11 +1053,14 @@ async def process_clip_download(
             await db_session.commit()
 
             _action = ChatActionSender.upload_voice if is_audio_only else ChatActionSender.upload_video
+            _dl_action = ChatActionSender.record_voice if is_audio_only else ChatActionSender.record_video
 
             client = http_client or httpx.AsyncClient()
+            if i18n:
+                current_context.set((message, i18n))
             try:
                 if message.bot:
-                    async with _action(bot=message.bot, chat_id=message.chat.id):
+                    async with _dl_action(bot=message.bot, chat_id=message.chat.id):
                         media_content = await download_youtube_clip(
                             http_client=client,
                             url=url,

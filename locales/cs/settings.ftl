@@ -109,6 +109,12 @@ btn-bot-sign = { $is_enabled ->
 }
 desc-bot-sign = Přidávat podpis „Charlotte 🧡“ k médiím. Vypnutí je zcela zdarma.
 
+btn-detect-links-anywhere = { $is_enabled ->
+    [true] 🟢 Odkazy v textu
+    *[false] ⚪ Odkazy v textu
+}
+desc-detect-links-anywhere = Reagovat na odkazy uvnitř zprávy. Pokud to vypneš, odpovím jen na zprávy, které jsou samotným odkazem.
+
 btn-simple-mode = { $is_enabled ->
     [true] 🟢 Jednoduchý režim
     *[false] ⚪ Jednoduchý režim

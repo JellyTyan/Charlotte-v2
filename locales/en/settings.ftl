@@ -109,6 +109,12 @@ btn-bot-sign = { $is_enabled ->
 }
 desc-bot-sign = Add "Charlotte 🧡" watermark to media. Disabling is completely free.
 
+btn-detect-links-anywhere = { $is_enabled ->
+    [true] 🟢 Links in text
+    *[false] ⚪ Links in text
+}
+desc-detect-links-anywhere = React to links inside a message. If turned off, I only answer messages that are just a link.
+
 btn-simple-mode = { $is_enabled ->
     [true] 🟢 Simple mode
     *[false] ⚪ Simple mode

@@ -2,8 +2,9 @@ import re
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, Message
 from typing import Callable, Dict, Any, Awaitable
-from storage.db.crud import get_chat_settings, get_global_settings
+from storage.db.crud import get_chat_settings, get_global_settings, get_user_settings
 from models.settings import ChatSettingsJson
+from utils.progress import current_context
 
 SERVICE_PATTERNS = {
     "applemusic": r"https?://music\.apple\.com/",
@@ -36,8 +37,9 @@ class ServiceBlockMiddleware(BaseMiddleware):
     ) -> Any:
         if not isinstance(event, Message) or not event.text:
             return await handler(event, data)
-        
+
         service = detect_service(event.text)
+        settings = None
         session = data.get("db_session")
         if service and session:
             # Blocked globally by the admin: tell the user, otherwise the bot looks broken
@@ -52,5 +54,13 @@ class ServiceBlockMiddleware(BaseMiddleware):
                 settings = await get_chat_settings(session, event.chat.id)
                 if isinstance(settings, ChatSettingsJson) and service in settings.profile.blocked_services:
                     return
+            elif event.from_user:
+                settings = await get_user_settings(session, event.from_user.id)
+
+            # "links in text" off: react only to messages that are just a link
+            if settings and not settings.profile.detect_links_anywhere and len(event.text.split()) > 1:
+                return
         
+        if data.get("i18n"):
+            current_context.set((event, data["i18n"]))
         return await handler(event, data)

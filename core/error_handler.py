@@ -7,7 +7,7 @@ from aiogram.types import Chat, ErrorEvent, Message, User
 from fluentogram import TranslatorRunner
 
 from core.alert_manager import send_admin_alert
-from models.errors import BotError
+from models.errors import BotError, ErrorCode
 from storage.db import database_manager
 from storage.db.crud import get_chat_settings, get_user_settings
 
@@ -19,6 +19,19 @@ _IGNORABLE_TG_ERRORS = {
     "MESSAGE_NOT_MODIFIED",
     "MESSAGE_TO_DELETE_NOT_FOUND",
     "MESSAGE_TO_EDIT_NOT_FOUND",
+}
+
+
+_EXPECTED_CODES = {
+    ErrorCode.NOT_FOUND,
+    ErrorCode.AGE_RESTRICTED,
+    ErrorCode.PRIVATE_CONTENT,
+    ErrorCode.REGION_RESTRICTED,
+    ErrorCode.INVALID_URL,
+    ErrorCode.LARGE_FILE,
+    ErrorCode.DOWNLOAD_CANCELLED,
+    ErrorCode.NOT_ALLOWED,
+    ErrorCode.NOT_SUPPORTED,
 }
 
 
@@ -90,9 +103,6 @@ async def _handle_bot_error(
             cooldown_seconds=300,
         )
 
-    if exception.is_logged:
-        logger.error(f"Error: {exception.message}")
-
 
 async def _log_download_failure(exception: BotError, user: User | None, chat: Chat | None) -> None:
     user_id = user.id if user else (chat.id if chat else None)
@@ -142,7 +152,15 @@ def register_error_handler(dp: Dispatcher, bot: Bot) -> None:
     @dp.error()
     async def global_error_handler(event: ErrorEvent):
         exception = event.exception
-        logger.error(f"Global error handler triggered: {type(exception).__name__}: {exception}")
+        user, chat = _extract_user_and_chat(event.update)
+        who = f"user={user.id if user else None} chat={chat.id if chat else None}"
+        if isinstance(exception, BotError):
+            # one line per BotError; expected user-facing outcomes are not errors
+            level = logging.WARNING if exception.code in _EXPECTED_CODES else logging.ERROR
+            svc = exception.service.value if exception.service else None
+            logger.log(level, f"BotError {exception.code.value} service={svc} {who} url={exception.url} msg={exception.message}")
+        else:
+            logger.error(f"Global error handler triggered: {type(exception).__name__}: {exception} {who}")
 
         if isinstance(exception, TelegramBadRequest) and _is_ignorable_tg_error(exception):
             logger.info(f"Ignoring non-actionable Telegram error: {exception}")
@@ -171,7 +189,6 @@ def register_error_handler(dp: Dispatcher, bot: Bot) -> None:
                 from middlewares.button_owner import register_message_owner
                 from utils.ephemeral import send_smart_message
                 from utils.error_messages import get_error_keyboard
-                user, chat = _extract_user_and_chat(event.update)
                 owner_id = user.id if user else (message.from_user.id if message.from_user else None)
                 reply_markup = get_error_keyboard(None, owner_id=owner_id)
                 sent = await send_smart_message(message, "❌ An error occurred. Please try again later.", for_user_id=owner_id, reply_markup=reply_markup)
@@ -181,12 +198,10 @@ def register_error_handler(dp: Dispatcher, bot: Bot) -> None:
                 pass
             return
 
-        user, chat = _extract_user_and_chat(event.update)
         lang = await _resolve_language(chat, user)
         i18n: TranslatorRunner = hub.get_translator_by_locale(lang)
 
         if isinstance(exception, BotError):
-            logger.info(f"Handling BotError: code={exception.code}, message={exception.message}")
             await _handle_bot_error(exception, message, user, chat, i18n, bot)
         else:
             try:
