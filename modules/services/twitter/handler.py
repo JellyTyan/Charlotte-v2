@@ -20,7 +20,7 @@ twitter_router = Router(name="twitter")
 
 logger = logging.getLogger(__name__)
 
-TWITTER_REGEX = r"https?://(?:www\.|mobile\.)?(?:twitter|x)\.com/(?:[\w-]+/){1,2}status/\d+"
+TWITTER_REGEX = r"https?://(?:[\w-]+\.)?(?:twitter|x|fxtwitter|fixupx|vxtwitter|fixvx|twittpr)\.com/(?:[\w-]+/){1,2}status/\d+"
 
 
 @twitter_router.message(F.text.regexp(TWITTER_REGEX))
@@ -36,6 +36,7 @@ async def twitter_handler(
     url = extract_url(TWITTER_REGEX, message.text)
     if not url:
         return
+    url = "https://x.com/" + url.split("/", 3)[3]  # embed-fix mirrors (fxtwitter, vxtwitter, …) → x.com
     chat_id = message.chat.id
     user_id = message.from_user.id
 

@@ -1,3 +1,4 @@
+import re
 import logging
 from pathlib import Path
 
@@ -37,7 +38,7 @@ async def cache_check(session: AsyncSession, cache_key: str) -> MediaContent | N
         )
     return None
 
-APPLE_REGEX = r"https?:\/\/music\.apple\.com\/[a-z]{2}\/(?:album|playlist|song)\/\S+"
+APPLE_REGEX = r"https?:\/\/music\.apple\.com\/(?:[a-z]{2}\/)?(?:album|playlist|song)\/\S+"
 
 
 async def fetch_core_download(
@@ -166,6 +167,7 @@ async def apple_handler(
     url = extract_url(APPLE_REGEX, message.text)
     if not url:
         return
+    url = re.sub(r"music\.apple\.com/(album|playlist|song)/", r"music.apple.com/us/\1/", url)  # add storefront core expects
     chat_id = message.chat.id
     user_id = message.from_user.id
 

@@ -12,14 +12,14 @@ from models.service_list import Services
 from modules.services._shared import build_media_items, cache_check, make_cache_key
 from senders.media_sender import MediaSender
 from storage.db.crud import check_if_user_premium
-from tasks.task_manager import task_manager
+from tasks.task_manager import resolve_url, task_manager
 from utils import escape_html, build_caption, format_author_link, extract_url
 
 insta_router = Router(name="instagram")
 
 logger = logging.getLogger(__name__)
 
-INSTAGRAM_REGEX = r"https?://(?:www\.)?instagram\.com/(?:p|reels?|tv)/[\w-]+/?"
+INSTAGRAM_REGEX = r"https?://(?:www\.)?instagram\.com/(?:share/(?:(?:p|reels?)/)?|(?:p|reels?|tv)/)[\w-]+/?"
 
 @insta_router.message(F.text.regexp(INSTAGRAM_REGEX))
 async def instagram_handler(message: Message, db_session: AsyncSession, http_client: httpx.AsyncClient):
@@ -30,6 +30,9 @@ async def instagram_handler(message: Message, db_session: AsyncSession, http_cli
     if not url:
         return
     user_id = message.from_user.id
+
+    if "/share/" in url:
+        url = (await resolve_url(http_client, url)).split("?")[0]
 
     # real shortcodes are 10-11 chars; longer ones are mangled pastes core can never resolve
     if len(url.rstrip("/").rsplit("/", 1)[-1]) > 15:

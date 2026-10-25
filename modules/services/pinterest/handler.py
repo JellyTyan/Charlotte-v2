@@ -18,7 +18,7 @@ pinterest_router = Router(name="pinterest")
 
 logger = logging.getLogger(__name__)
 
-PINTEREST_REGEX = r"https?://(?:www\.)?(?:pinterest\.com/[\w/-]+|pin\.it/[A-Za-z0-9]+)"
+PINTEREST_REGEX = r"https?://(?:(?:[\w-]+\.)?pinterest\.(?:com|[a-z]{2})(?:\.[a-z]{2})?/[\w/-]+|pin\.it/[A-Za-z0-9]+)"
 
 
 @pinterest_router.message(F.text.regexp(PINTEREST_REGEX))
@@ -41,6 +41,7 @@ async def pinterest_handler(message: Message, db_session: AsyncSession, http_cli
         match = re.search(r"/pin/(\d+)", resolved_url)
         if match:
             pin_id = match.group(1)
+            resolved_url = f"https://www.pinterest.com/pin/{pin_id}/"  # regional domains (ru., .co.uk) → canonical
 
         cache_key = f"pin:{pin_id}" if pin_id else None
         if cache_key:

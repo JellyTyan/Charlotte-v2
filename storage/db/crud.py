@@ -1,3 +1,4 @@
+import re
 import logging
 import datetime
 import json
@@ -14,6 +15,7 @@ from sqlalchemy import (
     case,
     text,
     literal,
+    literal_column,
     String,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -921,38 +923,52 @@ async def increment_save_uses(session: AsyncSession, save_id: int, user_id: int 
 
 # Порог strict_word_similarity для нечёткого поиска по целым словам.
 # Опечатки: «снае»→«санае» = 0.375, «лижит»→«лижет» = 0.333. Шум: «снае»→«нае*ал» = 0.286.
-FUZZY_WORD_THRESHOLD = 0.33
+FUZZY_WORD_THRESHOLD = 0.30
+# literal SQL (no bind params) so it matches the trigram index ix_user_saves_doc_trgm
+SAVES_DOC = literal_column("left(label || ' ' || coalesce(title, '') || ' ' || coalesce(caption, ''), 300)")
+
+
+def _query_forms(query: str) -> list[str]:
+    """query_variants без раскладочного мусора: формы со знаками между букв («g;.s», «v]k.»)
+    получаются, только когда запрос и так набран правильно."""
+    variants = query_variants(query)
+    return [v for i, v in enumerate(variants) if re.search(r"\w", v) and (i == 0 or not re.search(r"\w[^\w\s'-]+\w", v))]
+
+
+def _word_starts(col, form: str):
+    """Каждое слово формы — начало какого-то слова в col (\\m). Не подстрокой: транслит-обрезки
+    вроде «olt» иначе находят «Travolta». GIN trgm-индекс умеет и регэкспы."""
+    return and_(*[col.op("~*")(r"\m" + re.escape(w)) for w in re.findall(r"\w+", form)])
 
 
 async def _search_saves(session: AsyncSession, base, query: str, order: list, limit: int) -> list[UserSaves]:
     """Общий поиск по сохранёнкам.
 
-    1. Полнотекст (search_vector, стемминг) ИЛИ подстрока ILIKE по label/title/caption —
-       одним запросом, чтобы частично набранное слово («кот» → «котики») тоже находилось.
-    2. Если пусто — нечёткий pg_trgm по отдельным словам label (опечатки):
+    1. Полнотекст (search_vector, стемминг) ИЛИ слова запроса — начала слов в названии/подписи
+       («кот» → «котики»).
+    2. Если в названии нашлось меньше лимита — нечёткий pg_trgm по отдельным словам label (опечатки):
        «снае» находит и «Санае», и «Санае Лижет рейму».
+    Порядок: совпадение в названии (его дал человек) → нечёткое в названии → слово в чужой подписи.
     Ошибочная раскладка (ghbdtn → привет) и транслит (санае ⇄ sanae) учитываются в обоих шагах.
     """
     if not query.strip():
         result = await session.execute(base.order_by(*order).limit(limit))
         return list(result.scalars().all())
-
-    variants = query_variants(query)
+    forms = _query_forms(query)
+    if not forms:
+        return []
 
     # websearch_to_tsquery понимает «or» и никогда не падает на пользовательском вводе
-    ts_query = func.websearch_to_tsquery(text("'russian'::regconfig"), " or ".join(variants))
-    conditions = [UserSaves.search_vector.op("@@")(ts_query)]
-    for v in variants:
-        pattern = f"%{escape_ilike(v)}%"
-        conditions += [
-            UserSaves.label.ilike(pattern, escape="\\"),
-            UserSaves.title.ilike(pattern, escape="\\"),
-            UserSaves.caption.ilike(pattern, escape="\\"),
-        ]
-
-    result = await session.execute(base.where(or_(*conditions)).order_by(*order).limit(limit))
-    rows = list(result.scalars().all())
-    if rows:
+    ts_query = func.websearch_to_tsquery(text("'russian'::regconfig"), " or ".join(forms))
+    in_label = case((or_(*[_word_starts(UserSaves.label, f) for f in forms]), True), else_=False)
+    matched = or_(UserSaves.search_vector.op("@@")(ts_query), *[_word_starts(SAVES_DOC, f) for f in forms])
+    result = await session.execute(
+        base.add_columns(in_label).where(matched).order_by(in_label.desc(), *order).limit(limit)
+    )
+    found = result.all()
+    rows = [r for r, hit in found if hit]
+    in_caption = [r for r, hit in found if not hit]
+    if len(rows) >= limit:
         return rows
 
     # `q <<% label` — есть ли в label целое слово, похожее на q (strict_word_similarity), идёт через GIN-индекс.
@@ -960,10 +976,15 @@ async def _search_saves(session: AsyncSession, base, query: str, order: list, li
     # Нестрогий `<%` засчитывает кусок слова и тянет шум («снае» → «Нае*ал»).
     # Дефолтный порог 0.5 слишком строг для коротких слов: одна опечатка в «санае» даёт 0.375.
     await session.execute(select(func.set_config("pg_trgm.strict_word_similarity_threshold", str(FUZZY_WORD_THRESHOLD), True)))
-    fuzzy = or_(*[literal(v).op("<<%")(UserSaves.label) for v in variants])
-    score = func.greatest(*[func.strict_word_similarity(v, UserSaves.label) for v in variants])
-    result = await session.execute(base.where(fuzzy).order_by(score.desc(), *order).limit(limit))
-    return list(result.scalars().all())
+    fuzzy = base.where(or_(*[literal(f).op("<<%")(UserSaves.label) for f in forms]))
+    if rows:
+        fuzzy = fuzzy.where(UserSaves.id.notin_([r.id for r in rows]))
+    score = func.greatest(*[func.strict_word_similarity(f, UserSaves.label) for f in forms])
+    result = await session.execute(fuzzy.order_by(score.desc(), *order).limit(limit - len(rows)))
+    # name hits, then typo'd name hits, then a stray word in someone's caption
+    rows += result.scalars().all()
+    seen = {r.id for r in rows}
+    return (rows + [r for r in in_caption if r.id not in seen])[:limit]
 
 
 async def search_user_saves(
@@ -1129,7 +1150,10 @@ MUSIC_PLATFORMS = (
 
 # Порог word_similarity для нечёткого поиска музыки. «kai endzhel»→«Kai Angel» = 0.33,
 # «teylor svift»→«Taylor Swift» = 0.38 (транслит кириллицы), «ken karson»→«Ken Carson» = 0.62.
-MUSIC_FUZZY_THRESHOLD = 0.33
+MUSIC_FUZZY_THRESHOLD = 0.30  # strict_word_similarity; tuned on prod dump: 0.33 loses 3% of double typos, 0.27 adds 15% noise
+# literal SQL (no bind params) so it matches the trigram index ix_mediacache_doc_trgm
+# capped at 100 chars: some "titles" are whole YouTube descriptions (up to 5k chars) — slow and noisy to match
+MUSIC_DOC = literal_column("left(trim(coalesce(data->>'author', '')) || ' ' || coalesce(data->>'title', ''), 100)")
 
 
 async def search_cached_music(
@@ -1141,9 +1165,9 @@ async def search_cached_music(
     """
     Поиск по кэшированной музыке (все музыкальные сервисы + YouTube audio).
 
-    1. Все слова запроса есть в артисте или названии (в любом порядке).
+    1. Каждое слово запроса — начало какого-то слова у артиста или в названии (в любом порядке).
        Сначала треки, где запрос — это артист целиком, потом начало артиста/названия, потом остальное.
-    2. Если мало — нечёткий pg_trgm по «артист + название»: опечатки («arctic monkys»)
+    2. Если мало — нечёткий pg_trgm (strict_word_similarity, целые слова) по «артист + название»: опечатки («arctic monkys»)
        и артист кириллицей («кен карсон» → «Ken Carson»).
     Ошибочная раскладка и транслит учитываются в обоих шагах (query_variants).
     """
@@ -1171,21 +1195,17 @@ async def search_cached_music(
         rows = result.scalars().all()
         return [MediaCacheDTO.model_validate(row, from_attributes=True) for row in rows]
 
-    variants = query_variants(query)
+    variants = _query_forms(query)
+    if not variants:
+        return []
     author = func.trim(func.coalesce(MediaCache.data["author"].as_string(), ""))
     title = func.coalesce(MediaCache.data["title"].as_string(), "")
 
     def like(col, pattern: str):
         return col.ilike(pattern, escape="\\")
 
-    # 1. Все слова есть в артисте или названии — хотя бы для одного варианта запроса
-    all_words = or_(*[
-        and_(*[
-            or_(like(title, f"%{escape_ilike(w)}%"), like(author, f"%{escape_ilike(w)}%"))
-            for w in v.split()
-        ])
-        for v in variants
-    ])
+    # 1. Каждое слово — начало какого-то слова у артиста или в названии, хотя бы для одного варианта
+    all_words = or_(*[_word_starts(MUSIC_DOC, v) for v in variants])
     escaped = [escape_ilike(v) for v in variants]
     relevance_rank = case(
         (or_(*[like(author, e) for e in escaped]), 0),
@@ -1201,11 +1221,15 @@ async def search_cached_music(
 
     # 2. Нечёткий поиск, если точных совпадений меньше лимита
     if len(found_rows) < limit:
-        doc = func.concat(author, " ", title)
-        score = func.greatest(*[func.word_similarity(v, doc) for v in variants])
+        doc = MUSIC_DOC
+        score = func.greatest(*[func.strict_word_similarity(v, doc) for v in variants])
         # Похожесть на артиста целиком поднимает его треки над случайным словом в названии
         author_score = func.greatest(*[func.similarity(v, author) for v in variants])
-        fuzzy_stmt = stmt.where(score >= MUSIC_FUZZY_THRESHOLD)
+        # `v <<% doc` is strict_word_similarity >= threshold (whole words only), served by the trigram index
+        await session.execute(
+            select(func.set_config("pg_trgm.strict_word_similarity_threshold", str(MUSIC_FUZZY_THRESHOLD), True))
+        )
+        fuzzy_stmt = stmt.where(or_(*[literal(v).op("<<%")(doc) for v in variants]))
         if found_rows:
             fuzzy_stmt = fuzzy_stmt.where(~MediaCache.media_id.in_([r.media_id for r in found_rows]))
         res = await session.execute(

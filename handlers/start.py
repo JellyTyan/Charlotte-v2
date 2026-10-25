@@ -42,6 +42,18 @@ async def start_command(
     if not message.from_user:
         return None
 
+    if command.args and command.args.startswith("dm_") and message.chat.type == "private":
+        # deep link from a chat where the bot had no media rights (MediaSender._offer_dm)
+        data = await cache_get(f"dm:{command.args[3:]}")
+        if not data:
+            return await message.answer(i18n.get("dm-expired"))
+        await create_user(session=db_session, user_id=message.from_user.id)
+        from models.media import MediaContent, MediaType
+        from senders.media_sender import MediaSender
+        content = [MediaContent(**{**d, "type": MediaType(d["type"])}) for d in data["items"]]
+        await MediaSender().send(message, content, skip_reaction=True, service=data.get("service"), db_session=db_session)
+        return None
+
     if command.args:
         url_hash = command.args
 

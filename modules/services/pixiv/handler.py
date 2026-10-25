@@ -1,3 +1,4 @@
+import re
 import logging
 
 import httpx
@@ -18,7 +19,7 @@ pixiv_router = Router(name="pixiv")
 
 logger = logging.getLogger(__name__)
 
-PIXIV_REGEX = r"https?://(?:www\.)?pixiv\.net/(?:[a-z]{2}/)?artworks/\d+"
+PIXIV_REGEX = r"https?://(?:www\.)?pixiv\.net/(?:(?:[a-z]{2}/)?artworks/|i/|member_illust\.php\?(?:[\w=]+&)*illust_id=)\d+"
 
 
 @pixiv_router.message(F.text.regexp(PIXIV_REGEX))
@@ -34,6 +35,7 @@ async def pixiv_handler(
     url = extract_url(PIXIV_REGEX, message.text)
     if not url:
         return
+    url = "https://www.pixiv.net/artworks/" + re.search(r"(\d+)$", url).group(1)
     chat_id = message.chat.id
     user_id = message.from_user.id
 

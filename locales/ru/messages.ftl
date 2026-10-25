@@ -202,6 +202,9 @@ report-reply-required = Ответь командой <code>/report</code> на 
 report-not-bot-message = Эта команда работает только в ответ на мои сообщения 🐾
 report-success = Спасибо за репорт! Я передала всё разработчику, скоро разберёмся 🧡
 error-send-failed = ❌ Не удалось отправить медиа в Telegram. Файл повреждён или отклонён сервером.
+error-no-media-rights = 🚫 Мне запрещено отправлять медиа в этот чат. Админы могут выдать мне права на медиа — а пока забери в личке:
+btn-get-in-dm = 📩 Получить в ЛС
+dm-expired = ⌛ Ссылка устарела. Пришли исходную ссылку ещё раз.
 yt-trim-invalid-format = Не могу разобрать такой формат. Укажи НАЧАЛО-КОНЕЦ, например <code>1:30-2:45</code>, а миллисекунды — через запятую: <code>1:30,250-2:45</code>. Попробуешь ещё раз?
 
 # Task stage statuses (media-core /status: stage, reason); suffix -1..-3 = random variants

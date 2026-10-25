@@ -2,7 +2,7 @@ import datetime
 from datetime import timezone
 from typing import Any
 from sqlalchemy import BigInteger, Boolean, Date, Integer, String, DateTime, JSON, Text, Index, Computed
-from sqlalchemy.dialects.postgresql import TSVECTOR
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -102,7 +102,7 @@ class MediaCache(Base):
     media_type: Mapped[str] = mapped_column(String, nullable=False)  # 'video', 'audio', 'gallery'
     platform: Mapped[str] = mapped_column(String, nullable=False)  # 'youtube', 'instagram', 'tiktok'
 
-    data: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
 
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),

@@ -41,7 +41,7 @@ from .utils import get_cache_key, cache_check, cached_items, metadata_from_cache
 youtube_router = Router(name="youtube")
 logger = logging.getLogger(__name__)
 
-YOUTUBE_REGEX = r"https?://(?:www\.)?(?:m\.)?(?:youtu\.be/|youtube\.com/(?:shorts/|watch\?v=))([\w-]+)"
+YOUTUBE_REGEX = r"https?://(?:www\.)?(?:m\.)?(?:youtu\.be/|youtube\.com/(?:shorts/|watch\?(?:[\w%.-]+=[\w%.-]*&)*v=))([\w-]+)"
 
 _background_tasks: set[asyncio.Task] = set()
 
@@ -429,6 +429,8 @@ async def youtube_handler(
     url = extract_url(YOUTUBE_REGEX, message.text)
     if not url:
         return
+    if "watch?" in url:
+        url = "https://www.youtube.com/watch?v=" + url.rsplit("v=", 1)[1]  # ?app=desktop&v=… → canonical
     chat_id = message.chat.id
 
     from utils.effects import react_safe
@@ -884,7 +886,7 @@ async def process_youtube_download(
             is_premium = (user.is_premium if user else False) or (payment_charge_id is not None)
 
             _action = ChatActionSender.upload_voice if is_audio_only else ChatActionSender.upload_video
-            _dl_action = ChatActionSender.record_voice if is_audio_only else ChatActionSender.record_video
+            _dl_action = ChatActionSender.record_voice if is_audio_only else ChatActionSender.record_video_note
 
             cache_key = get_cache_key(url, target_height, is_audio_only, is_topich)
             cached = await cache_check(db_session, cache_key)
@@ -1053,7 +1055,7 @@ async def process_clip_download(
             await db_session.commit()
 
             _action = ChatActionSender.upload_voice if is_audio_only else ChatActionSender.upload_video
-            _dl_action = ChatActionSender.record_voice if is_audio_only else ChatActionSender.record_video
+            _dl_action = ChatActionSender.record_voice if is_audio_only else ChatActionSender.record_video_note
 
             client = http_client or httpx.AsyncClient()
             if i18n:

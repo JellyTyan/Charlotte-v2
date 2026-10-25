@@ -11,7 +11,7 @@ from models.media import MediaContent, MediaType
 
 logger = logging.getLogger(__name__)
 
-YOUTUBE_ID_REGEX = re.compile(r"https?://(?:www\.)?(?:m\.)?(?:youtu\.be/|youtube\.com/(?:shorts/|watch\?v=))([\w-]+)")
+YOUTUBE_ID_REGEX = re.compile(r"https?://(?:www\.)?(?:m\.)?(?:youtu\.be/|youtube\.com/(?:shorts/|watch\?(?:[\w%.-]+=[\w%.-]*&)*v=))([\w-]+)")
 
 
 def format_ms_to_hhmmss(ms: int) -> str:

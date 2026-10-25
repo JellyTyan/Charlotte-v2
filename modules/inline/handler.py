@@ -24,7 +24,8 @@ from fluentogram import TranslatorRunner
 inline_router = Router(name="inline_handler")
 logger = logging.getLogger(__name__)
 
-INLINE_SEARCH_LIMIT = 25
+INLINE_PAGE = 50  # Bot API max results per answerInlineQuery
+INLINE_MAX_RESULTS = 1000  # each page re-runs the search with LIMIT offset+page and slices; 1001 rows ≈ 25 ms on the prod dump
 VISUAL_MEDIA_TYPES = ("photo", "video", "gif")
 
 RECENT_TAGS = ("#recent", "#recents", "#недавнее", "#история", "#last")
@@ -81,15 +82,30 @@ def _build_recent_inline_result(item: dict, idx: int):
     return None
 
 
+def _offset(inline_query: InlineQuery) -> int:
+    try:
+        return max(int(inline_query.offset or 0), 0)
+    except ValueError:
+        return 0
+
+
 async def _safe_answer_inline(
     inline_query: InlineQuery,
     results: list,
     cache_time: int = 3,
     is_personal: bool = True,
+    offset: int = 0,
 ):
-    """Безопасная отправка ответа инлайна с перехватом TelegramBadRequest."""
+    """Отдаёт страницу results[offset:offset+50] с next_offset; перехватывает TelegramBadRequest.
+
+    results — полный список до offset + INLINE_PAGE + 1 элементов (лишний = есть следующая страница)."""
+    end = offset + INLINE_PAGE
+    next_offset = str(end) if len(results) > end and end < INLINE_MAX_RESULTS else ""
+    results = results[offset:end]
     try:
-        return await inline_query.answer(results, cache_time=cache_time, is_personal=is_personal)
+        return await inline_query.answer(
+            results, cache_time=cache_time, is_personal=is_personal, next_offset=next_offset
+        )
     except TelegramBadRequest as e:
         logger.warning(f"Failed to answer inline query with {len(results)} items: {e}")
         try:
@@ -116,6 +132,8 @@ async def inline_main_handler(
     raw_query = inline_query.query.strip()
     user_id = inline_query.from_user.id
     q_lower = raw_query.lower()
+    offset = _offset(inline_query)
+    limit = offset + INLINE_PAGE + 1
 
     # 1. ХЭШТЕГ #recent — до 15 недавних загрузок за 12 часов
     is_recent, recent_query = _match_hashtag(raw_query, RECENT_TAGS)
@@ -157,7 +175,7 @@ async def inline_main_handler(
     is_music, music_query = _match_hashtag(raw_query, MUSIC_TAGS)
     if is_music:
         results = []
-        tracks = await search_cached_music(db_session, music_query, limit=INLINE_SEARCH_LIMIT)
+        tracks = await search_cached_music(db_session, music_query, limit=limit)
         for idx, track in enumerate(tracks):
             if not track.telegram_file_id or ":lossless" in track.cache_key:
                 continue
@@ -169,20 +187,21 @@ async def inline_main_handler(
                     caption=None,
                 )
             )
-        return await _safe_answer_inline(inline_query, results, cache_time=5, is_personal=True)
+        # same results for everyone: let Telegram serve repeats from its own cache
+        return await _safe_answer_inline(inline_query, results, cache_time=300, is_personal=False, offset=offset)
 
     # 4. ХЭШТЕГ #saved (или #saves) — поиск только по личным сохранёнкам
     is_saved, saved_query = _match_hashtag(raw_query, SAVED_TAGS)
     if is_saved:
         results = []
         user_saves = await search_user_saves(
-            db_session, user_id, query=saved_query, limit=INLINE_SEARCH_LIMIT
+            db_session, user_id, query=saved_query, limit=limit
         )
         for save in user_saves:
             item = _build_save_inline_result(save, is_own=True)
             if item:
                 results.append(item)
-        return await _safe_answer_inline(inline_query, results, cache_time=3, is_personal=True)
+        return await _safe_answer_inline(inline_query, results, cache_time=3, is_personal=True, offset=offset)
 
     # 5. ПУСТОЙ ЗАПРОС (@bot): структурированная выдача без перегруза
     if not raw_query:
@@ -215,7 +234,7 @@ async def inline_main_handler(
                     seen_file_ids.add(fid)
                     results.append(res)
 
-        # В. Личные сохранёнки пользователя (до 5 шт.)
+        # В. Личные сохранёнки пользователя (до 5 шт.; все — через #saved)
         user_saves = await search_user_saves(
             db_session, user_id, query="", limit=5, media_types=VISUAL_MEDIA_TYPES
         )
@@ -226,8 +245,8 @@ async def inline_main_handler(
                     seen_file_ids.add(save.telegram_file_id)
                     results.append(res)
 
-        # Г. Популярные публичные мемы библиотеки (добирают до 25)
-        remaining = INLINE_SEARCH_LIMIT - len(results)
+        # Г. Популярные публичные мемы библиотеки (добирают до страницы, дальше листаются)
+        remaining = limit - len(results)
         if remaining > 0:
             pub_saves = await search_public_saves(
                 db_session, query="", exclude_user_id=user_id,
@@ -240,29 +259,29 @@ async def inline_main_handler(
                         seen_file_ids.add(save.telegram_file_id)
                         results.append(res)
 
-        return await _safe_answer_inline(inline_query, results, cache_time=1, is_personal=True)
+        return await _safe_answer_inline(inline_query, results, cache_time=1, is_personal=True, offset=offset)
 
     # 6. ПОИСК ПО ТЕКСТУ (@bot <текст>)
     results = []
     user_saves = await search_user_saves(
-        db_session, user_id, query=raw_query, limit=INLINE_SEARCH_LIMIT, media_types=VISUAL_MEDIA_TYPES
+        db_session, user_id, query=raw_query, limit=limit, media_types=VISUAL_MEDIA_TYPES
     )
     for save in user_saves:
         item = _build_save_inline_result(save, is_own=True)
         if item:
             results.append(item)
 
-    if len(results) < INLINE_SEARCH_LIMIT:
+    if len(results) < limit:
         pub_saves = await search_public_saves(
             db_session, query=raw_query, exclude_user_id=user_id,
-            limit=INLINE_SEARCH_LIMIT - len(results), media_types=VISUAL_MEDIA_TYPES
+            limit=limit - len(results), media_types=VISUAL_MEDIA_TYPES
         )
         for save in pub_saves:
             item = _build_save_inline_result(save, is_own=False)
             if item:
                 results.append(item)
 
-    return await _safe_answer_inline(inline_query, results, cache_time=3, is_personal=True)
+    return await _safe_answer_inline(inline_query, results, cache_time=3, is_personal=True, offset=offset)
 
 
 @inline_router.chosen_inline_result()

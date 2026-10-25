@@ -18,7 +18,7 @@ reddit_router = Router(name="reddit")
 
 logger = logging.getLogger(__name__)
 
-REDDIT_REGEX = r"https?:\/\/(?:www\.|old\.|new\.)?reddit\.com\/(?:r\/[A-Za-z0-9_]+\/)?(?:comments\/[A-Za-z0-9]+(?:\/[^\/\s?]+)?|s\/[A-Za-z0-9]+|gallery\/[A-Za-z0-9]+)(?:\/)?"
+REDDIT_REGEX = r"https?:\/\/(?:(?:www\.|old\.|new\.|m\.)?reddit\.com\/(?:r\/[A-Za-z0-9_]+\/)?(?:comments\/[A-Za-z0-9]+(?:\/[^\/\s?]+)?|s\/[A-Za-z0-9]+|gallery\/[A-Za-z0-9]+)(?:\/)?|(?:v\.)?redd\.it\/[A-Za-z0-9]+)"
 
 
 @reddit_router.message(F.text.regexp(REDDIT_REGEX))
@@ -39,7 +39,7 @@ async def reddit_handler(
     from utils.effects import react_safe
     await react_safe(message, "👀")
 
-    if "/s/" in url:
+    if "/s/" in url or "redd.it/" in url:
         url = (await resolve_url(http_client, url)).split("?")[0]  # drop ?share_id=… that core rejects
 
     sponsor = await check_if_user_premium(db_session, user_id)

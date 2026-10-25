@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import random
+import secrets
 import time
 from functools import wraps
 from pathlib import Path
@@ -29,6 +30,7 @@ from storage.db.crud import (
     get_media_cache,
 )
 from storage.cache import redis_client as _redis_module
+from storage.cache.redis_client import cache_set
 from models.settings import UserSettingsJson, ChatSettingsJson
 from models.media_cache import MediaCacheDTO, CacheMetadata, CacheItemMetadata
 from models.service_list import Services
@@ -39,6 +41,11 @@ logger = logging.getLogger(__name__)
 
 _IS_LOCAL_API = Config.instance().TELEGRAM_LOCAL
 AD_TEXT = "<a href='https://t.me/CharlotteFox_Bot'>Charlotte 🧡</a>"
+# MediaContent fields that survive a Redis round-trip (no local paths/bytes) for the DM fallback
+DM_FIELDS = (
+    "telegram_file_id", "telegram_document_file_id", "cover_file_id", "full_cover_file_id", "filename",
+    "width", "height", "duration", "title", "description", "performer", "is_blurred", "is_lossless", "is_nsfw", "as_document",
+)
 
 REACTION_EMOJIS = [
     "👍",
@@ -464,27 +471,33 @@ class MediaSender:
 
             # 6. Отправка пользователю
             sent_all = []
-            if media_items:
-                has_video = any(getattr(m, "type", None) == MediaType.VIDEO for m in media_items)
-                media_action = ChatActionSender.upload_video if has_video else ChatActionSender.upload_photo
-                async with media_action(bot=message.bot, chat_id=message.chat.id):
-                    msgs = await self._send_media_group(
-                        message, media_items, caption, settings, service, show_ad, skip_notification
-                    )
-                    if msgs:
-                        sent_all.extend(msgs)
+            try:
+                if media_items:
+                    has_video = any(getattr(m, "type", None) == MediaType.VIDEO for m in media_items)
+                    media_action = ChatActionSender.upload_video if has_video else ChatActionSender.upload_photo
+                    async with media_action(bot=message.bot, chat_id=message.chat.id):
+                        msgs = await self._send_media_group(
+                            message, media_items, caption, settings, service, show_ad, skip_notification
+                        )
+                        if msgs:
+                            sent_all.extend(msgs)
 
-            for audio in audio_items:
-                async with ChatActionSender.upload_voice(bot=message.bot, chat_id=message.chat.id):
-                    msg = await self._send_audio(message, audio, settings, service, caption, show_ad, skip_notification)
-                    if msg:
-                        sent_all.append(msg)
+                for audio in audio_items:
+                    async with ChatActionSender.upload_voice(bot=message.bot, chat_id=message.chat.id):
+                        msg = await self._send_audio(message, audio, settings, service, caption, show_ad, skip_notification)
+                        if msg:
+                            sent_all.append(msg)
 
-            for gif in gif_items:
-                async with ChatActionSender.upload_video(bot=message.bot, chat_id=message.chat.id):
-                    msg = await self._send_gif(message, gif, settings, service, caption, show_ad, skip_notification)
-                    if msg:
-                        sent_all.append(msg)
+                for gif in gif_items:
+                    async with ChatActionSender.upload_video(bot=message.bot, chat_id=message.chat.id):
+                        msg = await self._send_gif(message, gif, settings, service, caption, show_ad, skip_notification)
+                        if msg:
+                            sent_all.append(msg)
+            except BotError as e:
+                # chat forbids this media type for the bot: offer a deep link that delivers it in DM instead
+                if "not enough rights" not in str(e.message) or not await self._offer_dm(message, content, service):
+                    raise
+                return
 
             if sent_all:
                 from utils.message_context import save_message_context
@@ -908,6 +921,31 @@ class MediaSender:
             logger.info(f"💾 Saved media to cache: {cache_key}")
         except Exception as e:
             logger.error(f"Failed to save media to cache: {e}")
+
+    async def _offer_dm(self, message: types.Message, content: List[MediaContent], service: Optional[str]) -> bool:
+        """Stash file_ids in Redis and post a t.me/<bot>?start=dm_<token> button. False if nothing to stash or posting failed."""
+        if not all(c.telegram_file_id or c.telegram_document_file_id for c in content):
+            return False
+        token = secrets.token_urlsafe(9)
+        items = [{"type": c.type.value, **{f: getattr(c, f) for f in DM_FIELDS}} for c in content]
+        await cache_set(f"dm:{token}", {"items": items, "service": service}, ttl=48 * 3600)
+
+        from utils.progress import current_context
+        ctx = current_context.get()
+        i18n = ctx[1] if ctx else None
+        text = i18n.get("error-no-media-rights") if i18n else "🚫 I'm not allowed to send media in this chat. Admins can grant me media rights, or grab it in DM:"
+        button = i18n.get("btn-get-in-dm") if i18n else "📩 Get in DM"
+        bot = await message.bot.me()
+        kb = types.InlineKeyboardMarkup(inline_keyboard=[[
+            types.InlineKeyboardButton(text=button, url=f"https://t.me/{bot.username}?start=dm_{token}")
+        ]])
+        try:
+            await message.reply(text, reply_markup=kb)
+        except TelegramAPIError as e:
+            logger.warning(f"Can't post DM offer in {message.chat.id}: {e}")
+            return False
+        logger.warning(f"No media rights in chat {message.chat.id}, offered DM link")
+        return True
 
     def _parse_media(
         self, content: List[MediaContent]

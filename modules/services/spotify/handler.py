@@ -1,3 +1,4 @@
+import re
 import logging
 from pathlib import Path
 
@@ -15,7 +16,7 @@ from models.media import MediaContent, MediaType
 from models.service_list import Services
 from senders.media_sender import MediaSender
 from storage.db.crud import get_chat_settings, get_user_settings, get_media_cache
-from tasks.task_manager import task_manager
+from tasks.task_manager import resolve_url, task_manager
 from utils import delete_files, handle_lossless_response, extract_url
 from utils.statistics_helper import log_download_event
 
@@ -37,7 +38,7 @@ async def cache_check(session: AsyncSession, cache_key: str) -> MediaContent | N
         )
     return None
 
-SPOTIFY_REGEX = r"https?://open\.spotify\.com/(track|playlist|album)/([\w-]+)"
+SPOTIFY_REGEX = r"https?://(?:open\.spotify\.com/(?:intl-[\w-]+/)?(track|playlist|album)/([\w-]+)|spotify\.link/\w+)"
 
 
 async def fetch_core_download(
@@ -166,6 +167,9 @@ async def spotify_handler(
     url = extract_url(SPOTIFY_REGEX, message.text)
     if not url:
         return
+    if "spotify.link/" in url:
+        url = (await resolve_url(http_client, url)).split("?")[0]
+    url = re.sub(r"/intl-[\w-]+/", "/", url)  # localized share links (/intl-ru/track/…)
     chat_id = message.chat.id
     user_id = message.from_user.id
 
