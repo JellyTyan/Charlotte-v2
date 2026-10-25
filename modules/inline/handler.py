@@ -249,7 +249,7 @@ async def inline_main_handler(
         remaining = limit - len(results)
         if remaining > 0:
             pub_saves = await search_public_saves(
-                db_session, query="", exclude_user_id=user_id,
+                db_session, query="",
                 limit=remaining, media_types=VISUAL_MEDIA_TYPES
             )
             for save in pub_saves:
