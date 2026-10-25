@@ -245,12 +245,11 @@ async def inline_main_handler(
                     seen_file_ids.add(save.telegram_file_id)
                     results.append(res)
 
-        # Г. Популярные публичные мемы библиотеки (добирают до страницы, дальше листаются)
-        remaining = limit - len(results)
-        if remaining > 0:
+        # Г. Популярные публичные мемы библиотеки (добирают до страницы, дальше листаются).
+        if len(results) < limit:
             pub_saves = await search_public_saves(
                 db_session, query="",
-                limit=remaining, media_types=VISUAL_MEDIA_TYPES
+                limit=limit, media_types=VISUAL_MEDIA_TYPES
             )
             for save in pub_saves:
                 if save.telegram_file_id not in seen_file_ids:
