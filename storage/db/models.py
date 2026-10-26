@@ -21,6 +21,11 @@ class Users(Base):
     premium_ends: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=True)
     last_used: Mapped[datetime.date] = mapped_column(Date, default=datetime.date.today, nullable=True)
     settings_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    # set when the user blocks the bot or deletes the account; cleaned up after 30 days (tasks.scheduled)
+    blocked_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.datetime.now(timezone.utc), nullable=True
+    )
 
     @property
     def is_premium(self) -> bool:
@@ -47,6 +52,13 @@ class Chats(Base):
     chat_id: Mapped[int] = mapped_column(BigInteger, unique=True)
     owner_id: Mapped[int] = mapped_column(BigInteger)
     settings_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    # the bot's own membership, kept fresh by my_chat_member events (handlers/membership.py)
+    left_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    bot_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    can_post: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    created_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.datetime.now(timezone.utc), nullable=True
+    )
 
 
 class Statistics(Base):

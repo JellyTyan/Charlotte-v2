@@ -57,7 +57,9 @@ from utils.effects import send_message_with_effect, EFFECT_FIREWORKS
 from aiogram import Router
 from middlewares.admin_check import AdminMiddleware
 from middlewares.service_block import SERVICE_PATTERNS
-from storage.cache.redis_client import cache_delete
+from storage.cache.redis_client import cache_delete, cache_get
+from tasks import membership_check
+from tasks.membership_check import LAST_KEY as LAST_CHECK_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +87,10 @@ statistic_kb = InlineKeyboardMarkup(inline_keyboard=[
             InlineKeyboardButton(text="📊 Service Stats", callback_data="statistic_service_usage"),
         ],
         [
+            InlineKeyboardButton(text="🔍 Check DB", callback_data="statistic_membership_check"),
             InlineKeyboardButton(text="🗑 Clean Old Stats", callback_data="statistic_clean_old"),
+        ],
+        [
             InlineKeyboardButton(text="🔙 Back", callback_data="admin_panel_back"),
         ],
     ])
@@ -258,38 +263,75 @@ async def settings_back(callback: CallbackQuery, state: FSMContext):
 # === Statistic ===
 @admin_router.callback_query(lambda c: c.data == "admin_panel_statistic")
 async def admin_panel_stats(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession):
-    user_count = await get_user_counts(db_session)
+    dl = await get_user_counts(db_session)
     status_stats = await get_status_stats(db_session)
-    db_overview = await get_db_overview_stats(db_session)
+    o = await get_db_overview_stats(db_session)
+    u, c = o["users"], o["chats"]
+    last_check = await cache_get(LAST_CHECK_KEY)
 
-    total_requests = status_stats['complete'] + status_stats['error']
-    success_rate = (status_stats['complete'] / total_requests * 100) if total_requests > 0 else 0
+    def pct(part, whole):
+        return f"{part / whole * 100:.0f}%" if whole else "—"
 
-    total_users = db_overview['total_users']
-    total_chats = db_overview['total_chats']
-    inactive_users = db_overview['inactive_users']
-    inactive_users_pct = (inactive_users / total_users * 100) if total_users > 0 else 0
+    total_requests = status_stats["complete"] + status_stats["error"]
+    no_dm = (
+        f"\n  └ 👥 never opened DM: {last_check['no_dm']:,} (check {_fmt_check_date(last_check)})"
+        if last_check else ""
+    )
+    blocked_kept = f", {u['blocked_kept']} kept: banned/donors/premium" if u["blocked_kept"] else ""
+    unknown = f" · ❔ {c['unknown']}" if c["unknown"] else ""
+    cache_types = " · ".join(f"{t} {n:,}" for t, n in o["cache_by_type"].items())
 
     text = (
         "📊 <b>Global Statistics</b>\n\n"
-        "<b>🗄 Database</b>\n"
-        f"  👤 Users: <b>{total_users:,}</b>\n"
-        f"  └ Inactive (30d+): {inactive_users:,} ({inactive_users_pct:.1f}%)\n"
-        f"  💬 Chats: <b>{total_chats:,}</b>\n\n"
-        "<b>👥 Active Users:</b>\n"
-        f"  Today: {user_count['today']}\n"
-        f"  Yesterday: {user_count['yesterday']}\n"
-        f"  This week: {user_count['week']}\n"
-        f"  This month: {user_count['month']}\n\n"
-        "<b>📥 Total Requests:</b> {total}\n"
-        f"  ✅ Successful: {status_stats['complete']} ({success_rate:.1f}%)\n"
-        f"  ❌ Failed: {status_stats['error']} ({100-success_rate:.1f}%)\n\n"
-        "<b>💾 Media Cache:</b>\n"
-        f"  📦 Total cached: <b>{db_overview.get('total_cached', 0):,}</b> files\n"
-    ).format(total=total_requests)
+        f"👤 <b>Users: {u['total']:,}</b>\n"
+        f"  ├ 🆕 new: {u['new_today']} today · {u['new_week']} week · {u['new_month']} month\n"
+        f"  ├ 💤 inactive 30d+: {u['inactive']:,} ({pct(u['inactive'], u['total'])})\n"
+        f"  {'├' if last_check else '└'} 🚫 blocked the bot: {u['blocked']:,} ({pct(u['blocked'], u['total'])}{blocked_kept})"
+        f"{no_dm}\n\n"
+        f"💬 <b>Chats (known): {c['total']:,}</b>\n"
+        f"  ├ ✅ bot present: {c['present']} (👑 {c['admin']} · 👤 {c['member']} · 🔇 {c['muted']}{unknown})\n"
+        f"  ├ 🆕 this month: {c['new_month']}\n"
+        f"  └ 🚪 kicked / left: {c['left']}\n\n"
+        f"🔥 <b>Seen</b> (any action): {u['seen_today']} today · {u['seen_week']} 7d · {u['seen_month']} 30d\n"
+        f"📥 <b>Downloaders</b>: {dl['today']} today · {dl['yesterday']} yesterday · {dl['week']} 7d · {dl['month']} 30d\n\n"
+        f"📨 <b>Requests (90 d): {total_requests:,}</b> · today {o['requests_today']:,}\n"
+        f"  ✅ {pct(status_stats['complete'], total_requests)} · ❌ {pct(status_stats['error'], total_requests)}\n\n"
+        f"💾 <b>Cache: {o['total_cached']:,}</b> files\n"
+        f"  {cache_types}\n\n"
+        f"🔍 Last full check: {_fmt_check_date(last_check) if last_check else 'never'}"
+    )
 
     await show(callback, text, statistic_kb)
     await callback.answer()
+
+
+def _fmt_check_date(check: dict) -> str:
+    return datetime.datetime.fromisoformat(check["at"]).strftime("%d.%m %H:%M UTC")
+
+
+@admin_router.callback_query(lambda c: c.data == "statistic_membership_check")
+async def admin_membership_check(callback: CallbackQuery) -> None:
+    if await membership_check.is_running():
+        await callback.answer("Check is already running", show_alert=True)
+        return
+    await callback.answer("Started")
+    status = await callback.bot.send_message(callback.from_user.id, "🔍 Checking users and chats…")
+
+    async def progress(text: str) -> None:
+        try:
+            await status.edit_text(f"🔍 Checking… {text}")
+        except TelegramBadRequest:
+            pass
+
+    async def run() -> None:
+        try:
+            result = await membership_check.run_check(callback.bot, progress)
+            await status.edit_text(membership_check.format_report(result), parse_mode=ParseMode.HTML)
+        except Exception as e:
+            logger.exception("Membership check failed")
+            await status.edit_text(f"❌ Check failed: {e}")
+
+    asyncio.create_task(run())
 
 @admin_router.callback_query(lambda c: c.data == "statistic_top_services")
 async def admin_panel_top_services(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession):
@@ -826,6 +868,21 @@ async def _run_broadcast(bot: Bot, sender_id: int, user_ids: list[int], message_
 
     await bot.send_message(chat_id=sender_id, text=done_message)
 
+async def _remember_gone(chat_id: int, reason: str) -> None:
+    """Broadcasts run as a background task without the request's db_session."""
+    from storage.db import database_manager
+    from storage.db.crud import mark_chat_gone, mark_user_blocked
+    try:
+        async with database_manager.async_session() as session:
+            if chat_id > 0:
+                await mark_user_blocked(session, chat_id, blocked=True)
+            else:
+                await mark_chat_gone(session, chat_id, reason)
+            await session.commit()
+    except Exception as e:
+        logger.warning(f"Could not mark {chat_id} as gone: {e}")
+
+
 async def send_message_safe(bot: Bot, user_id: int, text: str) -> bool:
     """
     Функция отправки сообщения с обработкой ошибок и ретраями.
@@ -841,8 +898,9 @@ async def send_message_safe(bot: Bot, user_id: int, text: str) -> bool:
         await asyncio.sleep(e.retry_after)
         return await send_message_safe(bot, user_id, text)
 
-    except TelegramForbiddenError:
-        # Пользователь заблокировал бота
+    except TelegramForbiddenError as e:
+        # Пользователь заблокировал бота / бота выгнали из чата — отмечаем, через 30 дней запись удалится
+        await _remember_gone(user_id, e.message)
         return False
 
     except TelegramBadRequest as e:

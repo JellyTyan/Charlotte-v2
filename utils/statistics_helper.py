@@ -32,6 +32,8 @@ async def log_download_event(
 
     try:
         from storage.db.crud_statistics import log_event
+        from storage.db.crud import touch_user
         await log_event(session, service.value, user_id, 'download', status)
+        await touch_user(session, user_id)  # downloading in a group counts as activity too
     except Exception as e:
         logger.error(f"Failed to log statistics: {e}")

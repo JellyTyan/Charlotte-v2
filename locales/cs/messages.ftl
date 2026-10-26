@@ -201,10 +201,10 @@ support-success-tip =
 report-reply-required = Odpověz příkazem <code>/report</code> na mou zprávu, se kterou je něco špatně.
 report-not-bot-message = Tento příkaz funguje jen jako odpověď na moje zprávy 🐾
 report-success = Děkuju za nahlášení! Všechno jsem předala vývojáři, brzy to vyřešíme 🧡
-error-send-failed = ❌ Odeslání médií do Telegramu se nezdařilo. Soubor může být poškozen nebo odmítnut.
-error-no-media-rights = 🚫 V tomto chatu nesmím posílat média. Admini mi mohou udělit práva na média — nebo si to vezmi v soukromé zprávě:
+error-send-failed = Jejda, Telegram tenhle soubor nepřijal, asi je poškozený. Zkusíš to znovu?
+error-no-media-rights = Jejda, tady nesmím posílat média. Popros adminy, ať mi dají práva, a zatím ti to můžu poslat do soukromé zprávy.
 btn-get-in-dm = 📩 Získat v SZ
-dm-expired = ⌛ Odkaz vypršel. Pošli původní odkaz znovu.
+dm-expired = Jejda, už si nepamatuju, co to bylo, uběhlo moc času. Pošleš mi odkaz znovu?
 yt-trim-invalid-format = Tento formát se nepodařilo rozpoznat. Použij ZAČÁTEK-KONEC, např. <code>1:30-2:45</code>, milisekundy za čárkou: <code>1:30,250-2:45</code>. Zkusit znovu?
 
 # Task stage statuses (media-core /status: stage, reason); suffix -1..-3 = random variants

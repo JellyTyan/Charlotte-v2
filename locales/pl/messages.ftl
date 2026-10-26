@@ -201,10 +201,10 @@ support-success-tip =
 report-reply-required = Odpowiedz komendą <code>/report</code> na moją wiadomość, z którą coś poszło nie tak.
 report-not-bot-message = Ta komenda działa tylko w odpowiedzi na moje wiadomości 🐾
 report-success = Dzięki za zgłoszenie! Przekazałam wszystko programiście, zaraz się temu przyjrzymy 🧡
-error-send-failed = ❌ Nie udało się wysłać pliku do Telegrama. Plik może być uszkodzony lub odrzucony.
-error-no-media-rights = 🚫 Nie mogę wysyłać multimediów w tym czacie. Admini mogą nadać mi uprawnienia — albo odbierz to w prywatnej wiadomości:
+error-send-failed = Ojej, Telegram nie przyjął tego pliku, chyba jest uszkodzony. Spróbujesz jeszcze raz?
+error-no-media-rights = Ojej, nie mogę tu wysyłać multimediów. Poproś adminów o uprawnienia dla mnie, a na razie mogę wysłać ci to na priv.
 btn-get-in-dm = 📩 Odbierz na PW
-dm-expired = ⌛ Link wygasł. Wyślij oryginalny link jeszcze raz.
+dm-expired = Ojej, już nie pamiętam, co to było, minęło za dużo czasu. Wyślesz mi link jeszcze raz?
 yt-trim-invalid-format = Nie rozpoznaję tego formatu. Podaj POCZĄTEK-KONIEC, np. <code>1:30-2:45</code>, a milisekundy po przecinku: <code>1:30,250-2:45</code>. Spróbujesz ponownie?
 
 # Task stage statuses (media-core /status: stage, reason); suffix -1..-3 = random variants

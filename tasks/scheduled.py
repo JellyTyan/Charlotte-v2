@@ -36,6 +36,23 @@ async def cleanup_old_statistics():
             logger.error(f"Failed to clean old statistics: {e}")
 
 
+async def purge_departed_daily():
+    """Delete users who blocked the bot and chats the bot left more than 30 days ago - runs daily"""
+    while True:
+        try:
+            await asyncio.sleep(86400)  # 24 hours
+
+            from storage.db import database_manager
+            from storage.db.crud import purge_departed
+
+            async with database_manager.async_session() as session:
+                users, chats = await purge_departed(session)
+            if users or chats:
+                logger.info(f"Purged {users} users who blocked the bot and {chats} chats the bot left (>30 days)")
+        except Exception as e:
+            logger.error(f"Failed to purge departed users/chats: {e}")
+
+
 def _delete_old_files(temp_dir: Path, max_age: float) -> int:
     """Blocking part of the cleanup: removes files older than max_age seconds and empty subdirs."""
     if not temp_dir.exists():
@@ -135,6 +152,7 @@ async def cleanup_url_cache():
 def start_scheduled_tasks(bot: Bot):
     """Start all scheduled background tasks"""
     asyncio.create_task(cleanup_old_statistics())
+    asyncio.create_task(purge_departed_daily())
     asyncio.create_task(cleanup_old_downloads())
     asyncio.create_task(cleanup_url_cache())
     # asyncio.create_task(notify_expired_premium(bot))

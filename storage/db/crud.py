@@ -698,44 +698,174 @@ async def update_global_settings(session: AsyncSession, key: str, value) -> None
     await cache_delete("global_settings")
 
 
-async def get_db_overview_stats(session: AsyncSession) -> dict:
-    """
-    Returns total counts of users and chats in the database,
-    along with the count of inactive ones (no activity in the last 30 days).
-    Inactive users: those with no Statistics records in the last 30 days.
-    """
-    now = datetime.datetime.now(datetime.timezone.utc)
-    month_ago = now - datetime.timedelta(days=30)
+# ─── Membership: who blocked the bot, where the bot still is ────────────────────
 
-    # Total users & chats
-    res = await session.execute(select(func.count()).select_from(Users))
-    total_users = res.scalar() or 0
+BOT_STATUS_TTL = 6 * 3600  # freshness comes from my_chat_member events; the TTL only covers missed ones
+BLOCKED_PURGE_DAYS = 30
 
-    res = await session.execute(select(func.count()).select_from(Chats))
-    total_chats = res.scalar() or 0
 
-    # Active users: distinct user_ids in Statistics for last 30 days
+def bot_member_can_post(member) -> bool:
+    """Can the bot post (at least text) given its ChatMember: not gone and not muted."""
+    return member.status not in ("left", "kicked") and getattr(member, "can_send_messages", True) is not False
+
+
+def _protected_user():
+    """Users kept even after blocking: the ban must survive their return, donors and premium are paid for.
+    COALESCE: with a NULL premium_ends the OR is NULL, and NOT NULL would silently protect everyone."""
+    return func.coalesce(or_(
+        Users.is_banned.is_(True),
+        Users.is_lifetime_premium.is_(True),
+        Users.stars_donated > 0,
+        Users.premium_ends > func.now(),
+    ), False)
+
+
+async def mark_user_blocked(session: AsyncSession, user_id: int, blocked: bool) -> None:
+    """blocked: keep the first blocked_at (the 30-day clock); unblocked: clear it."""
+    value = func.coalesce(Users.blocked_at, func.now()) if blocked else None
+    await session.execute(update(Users).where(Users.user_id == user_id).values(blocked_at=value))
+    await cache_delete(f"user:{user_id}")
+
+
+async def touch_user(session: AsyncSession, user_id: int) -> None:
+    """Any interaction: seen today, and evidently not blocking the bot anymore. No-op write if already so."""
+    today = datetime.date.today()
     res = await session.execute(
-        select(func.count(func.distinct(Statistics.user_id)))
-        .where(Statistics.event_time >= month_ago)
+        update(Users)
+        .where(Users.user_id == user_id, or_(Users.last_used.is_distinct_from(today), Users.blocked_at.isnot(None)))
+        .values(last_used=today, blocked_at=None)
     )
-    active_users = res.scalar() or 0
-    inactive_users = max(total_users - active_users, 0)
+    if res.rowcount:
+        await cache_delete(f"user:{user_id}")
 
-    # Cache count
-    res = await session.execute(select(func.count()).select_from(MediaCache))
-    total_cached = res.scalar() or 0
+
+async def ensure_chat(session: AsyncSession, chat_id: int, owner_id: int) -> None:
+    """Make sure the group has a row (settings and /cban are UPDATEs and silently no-op without one).
+    A Redis marker keeps this off the DB for every group message."""
+    marker = f"chat_known:{chat_id}"
+    if await cache_get(marker):
+        return
+    await session.execute(
+        insert(Chats).values(chat_id=chat_id, owner_id=owner_id, settings_json={},
+                             created_at=func.now()).on_conflict_do_nothing(index_elements=[Chats.chat_id])
+    )
+    await session.commit()  # before the marker: a rolled-back insert must not be remembered as done
+    await cache_set(marker, {"ok": True}, ttl=86400)
+
+
+async def remember_bot_status(session: AsyncSession, chat_id: int, member, owner_id: int = 0) -> bool:
+    """Store the bot's ChatMember in `chats` (creating the row if needed) and in the bot_can_post cache.
+    Returns can_post."""
+    can_post = bot_member_can_post(member)
+    gone = member.status in ("left", "kicked")
+    now = datetime.datetime.now(datetime.timezone.utc)
+    stmt = insert(Chats).values(
+        chat_id=chat_id, owner_id=owner_id, settings_json={}, created_at=now,
+        bot_status=member.status, can_post=can_post, left_at=now if gone else None,
+    )
+    await session.execute(stmt.on_conflict_do_update(
+        index_elements=[Chats.chat_id],
+        set_={
+            "bot_status": member.status,
+            "can_post": can_post,
+            "left_at": func.coalesce(Chats.left_at, now) if gone else None,
+        },
+    ))
+    await cache_set(f"bot_can_post:{chat_id}", {"ok": can_post}, ttl=BOT_STATUS_TTL)
+    return can_post
+
+
+async def mark_chat_gone(session: AsyncSession, chat_id: int, reason: str) -> None:
+    """Chat deleted / bot removed and we only know it from an API error (no ChatMember to store)."""
+    await session.execute(
+        update(Chats).where(Chats.chat_id == chat_id)
+        .values(left_at=func.coalesce(Chats.left_at, func.now()), bot_status="left", can_post=False)
+    )
+    await cache_set(f"bot_can_post:{chat_id}", {"ok": False}, ttl=BOT_STATUS_TTL)
+    logger.info(f"Chat {chat_id} marked gone: {reason}")
+
+
+async def migrate_chat(session: AsyncSession, old_id: int, new_id: int) -> None:
+    """Group upgraded to a supergroup: move settings and bans to the new id."""
+    await session.execute(
+        update(Chats).where(Chats.chat_id == old_id).values(chat_id=new_id)
+        .execution_options(synchronize_session=False)
+    )
+    for key in ("chat_settings", "chat", "bot_can_post", "chat_known"):
+        await cache_delete(f"{key}:{old_id}")
+        await cache_delete(f"{key}:{new_id}")
+
+
+async def purge_departed(session: AsyncSession) -> tuple[int, int]:
+    """Delete users blocked and chats left more than BLOCKED_PURGE_DAYS ago (protected users stay)."""
+    cutoff = func.now() - datetime.timedelta(days=BLOCKED_PURGE_DAYS)
+    gone_users = (await session.execute(
+        delete(Users).where(Users.blocked_at < cutoff, ~_protected_user()).returning(Users.user_id)
+    )).scalars().all()
+    gone_chats = (await session.execute(
+        delete(Chats).where(Chats.left_at < cutoff).returning(Chats.chat_id)
+    )).scalars().all()
+    await session.commit()
+    for uid in gone_users:
+        await cache_delete(f"user:{uid}")
+        await cache_delete(f"user_settings:{uid}")
+    for cid in gone_chats:
+        await cache_delete(f"chat_settings:{cid}")
+        await cache_delete(f"chat_known:{cid}")
+    return len(gone_users), len(gone_chats)
+
+
+async def get_db_overview_stats(session: AsyncSession) -> dict:
+    """Everything for the admin «Global Statistics» page, a handful of COUNT(*) FILTER queries."""
+    today = datetime.date.today()
+    day_start = datetime.datetime.combine(today, datetime.time.min, tzinfo=datetime.timezone.utc)
+    week_start = day_start - datetime.timedelta(days=6)
+    month_start = day_start - datetime.timedelta(days=29)
+
+    def count(cond=None):
+        return func.count() if cond is None else func.count().filter(cond)
+
+    alive = Users.blocked_at.is_(None)
+    u = (await session.execute(select(
+        count(),
+        count(Users.created_at >= day_start), count(Users.created_at >= week_start), count(Users.created_at >= month_start),
+        count(alive & or_(Users.last_used.is_(None), Users.last_used < today - datetime.timedelta(days=29))),
+        count(~alive), count(~alive & _protected_user()),
+        count(Users.last_used >= today), count(Users.last_used >= today - datetime.timedelta(days=6)),
+        count(Users.last_used >= today - datetime.timedelta(days=29)),
+    ))).one()
+
+    present = Chats.left_at.is_(None)
+    c = (await session.execute(select(
+        count(), count(present),
+        count(present & (Chats.bot_status == "administrator")),
+        count(present & (Chats.bot_status.in_(("member", "restricted"))) & Chats.can_post.isnot(False)),
+        count(present & Chats.can_post.is_(False)),
+        count(present & Chats.bot_status.is_(None)),
+        count(Chats.created_at >= month_start), count(~present),
+    ))).one()
+
+    requests_today = (await session.execute(
+        select(func.count()).where(Statistics.event_time >= day_start)
+    )).scalar() or 0
+    cache_by_type = dict((await session.execute(
+        select(MediaCache.media_type, func.count()).group_by(MediaCache.media_type).order_by(func.count().desc())
+    )).all())
 
     return {
-        "total_users": total_users,
-        "total_chats": total_chats,
-        "inactive_users": inactive_users,
-        "total_cached": total_cached,
+        "users": dict(zip(
+            ("total", "new_today", "new_week", "new_month", "inactive", "blocked", "blocked_kept",
+             "seen_today", "seen_week", "seen_month"), u, strict=True)),
+        "chats": dict(zip(
+            ("total", "present", "admin", "member", "muted", "unknown", "new_month", "left"), c, strict=True)),
+        "requests_today": requests_today,
+        "cache_by_type": cache_by_type,
+        "total_cached": sum(cache_by_type.values()),
     }
 
 
 async def get_list_user_ids(session: AsyncSession) -> list[int]:
-    stmt = select(Users.user_id).where(Users.is_banned == False)
+    stmt = select(Users.user_id).where(Users.is_banned == False, Users.blocked_at.is_(None))
     result = await session.execute(stmt)
     return [row[0] for row in result.fetchall()]
 
@@ -744,6 +874,7 @@ async def get_news_subscribers_ids(session: AsyncSession) -> list[int]:
         select(Users.user_id)
         .where(
             Users.is_banned == False,
+            Users.blocked_at.is_(None),
             or_(
                 Users.settings_json["profile"]["news_spam"].as_boolean() == True,
                 Users.settings_json["profile"]["news_spam"].as_string() == "true",
@@ -756,6 +887,8 @@ async def get_news_subscribers_ids(session: AsyncSession) -> list[int]:
     stmt_chats = (
         select(Chats.chat_id)
         .where(
+            Chats.left_at.is_(None),
+            Chats.can_post.isnot(False),
             or_(
                 Chats.settings_json["profile"]["news_spam"].as_boolean() == True,
                 Chats.settings_json["profile"]["news_spam"].as_string() == "true",
@@ -768,7 +901,7 @@ async def get_news_subscribers_ids(session: AsyncSession) -> list[int]:
     return user_ids + chat_ids
 
 async def get_all_chat_ids(session: AsyncSession) -> list[int]:
-    stmt = select(Chats.chat_id)
+    stmt = select(Chats.chat_id).where(Chats.left_at.is_(None), Chats.can_post.isnot(False))
     result = await session.execute(stmt)
     return [row[0] for row in result.fetchall()]
 

@@ -493,10 +493,17 @@ class MediaSender:
                         msg = await self._send_gif(message, gif, settings, service, caption, show_ad, skip_notification)
                         if msg:
                             sent_all.append(msg)
-            except BotError as e:
-                # chat forbids this media type for the bot: offer a deep link that delivers it in DM instead
-                if "not enough rights" not in str(e.message) or not await self._offer_dm(message, content, service):
+            except (BotError, TelegramBadRequest) as e:
+                # chat forbids this media type for the bot (_send_gif lets the raw TelegramBadRequest through):
+                # offer a deep link that delivers it in DM instead. Either way it's the chat's setting, not our bug.
+                if "not enough rights" not in str(e.message):
                     raise
+                if not await self._offer_dm(message, content, service):
+                    raise BotError(
+                        code=ErrorCode.NOT_ALLOWED,
+                        message=f"No media rights in chat: {e.message}",
+                        service=self._get_service_enum(service) if service else None,
+                    ) from e
                 return
 
             if sent_all:
@@ -924,16 +931,19 @@ class MediaSender:
 
     async def _offer_dm(self, message: types.Message, content: List[MediaContent], service: Optional[str]) -> bool:
         """Stash file_ids in Redis and post a t.me/<bot>?start=dm_<token> button. False if nothing to stash or posting failed."""
-        if not all(c.telegram_file_id or c.telegram_document_file_id for c in content):
+        # items that never reached the dump channel have no file_id: deliver the rest rather than nothing
+        cached = [c for c in content if c.telegram_file_id or c.telegram_document_file_id]
+        if not cached:
+            logger.warning(f"No media rights in chat {message.chat.id}, but nothing cached to offer in DM")
             return False
         token = secrets.token_urlsafe(9)
-        items = [{"type": c.type.value, **{f: getattr(c, f) for f in DM_FIELDS}} for c in content]
+        items = [{"type": c.type.value, **{f: getattr(c, f) for f in DM_FIELDS}} for c in cached]
         await cache_set(f"dm:{token}", {"items": items, "service": service}, ttl=48 * 3600)
 
         from utils.progress import current_context
         ctx = current_context.get()
         i18n = ctx[1] if ctx else None
-        text = i18n.get("error-no-media-rights") if i18n else "🚫 I'm not allowed to send media in this chat. Admins can grant me media rights, or grab it in DM:"
+        text = i18n.get("error-no-media-rights") if i18n else "Oops, I'm not allowed to send media here. Ask the admins to give me permission, and for now I can send it to you in DM."
         button = i18n.get("btn-get-in-dm") if i18n else "📩 Get in DM"
         bot = await message.bot.me()
         kb = types.InlineKeyboardMarkup(inline_keyboard=[[
