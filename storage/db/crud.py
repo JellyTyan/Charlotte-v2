@@ -739,18 +739,20 @@ async def touch_user(session: AsyncSession, user_id: int) -> None:
         await cache_delete(f"user:{user_id}")
 
 
-async def ensure_chat(session: AsyncSession, chat_id: int, owner_id: int) -> None:
+async def ensure_chat(session: AsyncSession, chat_id: int, owner_id: int) -> bool:
     """Make sure the group has a row (settings and /cban are UPDATEs and silently no-op without one).
-    A Redis marker keeps this off the DB for every group message."""
+    A Redis marker keeps this off the DB for every group message. True if the bot's status there is unknown."""
     marker = f"chat_known:{chat_id}"
     if await cache_get(marker):
-        return
+        return False
     await session.execute(
         insert(Chats).values(chat_id=chat_id, owner_id=owner_id, settings_json={},
                              created_at=func.now()).on_conflict_do_nothing(index_elements=[Chats.chat_id])
     )
+    unknown = (await session.execute(select(Chats.bot_status).where(Chats.chat_id == chat_id))).scalar() is None
     await session.commit()  # before the marker: a rolled-back insert must not be remembered as done
     await cache_set(marker, {"ok": True}, ttl=86400)
+    return unknown
 
 
 async def remember_bot_status(session: AsyncSession, chat_id: int, member, owner_id: int = 0) -> bool:

@@ -4,7 +4,7 @@ import logging
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, ChatMemberUpdated, ChosenInlineResult, InlineQuery, Update
 
-from storage.db.crud import create_user, ensure_chat, get_user, get_chat_settings, touch_user
+from storage.db.crud import create_user, ensure_chat, get_user, get_chat_settings, remember_bot_status, touch_user
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +43,12 @@ class BanCheckMiddleware(BaseMiddleware):
                 user, _ = await create_user(session, user_id)
             if direct and user and not user.is_banned and (_as_date(user.last_used) != datetime.date.today() or user.blocked_at):
                 await touch_user(session, user_id)  # group downloads touch it in log_download_event
-            if chat_id and chat_id < 0:
-                await ensure_chat(session, chat_id, user_id)
+            if chat_id and chat_id < 0 and await ensure_chat(session, chat_id, user_id):
+                try:  # fill the bot's status right away instead of waiting for a link or the full check
+                    bot = data["bot"]
+                    await remember_bot_status(session, chat_id, await bot.get_chat_member(chat_id, (await bot.me()).id))
+                except Exception:
+                    logger.debug("bot status probe failed", exc_info=True)
             if user and user.is_banned:
                 if isinstance(target_event, CallbackQuery):
                     i18n = data.get("i18n")
