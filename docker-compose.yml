@@ -204,7 +204,7 @@ services:
     image: grafana/loki:2.9.0
     container_name: charlotte_loki
     restart: unless-stopped
-    command: -config.file=/etc/loki/local-config.yaml
+    command: -config.file=/etc/loki/local-config.yaml -query-scheduler.max-outstanding-requests-per-tenant=4096 -querier.max-outstanding-requests-per-tenant=4096
     volumes:
       - loki-data:/loki
     networks:
