@@ -8,6 +8,7 @@ from pathlib import Path
 from aiogram import Bot
 from sqlalchemy import delete
 
+from tasks.music_refresh import music_refresh_loop
 from utils.url_cache import cleanup_expired as cleanup_expired_urls
 
 logger = logging.getLogger(__name__)
@@ -155,5 +156,6 @@ def start_scheduled_tasks(bot: Bot):
     asyncio.create_task(purge_departed_daily())
     asyncio.create_task(cleanup_old_downloads())
     asyncio.create_task(cleanup_url_cache())
+    asyncio.create_task(music_refresh_loop(bot))
     # asyncio.create_task(notify_expired_premium(bot))
     logger.info("✅ Scheduled tasks started")

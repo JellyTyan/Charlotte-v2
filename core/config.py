@@ -12,6 +12,7 @@ class Config(BaseSettings):
     TELEGRAM_SERVER_URL: str
     LOSSLESS_CORE_URL: str
     MEDIA_CORE_URL: str
+    MUSIC_REFRESH: bool = False  # tasks/music_refresh.py: slowly re-download all cached tracks
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

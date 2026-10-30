@@ -121,6 +121,8 @@ class MediaCache(Base):
         default=lambda: datetime.datetime.now(timezone.utc),
         nullable=False
     )
+    # last re-download by tasks/music_refresh.py (NULL = never)
+    refreshed_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class UserSaves(Base):

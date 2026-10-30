@@ -4,7 +4,7 @@ from pathlib import Path
 import httpx
 from aiogram import F, Router
 from aiogram.enums import ParseMode
-from aiogram.types import FSInputFile, Message
+from aiogram.types import Message
 from aiogram.utils.chat_action import ChatActionSender
 from fluentogram import TranslatorRunner
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +16,7 @@ from models.service_list import Services
 from senders.media_sender import MediaSender
 from storage.db.crud import get_chat_settings, get_user_settings, get_media_cache
 from tasks.task_manager import task_manager
-from utils import delete_files, handle_lossless_response, extract_url
+from utils import handle_lossless_response, extract_url
 from utils.statistics_helper import log_download_event
 
 soundcloud_router = Router(name="soundcloud")
@@ -160,26 +160,10 @@ async def soundcloud_handler(
         if metadata.get("release_date"):
             text += i18n.get("release-date", date=metadata["release_date"]) + "\n"
 
-        if metadata["cover"]:
-            cover_path = f"storage/temp/soundcloud_album_{metadata['id']}.png"
-            try:
-                res = await http_client.post(
-                    "http://media-core:9546/tools/download-image",
-                    json={
-                        "url": metadata["cover"],
-                        "destination": cover_path
-                    },
-                    timeout=30.0
-                )
-                if res.status_code == 200:
-                    await message.answer_photo(
-                        photo=FSInputFile(cover_path), caption=text, parse_mode=ParseMode.HTML
-                    )
-                    await delete_files([cover_path])
-                else:
-                    logger.error(f"Failed to download cover via media-core: status={res.status_code}")
-            except Exception as e:
-                logger.error(f"Failed to download cover via media-core: {e}")
+        try:  # Telegram fetches the cover by URL itself; no cover / bad URL → overview as text
+            await message.answer_photo(photo=metadata["cover"], caption=text, parse_mode=ParseMode.HTML)
+        except Exception:
+            await message.answer(text, parse_mode=ParseMode.HTML)
 
         await message.reply(i18n.get("downloading-tracks"))
 
