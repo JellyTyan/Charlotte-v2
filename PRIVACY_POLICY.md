@@ -15,6 +15,8 @@ Data is used solely to:
 
 ### Data Storage
 - Media files are stored temporarily and deleted automatically after processing
+- Downloaded media may be kept in a Telegram cache channel to serve repeat requests faster
+- Saved items are kept until the user deletes them
 - Logs and technical data are kept only as long as necessary for maintenance and debugging
 
 ### Data Sharing

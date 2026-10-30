@@ -1,3 +1,4 @@
+import os
 import logging
 import datetime
 import asyncio
@@ -280,6 +281,15 @@ async def admin_panel_stats(callback: CallbackQuery, state: FSMContext, db_sessi
     blocked_kept = f", {u['blocked_kept']} kept: banned/donors/premium" if u["blocked_kept"] else ""
     unknown = f" · ❔ {c['unknown']}" if c["unknown"] else ""
     cache_types = " · ".join(f"{t} {n:,}" for t, n in o["cache_by_type"].items())
+    # client languages of people seen in 30 days, base code (pt-br → pt); * = no translation yet
+    langs: dict[str, int] = {}
+    for code, n in o["languages"]:
+        key = code.split("-")[0].lower() if code else "?"
+        langs[key] = langs.get(key, 0) + n
+    translated = set(os.listdir("locales"))
+    languages = " · ".join(
+        f"{k}{'' if k in translated or k == '?' else '*'} {n}" for k, n in sorted(langs.items(), key=lambda x: -x[1])[:12]
+    )
 
     text = (
         "📊 <b>Global Statistics</b>\n\n"
@@ -293,6 +303,7 @@ async def admin_panel_stats(callback: CallbackQuery, state: FSMContext, db_sessi
         f"  ├ 🆕 this month: {c['new_month']}\n"
         f"  └ 🚪 kicked / left: {c['left']}\n\n"
         f"🔥 <b>Seen</b> (any action): {u['seen_today']} today · {u['seen_week']} 7d · {u['seen_month']} 30d\n"
+        f"🌐 <b>Languages</b> (30d, * = not translated): {languages}\n"
         f"📥 <b>Downloaders</b>: {dl['today']} today · {dl['yesterday']} yesterday · {dl['week']} 7d · {dl['month']} 30d\n\n"
         f"📨 <b>Requests (90 d): {total_requests:,}</b> · today {o['requests_today']:,}\n"
         f"  ✅ {pct(status_stats['complete'], total_requests)} · ❌ {pct(status_stats['error'], total_requests)}\n\n"

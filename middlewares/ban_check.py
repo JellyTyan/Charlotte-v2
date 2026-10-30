@@ -41,8 +41,12 @@ class BanCheckMiddleware(BaseMiddleware):
             )
             if user is None and direct:
                 user, _ = await create_user(session, user_id)
-            if direct and user and not user.is_banned and (_as_date(user.last_used) != datetime.date.today() or user.blocked_at):
-                await touch_user(session, user_id)  # group downloads touch it in log_download_event
+            lang = from_user.language_code if from_user else None
+            if direct and user and not user.is_banned and (
+                _as_date(user.last_used) != datetime.date.today() or user.blocked_at
+                or (lang and getattr(user, "language_code", None) != lang)
+            ):
+                await touch_user(session, user_id, lang)  # group downloads touch it in log_download_event
             if chat_id and chat_id < 0 and await ensure_chat(session, chat_id, user_id):
                 try:  # fill the bot's status right away instead of waiting for a link or the full check
                     bot = data["bot"]

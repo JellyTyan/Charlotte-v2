@@ -23,6 +23,7 @@ class Users(Base):
     settings_json: Mapped[dict] = mapped_column(JSON, default=dict)
     # set when the user blocks the bot or deletes the account; cleaned up after 30 days (tasks.scheduled)
     blocked_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    language_code: Mapped[str | None] = mapped_column(String(16), nullable=True)  # Telegram client language, updated on use
     created_at: Mapped[datetime.datetime | None] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.datetime.now(timezone.utc), nullable=True
     )

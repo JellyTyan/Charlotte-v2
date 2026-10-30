@@ -727,14 +727,16 @@ async def mark_user_blocked(session: AsyncSession, user_id: int, blocked: bool) 
     await cache_delete(f"user:{user_id}")
 
 
-async def touch_user(session: AsyncSession, user_id: int) -> None:
-    """Any interaction: seen today, and evidently not blocking the bot anymore. No-op write if already so."""
+async def touch_user(session: AsyncSession, user_id: int, language_code: str | None = None) -> None:
+    """Any interaction: seen today, and evidently not blocking the bot anymore; also the client language.
+    No-op write if already so."""
     today = datetime.date.today()
-    res = await session.execute(
-        update(Users)
-        .where(Users.user_id == user_id, or_(Users.last_used.is_distinct_from(today), Users.blocked_at.isnot(None)))
-        .values(last_used=today, blocked_at=None)
-    )
+    changed = [Users.last_used.is_distinct_from(today), Users.blocked_at.isnot(None)]
+    values = {"last_used": today, "blocked_at": None}
+    if language_code:
+        changed.append(Users.language_code.is_distinct_from(language_code))
+        values["language_code"] = language_code
+    res = await session.execute(update(Users).where(Users.user_id == user_id, or_(*changed)).values(**values))
     if res.rowcount:
         await cache_delete(f"user:{user_id}")
 
@@ -850,6 +852,10 @@ async def get_db_overview_stats(session: AsyncSession) -> dict:
     requests_today = (await session.execute(
         select(func.count()).where(Statistics.event_time >= day_start)
     )).scalar() or 0
+    languages = (await session.execute(  # people seen in the last 30 days; NULL = not seen since tracking began
+        select(Users.language_code, func.count()).where(Users.last_used >= today - datetime.timedelta(days=29))
+        .group_by(Users.language_code).order_by(func.count().desc())
+    )).all()
     cache_by_type = dict((await session.execute(
         select(MediaCache.media_type, func.count()).group_by(MediaCache.media_type).order_by(func.count().desc())
     )).all())
@@ -861,6 +867,7 @@ async def get_db_overview_stats(session: AsyncSession) -> dict:
         "chats": dict(zip(
             ("total", "present", "admin", "member", "muted", "unknown", "new_month", "left"), c, strict=True)),
         "requests_today": requests_today,
+        "languages": languages,
         "cache_by_type": cache_by_type,
         "total_cached": sum(cache_by_type.values()),
     }
