@@ -19,6 +19,9 @@ services:
     read_only: false
     networks:
       - charlotte-net
+    extra_hosts:
+      # media-core живёт в сети хоста (IPv6 /56 для YouTube)
+      - "media-core:host-gateway"
     depends_on:
       redis:
         condition: service_started
@@ -37,6 +40,8 @@ services:
     container_name: charlotte_redis
     restart: unless-stopped
     command: valkey-server --save 60 1 --loglevel warning
+    ports:
+      - "127.0.0.1:6379:6379"   # для media-core (network_mode: host)
     volumes:
       - redis-data:/data
     networks:
@@ -46,6 +51,8 @@ services:
   bgutil:
     image: brainicism/bgutil-ytdlp-pot-provider
     container_name: charlotte_bgutil
+    ports:
+      - "127.0.0.1:4416:4416"   # для media-core (network_mode: host)
     networks:
       - charlotte-net
     restart: always
@@ -60,6 +67,8 @@ services:
       - NET_ADMIN
     environment:
       - WARP_INSTANCES=1
+    ports:
+      - "127.0.0.1:1080:1080"   # для media-core (network_mode: host)
     volumes:
       - warp-data:/var/lib/cloudflare-warp
     networks:
@@ -97,20 +106,24 @@ services:
     restart: always
     volumes:
       - ${STORAGE_HOST_PATH}:/app/storage
+    # Сеть хоста: YouTube ходит напрямую со случайных адресов IPv6 /56
+    # (туннель Route64). Redis, bgutil и WARP — через порты на 127.0.0.1.
+    network_mode: host
     environment:
       - PORT=${MEDIA_CORE_PORT:-9546}
       - TWITTER_AUTH_TOKEN=${AUTH_TOKEN}
       - TWITTER_CSRF_TOKEN=${CSRF_TOKEN}
-      - BGUTIL_URL=${BGUTIL_URL}
+      - BGUTIL_URL=http://127.0.0.1:4416
       - STORAGE_PATH=/app/storage
-      - PROXY=socks5://warp:1080
+      - PROXY=socks5://127.0.0.1:1080
       - FALLBACK_PROXY=${YOUTUBE_FALLBACK_PROXY:-}
-      - REDIS_ADDR=${REDIS_ADDR}
+      - REDIS_ADDR=127.0.0.1:6379
       - PIXIV_REFRESH_TOKEN=${PIXIV_REFRESH_TOKEN}
       - YOUTUBE_ENGINE=${YOUTUBE_ENGINE}
       - YOUTUBE_IMPERSONATE=${YOUTUBE_IMPERSONATE}
-    networks:
-      - charlotte-net
+      - YOUTUBE_PROXY=direct
+      - YOUTUBE_SOURCE_ADDRESS=${YOUTUBE_SOURCE_ADDRESS:-}
+      - YOUTUBE_FALLBACK_PROXY=socks5://127.0.0.1:1080
     deploy:
       resources:
         limits:
